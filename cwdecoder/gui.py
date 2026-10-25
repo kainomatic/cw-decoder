@@ -27,7 +27,7 @@ import numpy as np
 from . import config as config_mod
 from . import error_report
 from . import utf8_console
-from .__version__ import CHANNEL, __version__
+from .__version__ import APP_NAME, CHANNEL, REPO_URL, __version__
 from .decoder import DecoderConfig
 from .gui_error_report import ErrorReportDialog, open_folder_or_report
 from .gui_errors import report_exception
@@ -39,7 +39,8 @@ from .paths import get_log_dir, get_recordings_dir
 log = logging.getLogger(__name__)
 
 # -- Beschriftungen --------------------------------------------------------
-_LBL_TITLE = "CW Decoder"
+_LBL_TITLE = "{name} v{version}"
+_LBL_TITLE_BETA = " BETA"
 _LBL_INPUT = "Eingang:"
 _LBL_START = "Start"
 _LBL_STOP = "Stop"
@@ -50,9 +51,16 @@ _LBL_CALLS = "Rufzeichen (Klick → N1MM)"
 _LBL_N1MM = "N1MM-Anbindung"
 _LBL_WIPE = "vorher Alt+W (Wipe)"
 _LBL_NO_DEVICE = "(kein Eingangsgerät gefunden)"
+_LBL_MENU_FILE = "Datei"
+_LBL_MENU_RECDIR = "Aufnahmeordner öffnen"
+_LBL_MENU_QUIT = "Beenden"
 _LBL_MENU_HELP = "Hilfe"
+_LBL_MENU_UPDATE = "Nach Updates suchen"
 _LBL_MENU_LOGDIR = "Log-Ordner öffnen"
 _LBL_MENU_REPORT = "Fehler melden…"
+_LBL_MENU_ABOUT = "Über CW Decoder"
+_LBL_ABOUT_TITLE = "Über CW Decoder"
+_LBL_ABOUT_CLOSE = "Schließen"
 
 # -- Meldungen -------------------------------------------------------------
 _MSG_READY = "bereit"
@@ -84,6 +92,15 @@ _MSG_AUDIO_INFO = "{device}, {rate}"
 _MSG_AUDIO_RATE = "{fs} Hz"
 _MSG_AUDIO_RATE_LAST = "zuletzt {fs} Hz"
 _MSG_AUDIO_NOT_STARTED = "nicht gestartet"
+_MSG_UPDATE_TITLE = "Nach Updates suchen"
+_MSG_UPDATE_SOON = ("Die Update-Prüfung kommt mit dem nächsten Release.\n\n"
+                    "Bis dahin: neue Versionen stehen unter {url}/releases.")
+_MSG_ABOUT = ("Version {version} ({channel})\n\n"
+              "Live-Morsedecoder für Audio vom Funkgerät mit Anbindung an "
+              "N1MM Logger+.\n\n"
+              "Copyright (C) 2026 DF1DS (kainomatic)\n"
+              "Lizenz: GNU General Public License v3.0 oder später "
+              "(GPL-3.0-or-later). Ohne jede Gewährleistung.")
 _MSG_ALREADY_RUNNING_TITLE = "CW Decoder läuft bereits"
 _MSG_ALREADY_RUNNING = ("Der CW Decoder ist bereits geöffnet (Prozess {pid}).\n\n"
                         "Bitte das vorhandene Fenster benutzen. Zwei Instanzen würden "
@@ -109,8 +126,15 @@ _TT_N1MM = ("N1MM Logger+ anbinden: empfängt Frequenz per UDP 12060 und bietet 
             "Spots auf Telnet 127.0.0.1:7373. Belegt die Ports erst beim Einschalten.")
 _TT_WIPE = "Vor dem Eintippen Alt+W senden, damit das Entry Window leer ist."
 _TT_N1MM_STATUS = "Zustand der N1MM-Anbindung und Ergebnis der letzten Übergabe."
+_TT_REPO_LINK = "Projektseite im Browser öffnen."
 
 NO_DEVICE = _LBL_NO_DEVICE
+
+
+def window_title(channel=CHANNEL, version=__version__):
+    """"CW Decoder v0.1.0", im Beta-Kanal mit " BETA" dahinter."""
+    title = _LBL_TITLE.format(name=APP_NAME, version=version)
+    return title + (_LBL_TITLE_BETA if channel == "beta" else "")
 
 
 class App(tk.Tk):
@@ -125,7 +149,7 @@ class App(tk.Tk):
         self.n1mm_on_start = self.cfg["n1mm_enabled"] if n1mm is None else bool(n1mm)
         # feste Tonfrequenz (Spektrum-Klick); None = noch keine gewählt
         self.fixed_freq = self.cfg["fixed_freq"]
-        self.title(_LBL_TITLE)
+        self.title(window_title())
         self.geometry("900x560")
         self.msgs = queue.Queue()
         self.live = None
@@ -153,9 +177,18 @@ class App(tk.Tk):
     # ------------------------------------------------------------------
     def _build_menu(self):
         bar = tk.Menu(self)
+        m_file = tk.Menu(bar, tearoff=False)
+        m_file.add_command(label=_LBL_MENU_RECDIR, command=self.open_recordings_dir)
+        m_file.add_separator()
+        m_file.add_command(label=_LBL_MENU_QUIT, command=self._quit)
+        bar.add_cascade(label=_LBL_MENU_FILE, menu=m_file)
         m_help = tk.Menu(bar, tearoff=False)
+        m_help.add_command(label=_LBL_MENU_UPDATE, command=self.show_update)
+        m_help.add_separator()
         m_help.add_command(label=_LBL_MENU_LOGDIR, command=self.open_log_dir)
         m_help.add_command(label=_LBL_MENU_REPORT, command=self.open_error_report)
+        m_help.add_separator()
+        m_help.add_command(label=_LBL_MENU_ABOUT, command=self.show_about)
         bar.add_cascade(label=_LBL_MENU_HELP, menu=m_help)
         self.configure(menu=bar)
         self.menubar = bar
@@ -368,6 +401,34 @@ class App(tk.Tk):
         else:
             rate = _MSG_AUDIO_NOT_STARTED
         return _MSG_AUDIO_INFO.format(device=self.dev_var.get() or "?", rate=rate)
+
+    def open_recordings_dir(self):
+        open_folder_or_report(self, get_recordings_dir())
+
+    def show_update(self):
+        from tkinter import messagebox
+        messagebox.showinfo(_MSG_UPDATE_TITLE, _MSG_UPDATE_SOON.format(url=REPO_URL),
+                            parent=self)
+
+    def show_about(self):
+        import webbrowser
+        dlg = tk.Toplevel(self)
+        dlg.title(_LBL_ABOUT_TITLE)
+        dlg.resizable(False, False)
+        dlg.transient(self)
+        frm = ttk.Frame(dlg, padding=16)
+        frm.pack(fill="both", expand=True)
+        ttk.Label(frm, text=APP_NAME, font=("Segoe UI", 14, "bold")).pack(anchor="w")
+        ttk.Label(frm, text=_MSG_ABOUT.format(version=__version__, channel=CHANNEL),
+                  wraplength=380, justify="left").pack(anchor="w", pady=(6, 8))
+        link = ttk.Label(frm, text=REPO_URL, foreground="#1a5fb4", cursor="hand2")
+        link.pack(anchor="w")
+        link.bind("<Button-1>", lambda _e: webbrowser.open(REPO_URL))
+        attach_tooltip(link, _TT_REPO_LINK)
+        ttk.Button(frm, text=_LBL_ABOUT_CLOSE, command=dlg.destroy).pack(anchor="e",
+                                                                        pady=(12, 0))
+        dlg.bind("<Escape>", lambda _e: dlg.destroy())
+        return dlg
 
     def open_log_dir(self):
         open_folder_or_report(self, get_log_dir())

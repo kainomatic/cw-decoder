@@ -28,6 +28,9 @@ class App(tk.Tk):
         self.n1mm = None
         self.calls = []
         self.devs = []
+        # Generation des laufenden Decoders; wird bei Start und Stop erhöht.
+        # Meldungen tragen ihre Generation, veraltete Status werden verworfen.
+        self.gen = 0
         self._build()
         self._fill_devices()
         self.after(60, self._poll)
@@ -130,15 +133,17 @@ class App(tk.Tk):
         except SystemExit as e:
             self.status.set(str(e))
             return
+        self.gen += 1
+        g = self.gen
         self.live = LiveDecoder(fs, cfg,
-                                on_text=lambda s: self.msgs.put(("text", s)),
-                                on_status=lambda d: self.msgs.put(("status", d)),
-                                on_call=lambda c: self.msgs.put(("call", c)))
+                                on_text=lambda s: self.msgs.put(("text", g, s)),
+                                on_status=lambda d: self.msgs.put(("status", g, d)),
+                                on_call=lambda c: self.msgs.put(("call", g, c)))
         if self.rec_var.get():
             import time
             name = time.strftime("cw_%Y%m%d_%H%M%S.wav")
             self.live.recorder = WavRecorder(name, fs)
-            self.msgs.put(("text", f"[Aufnahme: {name}]\n"))
+            self.msgs.put(("text", g, f"[Aufnahme: {name}]\n"))
         holder["live"] = self.live
         # gebundene Methode statt lambda: der Thread darf nicht erst beim
         # Anlaufen self.live nachschlagen (kann nach schnellem Stop None sein)
@@ -147,6 +152,7 @@ class App(tk.Tk):
         self.btn_start.configure(text="Stop")
 
     def _stop(self):
+        self.gen += 1   # ab jetzt eintreffende Statusmeldungen sind veraltet
         if self.live:
             self.live.stop()
         if self.stream:
@@ -202,7 +208,9 @@ class App(tk.Tk):
     def _poll(self):
         try:
             while True:
-                kind, val = self.msgs.get_nowait()
+                kind, gen, val = self.msgs.get_nowait()
+                if kind == "status" and gen != self.gen:
+                    continue    # verspätet aus einem bereits gestoppten Lauf
                 if kind == "text":
                     self.text.insert("end", val)
                     self.text.see("end")

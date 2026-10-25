@@ -1,8 +1,12 @@
 # CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
 """Grafische Oberfläche: Spektrum, Live-Text, erkannte Rufzeichen, N1MM.
 
-    python -m cwdecoder.gui            N1MM-Anbindung aus (per Haken einschaltbar)
-    python -m cwdecoder.gui --n1mm     N1MM-Anbindung gleich beim Start an
+    python -m cwdecoder.gui            Einstellungen aus config.json
+    python -m cwdecoder.gui --n1mm     N1MM-Anbindung für diesen Lauf an
+
+Die Einstellungen (Gerät, feste Tonfrequenz, Haken) werden beim Start aus
+<App-Ordner>/config.json gelesen und bei jeder Änderung gespeichert.
+Kommandozeilenschalter gelten nur für den laufenden Start.
 """
 import logging
 import os
@@ -15,6 +19,7 @@ import tkinter as tk
 from tkinter import ttk
 import numpy as np
 
+from . import config as config_mod
 from . import utf8_console
 from .decoder import DecoderConfig
 from .live import AudioDeviceError, LiveDecoder, open_stream, WavRecorder
@@ -27,9 +32,17 @@ NO_DEVICE = "(kein Eingangsgerät gefunden)"
 
 
 class App(tk.Tk):
-    def __init__(self, n1mm: bool = False):
+    def __init__(self, n1mm=None, cfg=None, config_path=None):
+        """n1mm: None = Einstellung aus der Config, True/False = nur für
+        diesen Lauf überschreiben. config_path None = nichts speichern
+        (Tests)."""
         super().__init__()
-        self.n1mm_on_start = n1mm
+        self.cfg = config_mod.defaults()
+        self.cfg.update(cfg or {})
+        self.config_path = config_path
+        self.n1mm_on_start = self.cfg["n1mm_enabled"] if n1mm is None else bool(n1mm)
+        # feste Tonfrequenz (Spektrum-Klick); None = noch keine gewählt
+        self.fixed_freq = self.cfg["fixed_freq"]
         self.title("CW Decoder")
         self.geometry("900x560")
         self.msgs = queue.Queue()
@@ -60,13 +73,15 @@ class App(tk.Tk):
         self.dev_var = tk.StringVar()
         self.dev_box = ttk.Combobox(top, textvariable=self.dev_var, width=40, state="readonly")
         self.dev_box.pack(side="left", padx=4)
+        self.dev_box.bind("<<ComboboxSelected>>", self._device_changed)
         self.btn_start = ttk.Button(top, text="Start", command=self._toggle)
         self.btn_start.pack(side="left", padx=4)
-        self.auto_var = tk.BooleanVar(value=True)
+        self.auto_var = tk.BooleanVar(value=self.fixed_freq is None)
         ttk.Checkbutton(top, text="Ton automatisch suchen", variable=self.auto_var,
                         command=self._auto_changed).pack(side="left", padx=8)
-        self.rec_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(top, text="Aufnahme (WAV)", variable=self.rec_var).pack(side="left", padx=8)
+        self.rec_var = tk.BooleanVar(value=self.cfg["record_default"])
+        ttk.Checkbutton(top, text="Aufnahme (WAV)", variable=self.rec_var,
+                        command=self._rec_changed).pack(side="left", padx=8)
         ttk.Button(top, text="Text löschen", command=self._clear).pack(side="right")
 
         self.status = tk.StringVar(value="bereit")
@@ -93,12 +108,12 @@ class App(tk.Tk):
         self.n1mm_var = tk.BooleanVar(value=self.n1mm_on_start)
         ttk.Checkbutton(right, text="N1MM-Anbindung", variable=self.n1mm_var,
                         command=self._n1mm_changed).pack(anchor="w", pady=(6, 0))
-        self.wipe_var = tk.BooleanVar(value=True)
+        self.wipe_var = tk.BooleanVar(value=self.cfg["n1mm_wipe"])
         ttk.Checkbutton(right, text="vorher Alt+W (Wipe)", variable=self.wipe_var,
                         command=self._n1mm_changed).pack(anchor="w")
         self.n1mm_status = tk.StringVar(value="N1MM: –")
         ttk.Label(right, textvariable=self.n1mm_status, wraplength=190).pack(anchor="w", pady=4)
-        self._n1mm_changed()
+        self._n1mm_changed(save=False)
 
     def _fill_devices(self):
         try:
@@ -115,6 +130,13 @@ class App(tk.Tk):
                             "VB-Cable anschließen und Programm neu starten")
             return
         self.dev_box["values"] = [f"{i}: {n}" for i, n in self.devs]
+        wanted = self.cfg["device_name"]
+        if wanted:
+            for k, (_, name) in enumerate(self.devs):
+                if name == wanted:
+                    self.dev_box.current(k)
+                    return
+            log.warning("Gespeichertes Gerät %r nicht vorhanden, nehme Standard", wanted)
         default = sd.default.device[0]
         for k, (i, _) in enumerate(self.devs):
             if i == default:
@@ -123,6 +145,26 @@ class App(tk.Tk):
         else:
             if self.devs:
                 self.dev_box.current(0)
+
+    # -- Einstellungen -------------------------------------------------
+    def _save_config(self, **changes):
+        """Änderung übernehmen und config.json schreiben (falls vorhanden)."""
+        self.cfg.update(changes)
+        if self.config_path is None:
+            return
+        try:
+            config_mod.save(self.cfg, self.config_path)
+        except OSError as e:
+            log.error("Config nicht gespeichert: %s", e)
+            self.status.set(f"Einstellungen nicht gespeichert: {e}")
+
+    def _device_changed(self, _ev=None):
+        k = self.dev_box.current()
+        if 0 <= k < len(self.devs):
+            self._save_config(device_name=self.devs[k][1])
+
+    def _rec_changed(self):
+        self._save_config(record_default=bool(self.rec_var.get()))
 
     # ------------------------------------------------------------------
     def _toggle(self):
@@ -219,6 +261,7 @@ class App(tk.Tk):
         self.text.delete("1.0", "end")
 
     def _auto_changed(self):
+        self._save_config(fixed_freq=None if self.auto_var.get() else self.fixed_freq)
         if self.live:
             self.live.dec.set_fixed_frequency(None if self.auto_var.get()
                                               else getattr(self, "fixed_freq", None))
@@ -228,11 +271,15 @@ class App(tk.Tk):
             return
         tr = self.live.dec.tracker
         f = tr.cfg.f_min + (tr.cfg.f_max - tr.cfg.f_min) * ev.x / max(self.canvas.winfo_width(), 1)
-        self.fixed_freq = float(f)
+        self.fixed_freq = round(float(f), 1)
         self.auto_var.set(False)
+        self._save_config(fixed_freq=self.fixed_freq)
         self.live.dec.set_fixed_frequency(self.fixed_freq)
 
-    def _n1mm_changed(self):
+    def _n1mm_changed(self, save=True):
+        if save:
+            self._save_config(n1mm_enabled=bool(self.n1mm_var.get()),
+                              n1mm_wipe=bool(self.wipe_var.get()))
         if self.n1mm_var.get():
             if self.n1mm is None:
                 log.info("N1MM-Anbindung ein (Wipe %s)", "an" if self.wipe_var.get() else "aus")
@@ -309,6 +356,14 @@ class App(tk.Tk):
         c.create_text(w - 6, 6, anchor="ne", fill="#a0aec0", font=("Segoe UI", 8),
                       text=f"{tr.cfg.f_max:.0f} Hz")
 
+    def show_config_notice(self, broken_name, reason):
+        from tkinter import messagebox
+        messagebox.showwarning(
+            "Einstellungen zurückgesetzt",
+            f"Die Einstellungsdatei war beschädigt ({reason}) und wurde als "
+            f"{broken_name} beiseitegelegt. Es gelten die Standardwerte.",
+            parent=self)
+
     def _add_call(self, call):
         if call in self.calls:
             return
@@ -337,10 +392,16 @@ def main():
     log_startup("GUI")
     import argparse
     p = argparse.ArgumentParser(description="CW Decoder – Oberfläche")
-    p.add_argument("--n1mm", action="store_true",
-                   help="N1MM-Anbindung beim Start einschalten (UDP 12060, Telnet 7373)")
+    p.add_argument("--n1mm", action="store_true", default=None,
+                   help="N1MM-Anbindung für diesen Lauf einschalten (UDP 12060, Telnet 7373)")
     a = p.parse_args()
-    App(n1mm=a.n1mm).mainloop()
+    config_path = config_mod.get_config_path()
+    cfg = config_mod.load(config_path)
+    app = App(n1mm=a.n1mm, cfg=cfg, config_path=config_path)
+    notice = config_mod.pop_broken_notice(config_path)
+    if notice:
+        app.after(300, lambda: app.show_config_notice(*notice))
+    app.mainloop()
 
 
 if __name__ == "__main__":

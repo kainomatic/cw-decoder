@@ -1,0 +1,187 @@
+# CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
+"""Einstellungen als JSON in <App-Ordner>/config.json (ADR-0005).
+
+load()   fehlt die Datei: Defaults. Ist sie kaputt (kein gültiges JSON, kein
+         Objekt): wird sie nach config.json.broken-<Zeitstempel> umbenannt,
+         Defaults geladen, WARNING geloggt und ein Hinweis für den nächsten
+         GUI-Start hinterlegt (pop_broken_notice()). Einzelne Werte mit
+         falschem Typ fallen still auf ihren Default zurück (WARNING im Log).
+save()   schreibt atomar (temporäre Datei + os.replace).
+
+Unbekannte Schlüssel bleiben beim Laden und Speichern erhalten, damit eine
+ältere Version die Einstellungen einer neueren nicht wegwirft.
+"""
+import json
+import logging
+import os
+import tempfile
+import time
+from datetime import datetime
+from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+CONFIG_FILE = "config.json"
+NOTICE_SUFFIX = ".broken-notice"
+
+DEFAULTS = {
+    "update_check": True,
+    "device_name": None,
+    "fixed_freq": None,
+    "n1mm_enabled": False,
+    "n1mm_wipe": True,
+    "record_default": False,
+}
+
+
+class ConfigError(ValueError):
+    """Config-Datei vorhanden, aber nicht lesbar (kaputtes JSON o. ä.)."""
+
+
+def _is_bool(v):
+    return isinstance(v, bool)
+
+
+def _is_opt_str(v):
+    return v is None or isinstance(v, str)
+
+
+def _is_opt_freq(v):
+    return v is None or (isinstance(v, (int, float)) and not isinstance(v, bool)
+                         and 50.0 <= float(v) <= 4000.0)
+
+
+_VALIDATORS = {
+    "update_check": _is_bool,
+    "device_name": _is_opt_str,
+    "fixed_freq": _is_opt_freq,
+    "n1mm_enabled": _is_bool,
+    "n1mm_wipe": _is_bool,
+    "record_default": _is_bool,
+}
+
+
+def get_config_path() -> Path:
+    from .paths import get_app_dir
+    return get_app_dir() / CONFIG_FILE
+
+
+def defaults() -> dict:
+    return dict(DEFAULTS)
+
+
+def parse(text: str) -> dict:
+    """JSON-Text in eine vollständige Config wandeln. Wirft ConfigError."""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ConfigError(f"kein gültiges JSON ({e})") from e
+    if not isinstance(data, dict):
+        raise ConfigError("JSON enthält kein Objekt")
+    cfg = defaults()
+    for key, value in data.items():
+        check = _VALIDATORS.get(key)
+        if check is not None and not check(value):
+            log.warning("Config: ungültiger Wert für %s (%r), Standard %r wird benutzt",
+                        key, value, DEFAULTS[key])
+            continue
+        cfg[key] = value
+    return cfg
+
+
+def _notice_path(path: Path) -> Path:
+    return path.with_name(path.name + NOTICE_SUFFIX)
+
+
+def _quarantine(path: Path, reason: str) -> Path:
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    target = path.with_name(f"{path.name}.broken-{stamp}")
+    n = 1
+    while target.exists():
+        n += 1
+        target = path.with_name(f"{path.name}.broken-{stamp}-{n}")
+    os.replace(path, target)
+    log.warning("Config ungültig (%s): umbenannt nach %s, Standardwerte geladen",
+                reason, target.name)
+    try:
+        _notice_path(path).write_text(f"{target.name}\n{reason}\n", encoding="utf-8")
+    except OSError as e:
+        log.warning("Hinweisdatei für die GUI nicht schreibbar: %s", e)
+    return target
+
+
+def load(path=None) -> dict:
+    """Config laden; liefert immer eine vollständige Config."""
+    path = Path(path) if path is not None else get_config_path()
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        log.info("Keine Config vorhanden, Standardwerte")
+        return defaults()
+    except (OSError, UnicodeDecodeError) as e:
+        if isinstance(e, UnicodeDecodeError):
+            try:
+                _quarantine(path, "keine UTF-8-Textdatei")
+            except OSError as e2:
+                log.error("Config nicht umbenennbar: %s", e2)
+        else:
+            log.error("Config nicht lesbar (%s), Standardwerte", e)
+        return defaults()
+    try:
+        cfg = parse(text)
+    except ConfigError as e:
+        try:
+            _quarantine(path, str(e))
+        except OSError as e2:
+            log.error("Config ungültig (%s) und nicht umbenennbar: %s", e, e2)
+        return defaults()
+    log.info("Config geladen: %s", path)
+    return cfg
+
+
+def save(cfg: dict, path=None) -> None:
+    """Config atomar schreiben. Wirft OSError, wenn das nicht geht."""
+    path = Path(path) if path is not None else get_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(cfg, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+    fd, tmp = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        # Unter Windows kann ein Virenscanner die Zieldatei kurz sperren
+        for attempt in range(5):
+            try:
+                os.replace(tmp, path)
+                break
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.05)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    log.debug("Config gespeichert: %s", path)
+
+
+def pop_broken_notice(path=None):
+    """Hinweis auf eine umbenannte, kaputte Config abholen (einmalig).
+
+    Liefert (umbenannter Dateiname, Grund) oder None."""
+    path = Path(path) if path is not None else get_config_path()
+    notice = _notice_path(path)
+    try:
+        lines = notice.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    try:
+        notice.unlink()
+    except OSError:
+        pass
+    name = lines[0] if lines else "?"
+    reason = lines[1] if len(lines) > 1 else ""
+    return name, reason

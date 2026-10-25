@@ -10,6 +10,7 @@ keine Soundkarte. Aufnahmen landen in einem temporären Ordner.
 
 Absichtlich nicht test_*.py: pytest soll ihn nicht ungefragt einsammeln.
 """
+import gc
 import os
 import shutil
 import sys
@@ -155,6 +156,12 @@ def run_scenario(ok_rate=48000, with_input=True, slow_recorder=False, n1mm=True)
     run()
     app.mainloop()
     time.sleep(0.3)
+    # Tk-Objekte des Fensters jetzt im Hauptthread abräumen: sonst kann die
+    # zyklische Garbage Collection sie später in einem Hintergrund-Thread
+    # des nächsten Szenarios löschen, und Tcl bricht ab
+    # ("Tcl_AsyncDelete: async handler deleted by the wrong thread").
+    del app, run, steps, snap
+    gc.collect()
     threading.excepthook = old_hook
     live.WavRecorder.write = orig_write
     recs = sorted(os.listdir(rec_dir))

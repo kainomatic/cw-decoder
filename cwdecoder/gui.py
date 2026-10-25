@@ -14,6 +14,7 @@ und Callbacks legen Meldungen in self.msgs, _poll() holt sie per after() ab.
 Alle sichtbaren Texte stehen als _LBL_*, _MSG_*, _TT_* oben im Modul
 (Vorbereitung für Übersetzungen).
 """
+import gc
 import logging
 import os
 import queue
@@ -646,6 +647,11 @@ def main():
         if notice:
             app.after(300, lambda: app.show_config_notice(*notice))
         app.mainloop()
+        # Tk-Objekte im Hauptthread abräumen, bevor ein noch laufender
+        # Hintergrund-Thread die Garbage Collection auslöst (Tcl verträgt
+        # das Löschen aus fremden Threads nicht)
+        del app
+        gc.collect()
     finally:
         lock.release()
         log.info("GUI beendet")

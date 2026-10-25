@@ -63,6 +63,7 @@ class CWDecoder:
 
     def set_fixed_frequency(self, f: float = None):
         self.tracker.set_fixed(f)
+        self._update_bandwidth()
 
     # ------------------------------------------------------------------
     def process(self, samples: np.ndarray):

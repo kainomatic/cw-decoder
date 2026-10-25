@@ -82,10 +82,16 @@ class ToneTracker:
         self.spectrum_db = None  # für Anzeige
 
     def set_fixed(self, f: float = None):
+        """Feste Frequenz setzen; None = zurück auf automatische Suche."""
         self.cfg.fixed_freq = f
         if f:
             self.freq = f
             self.locked = True
+        else:
+            # Automatik neu starten: Max-Hold leeren, damit nicht die alte
+            # Linie weiter "nachhallt", und Lock aufheben
+            self.locked = False
+            self.hold[:] = 0.0
 
     def process(self, x: np.ndarray):
         c = self.cfg

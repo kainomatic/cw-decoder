@@ -18,10 +18,9 @@ from . import utf8_console
 from .decoder import DecoderConfig
 from .live import LiveDecoder, open_stream, WavRecorder
 from .n1mm import N1MMBridge
+from .paths import get_recordings_dir
 
 NO_DEVICE = "(kein Eingangsgerät gefunden)"
-# Aufnahmen landen im testdata/-Ordner des Projekts, unabhängig vom Arbeitsverzeichnis
-REC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "testdata")
 
 
 class App(tk.Tk):
@@ -41,7 +40,9 @@ class App(tk.Tk):
         # Generation des laufenden Decoders; wird bei Start und Stop erhöht.
         # Meldungen tragen ihre Generation, veraltete Status werden verworfen.
         self.gen = 0
-        self.rec_dir = REC_DIR
+        # None = Standard-Aufnahmeordner (Dokumente\CW Decoder\Aufnahmen),
+        # wird erst beim ersten Aufnehmen angelegt; Tests setzen einen Temp-Ordner
+        self.rec_dir = None
         self.rec_path = None
         self._build()
         self._fill_devices()
@@ -157,8 +158,9 @@ class App(tk.Tk):
             # Zeitstempel mit Millisekunden: schneller Neustart überschreibt nichts
             name = datetime.now().strftime("cw_%Y%m%d_%H%M%S_%f")[:-3] + ".wav"
             try:
-                os.makedirs(self.rec_dir, exist_ok=True)
-                self.rec_path = os.path.join(self.rec_dir, name)
+                rec_dir = self.rec_dir or str(get_recordings_dir())
+                os.makedirs(rec_dir, exist_ok=True)
+                self.rec_path = os.path.join(rec_dir, name)
                 self.live.recorder = WavRecorder(self.rec_path, fs)
             except OSError as e:
                 self.rec_path = None

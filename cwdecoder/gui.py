@@ -25,13 +25,16 @@ from tkinter import ttk
 import numpy as np
 
 from . import config as config_mod
+from . import error_report
 from . import utf8_console
+from .__version__ import CHANNEL, __version__
 from .decoder import DecoderConfig
+from .gui_error_report import ErrorReportDialog, open_folder_or_report
 from .gui_errors import report_exception
 from .gui_tooltip import attach_tooltip
 from .live import AudioDeviceError, LiveDecoder, open_stream, WavRecorder
 from .n1mm import N1MMBridge, PortInUseError
-from .paths import get_recordings_dir
+from .paths import get_log_dir, get_recordings_dir
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +50,9 @@ _LBL_CALLS = "Rufzeichen (Klick → N1MM)"
 _LBL_N1MM = "N1MM-Anbindung"
 _LBL_WIPE = "vorher Alt+W (Wipe)"
 _LBL_NO_DEVICE = "(kein Eingangsgerät gefunden)"
+_LBL_MENU_HELP = "Hilfe"
+_LBL_MENU_LOGDIR = "Log-Ordner öffnen"
+_LBL_MENU_REPORT = "Fehler melden…"
 
 # -- Meldungen -------------------------------------------------------------
 _MSG_READY = "bereit"
@@ -74,6 +80,10 @@ _MSG_CTX_GUI = "Fehler in der Oberfläche"
 _MSG_CTX_DECODER = "Decoder abgebrochen"
 _MSG_CTX_N1MM = "N1MM-Anbindung"
 _MSG_DECODER_CRASHED = "Decoder abgebrochen – Details im Fehlerdialog"
+_MSG_AUDIO_INFO = "{device}, {rate}"
+_MSG_AUDIO_RATE = "{fs} Hz"
+_MSG_AUDIO_RATE_LAST = "zuletzt {fs} Hz"
+_MSG_AUDIO_NOT_STARTED = "nicht gestartet"
 
 # -- Tooltips --------------------------------------------------------------
 _TT_DEVICE = ("Audio-Eingang mit dem Empfängersignal: USB-Audio des Funkgeräts, "
@@ -129,12 +139,23 @@ class App(tk.Tk):
         self.rec_dir = None
         self.rec_path = None
         self.shown_errors = []  # angezeigte Fehler (ErrorInfo), für Tests
+        self.last_fs = None     # Abtastrate des letzten Laufs (Fehlerbericht)
+        self._build_menu()
         self._build()
         self._fill_devices()
         self._poll_id = self.after(60, self._poll)
         self.protocol("WM_DELETE_WINDOW", self._quit)
 
     # ------------------------------------------------------------------
+    def _build_menu(self):
+        bar = tk.Menu(self)
+        m_help = tk.Menu(bar, tearoff=False)
+        m_help.add_command(label=_LBL_MENU_LOGDIR, command=self.open_log_dir)
+        m_help.add_command(label=_LBL_MENU_REPORT, command=self.open_error_report)
+        bar.add_cascade(label=_LBL_MENU_HELP, menu=m_help)
+        self.configure(menu=bar)
+        self.menubar = bar
+
     def _build(self):
         top = ttk.Frame(self, padding=6)
         top.pack(fill="x")
@@ -286,6 +307,7 @@ class App(tk.Tk):
             self.status.set(str(e))
             self.report_error(e, f"Start mit {self.dev_var.get()}")
             return
+        self.last_fs = fs
         log.info("Decoder gestartet: %s, %d Hz, Ton %s", self.dev_var.get(), fs,
                  "automatisch" if cfg.tracker.fixed_freq is None
                  else f"fest {cfg.tracker.fixed_freq:.0f} Hz")
@@ -331,6 +353,29 @@ class App(tk.Tk):
         info = report_exception(self, exc, context)
         self.shown_errors.append(info)
         return info
+
+    # -- Hilfe ---------------------------------------------------------
+    def audio_info(self):
+        """Gerät und Abtastrate für den Fehlerbericht."""
+        if self.live:
+            rate = _MSG_AUDIO_RATE.format(fs=self.live.fs)
+        elif self.last_fs:
+            rate = _MSG_AUDIO_RATE_LAST.format(fs=self.last_fs)
+        else:
+            rate = _MSG_AUDIO_NOT_STARTED
+        return _MSG_AUDIO_INFO.format(device=self.dev_var.get() or "?", rate=rate)
+
+    def open_log_dir(self):
+        open_folder_or_report(self, get_log_dir())
+
+    def open_error_report(self):
+        from .logging_setup import get_log_path
+        log_dir = get_log_dir()
+        text = error_report.build_error_report(__version__, CHANNEL, get_log_path(log_dir),
+                                               self.audio_info())
+        log.info("Fehlerbericht-Dialog geöffnet")
+        return ErrorReportDialog(self, text, __version__,
+                                 save_dir=get_recordings_dir().parent, log_dir=log_dir)
 
     def report_callback_exception(self, exc_type, exc, tb):
         """Ausnahmen aus tk-Callbacks: Dialog statt Ausgabe auf stderr."""

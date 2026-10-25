@@ -46,7 +46,7 @@ def similarity(got: str, expect: str) -> float:
     return difflib.SequenceMatcher(None, a, b).ratio()
 
 
-def main():
+def main(argv=None):
     utf8_console()
     p = argparse.ArgumentParser()
     p.add_argument("wav")
@@ -54,7 +54,7 @@ def main():
     p.add_argument("--block", type=int, default=512)
     p.add_argument("--freq", type=float, default=None, help="feste Tonfrequenz statt Suche")
     p.add_argument("--trace", action="store_true")
-    a = p.parse_args()
+    a = p.parse_args(argv)
     fs, x = load_wav(a.wav)
     cfg = DecoderConfig()
     if a.freq:

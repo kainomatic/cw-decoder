@@ -1,3 +1,5 @@
 # Entwicklung und Tests (CI installiert diese Datei)
 -r requirements.txt
 pytest>=8.0
+# nur für tools/make_icon.py (Build), nicht zur Laufzeit
+pillow>=10.0

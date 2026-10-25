@@ -1,3 +1,4 @@
+# CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
 """Timing-Analyse: Punktlänge (Geschwindigkeit) schätzen, Elemente klassifizieren,
 Zeichen und Wörter live ausgeben.
 

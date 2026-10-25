@@ -1,3 +1,4 @@
+# CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
 """Morse-Tabelle und Umwandlung Punkt/Strich-Folge -> Zeichen."""
 
 MORSE_TABLE = {

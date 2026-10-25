@@ -1,3 +1,4 @@
+# CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
 """Testmatrix: erzeugt Signale mit verschiedenen Störungen und misst die
 Decodier-Genauigkeit. Aufruf: python tests/run_matrix.py [--verbose]
 """

@@ -1,3 +1,4 @@
+# CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
 """GUI-Rauchtest ohne Audiogerät:  python tests/gui_smoke.py
 
 Ersetzt sounddevice durch eine Fake-Soundkarte, die ein mit cwdecoder.gen

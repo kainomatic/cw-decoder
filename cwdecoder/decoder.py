@@ -1,3 +1,4 @@
+# CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
 """Komplette Decoder-Kette: Audio-Blöcke rein, Text raus."""
 from dataclasses import dataclass, field
 import numpy as np

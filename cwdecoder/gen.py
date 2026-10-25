@@ -1,3 +1,4 @@
+# CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
 """Testsignal-Generator: Morsetext -> WAV mit Rauschen, Pitch-Drift, QSB, QRM.
 
 Beispiel:

@@ -1,3 +1,4 @@
+# CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
 """Grafische Oberfläche: Spektrum, Live-Text, erkannte Rufzeichen, N1MM.
 
     python -m cwdecoder.gui            N1MM-Anbindung aus (per Haken einschaltbar)

@@ -1,0 +1,11 @@
+# CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
+# Nur Werkzeug-Konfiguration; installiert wird über requirements*.txt.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"
+markers = [
+    "gui: braucht ein Display (wird ohne Display übersprungen)",
+    "slow: läuft länger als ein paar Sekunden (GUI-Rauchtest, Testmatrix)",
+]

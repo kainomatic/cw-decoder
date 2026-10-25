@@ -1,0 +1,3 @@
+# Entwicklung und Tests (CI installiert diese Datei)
+-r requirements.txt
+pytest>=8.0

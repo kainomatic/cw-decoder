@@ -34,7 +34,11 @@ Grafische Oberfläche mit Spektrum, Text, Rufzeichen-Buttons und N1MM:
 
 ```
 python -m cwdecoder.gui
+python -m cwdecoder.gui --n1mm   # N1MM-Anbindung gleich beim Start an
 ```
+
+Die N1MM-Anbindung ist standardmäßig aus und belegt erst Ports (UDP 12060,
+TCP 7373), wenn der Haken "N1MM-Anbindung" gesetzt wird.
 
 Ein Klick ins Spektrum setzt die Tonfrequenz fest (Haken "Ton automatisch
 suchen" geht aus); Haken wieder setzen schaltet zurück auf Automatik.

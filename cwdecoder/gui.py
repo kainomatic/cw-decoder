@@ -1,6 +1,7 @@
 """Grafische Oberfläche: Spektrum, Live-Text, erkannte Rufzeichen, N1MM.
 
-    python -m cwdecoder.gui
+    python -m cwdecoder.gui            N1MM-Anbindung aus (per Haken einschaltbar)
+    python -m cwdecoder.gui --n1mm     N1MM-Anbindung gleich beim Start an
 """
 import os
 import queue
@@ -21,8 +22,9 @@ REC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 
 class App(tk.Tk):
-    def __init__(self):
+    def __init__(self, n1mm: bool = False):
         super().__init__()
+        self.n1mm_on_start = n1mm
         self.title("CW Decoder")
         self.geometry("900x560")
         self.msgs = queue.Queue()
@@ -79,7 +81,8 @@ class App(tk.Tk):
         ttk.Label(right, text="Rufzeichen (Klick → N1MM)").pack(anchor="w")
         self.call_frame = ttk.Frame(right)
         self.call_frame.pack(fill="both", expand=True)
-        self.n1mm_var = tk.BooleanVar(value=True)
+        # standardmäßig aus: Ports werden erst gebunden, wenn der Haken gesetzt wird
+        self.n1mm_var = tk.BooleanVar(value=self.n1mm_on_start)
         ttk.Checkbutton(right, text="N1MM-Anbindung", variable=self.n1mm_var,
                         command=self._n1mm_changed).pack(anchor="w", pady=(6, 0))
         self.wipe_var = tk.BooleanVar(value=True)
@@ -217,9 +220,10 @@ class App(tk.Tk):
                 self.n1mm = N1MMBridge(wipe=self.wipe_var.get())
             else:
                 self.n1mm.typer.wipe = self.wipe_var.get()
-        elif self.n1mm is not None:
-            self.n1mm.stop()
-            self.n1mm = None
+        else:
+            if self.n1mm is not None:
+                self.n1mm.stop()
+                self.n1mm = None
             self.n1mm_status.set("N1MM: aus")
 
     # ------------------------------------------------------------------
@@ -301,7 +305,12 @@ class App(tk.Tk):
 
 
 def main():
-    App().mainloop()
+    import argparse
+    p = argparse.ArgumentParser(description="CW Decoder – Oberfläche")
+    p.add_argument("--n1mm", action="store_true",
+                   help="N1MM-Anbindung beim Start einschalten (UDP 12060, Telnet 7373)")
+    a = p.parse_args()
+    App(n1mm=a.n1mm).mainloop()
 
 
 if __name__ == "__main__":

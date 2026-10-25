@@ -41,7 +41,7 @@ class App(tk.Tk):
         self.rec_path = None
         self._build()
         self._fill_devices()
-        self.after(60, self._poll)
+        self._poll_id = self.after(60, self._poll)
         self.protocol("WM_DELETE_WINDOW", self._quit)
 
     # ------------------------------------------------------------------
@@ -195,6 +195,8 @@ class App(tk.Tk):
         self._stop()
         if self.n1mm:
             self.n1mm.stop()
+        # Poll-Timer abmelden, sonst feuert er nach destroy() ins Leere
+        self.after_cancel(self._poll_id)
         self.destroy()
 
     def _clear(self):
@@ -250,7 +252,7 @@ class App(tk.Tk):
                 self.n1mm_status.set(f"N1MM: {r.freq_khz:.1f} kHz {r.mode or ''}  ({r.mycall or ''})")
             else:
                 self.n1mm_status.set("N1MM: keine Broadcasts (Port 12060)")
-        self.after(60, self._poll)
+        self._poll_id = self.after(60, self._poll)
 
     def _show_status(self, st):
         lock = "Ton" if st["locked"] else "kein Ton"

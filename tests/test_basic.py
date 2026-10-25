@@ -34,6 +34,20 @@ def test_callsign():
     assert not looks_like_call("599") and not looks_like_call("TEST")
 
 
+def test_entry_window_title():
+    from cwdecoder.n1mm import pick_entry_window
+    wins = [(1, "Elecraft K3 VFO A"),                     # Bandmap
+            (2, "Log"), (3, ""),
+            (4, "14053.63 CW Elecraft K3 VFO B"),         # zweites Entry Window
+            (5, "21050.00+0.00 CW Elecraft K3 VFO A"),    # Entry Window mit RIT
+            (6, "14200.00 USB Manual - VFO A")]
+    assert pick_entry_window(wins)[0] == 5
+    assert pick_entry_window(wins, vfo="B")[0] == 4
+    assert pick_entry_window([(6, "14200.00 USB Manual - VFO A")])[0] == 6
+    assert pick_entry_window(wins[:3]) is None            # nie die Bandmap nehmen
+    assert pick_entry_window(wins[:3], title_hint="log")[0] == 2
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

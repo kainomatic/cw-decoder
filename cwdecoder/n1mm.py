@@ -109,26 +109,91 @@ class RadioInfoListener(threading.Thread):
 
 
 # --------------------------------------------------------------------------
+# Titel des N1MM+ Entry Window laut Doku/Screenshots auf n1mmwp.hamdocs.com:
+#   "14053.63 CW Elecraft K3 VFO A"        (Frequenz kHz, Mode, Radio, VFO)
+#   "21050.00+0.00 CW Elecraft K3 VFO A"   (mit RIT-Anteil)
+#   "14200.00 USB Manual - VFO A"          (ohne CAT)
+# Das zweite Entry Window (SO2V/SO2R) hat "B" statt "A". Die Bandmap heißt
+# ähnlich ("Elecraft K3 VFO A"), beginnt aber nicht mit einer Frequenz.
+ENTRY_TITLE_RE = re.compile(
+    r"^\s*\d{1,6}\.\d{1,3}(?:[+-]\d+(?:\.\d+)?)?\s+\S+.*\bVFO\s*([AB])\s*$", re.I)
+
+
+def pick_entry_window(windows, vfo: str = "A", title_hint: str = ""):
+    """Wählt aus [(hwnd, titel), ...] das Entry Window.
+
+    1. Titel passt auf ENTRY_TITLE_RE, bevorzugt der gewünschte VFO
+    2. Fallback: Titel enthält title_hint (falls gesetzt)
+    Sonst None – lieber nichts tippen als ins falsche Fenster.
+    """
+    matches = []
+    for hwnd, title in windows:
+        m = ENTRY_TITLE_RE.match(title or "")
+        if m:
+            matches.append((m.group(1).upper() != vfo.upper(), hwnd, title))
+    if matches:
+        matches.sort(key=lambda t: t[0])    # gewünschter VFO zuerst, sonst stabil
+        return matches[0][1], matches[0][2]
+    if title_hint:
+        for hwnd, title in windows:
+            if title_hint.lower() in (title or "").lower():
+                return hwnd, title
+    return None
+
+
+def _win32():
+    """user32/kernel32 mit Signaturen (wichtig unter 64 Bit: HWND/HANDLE
+    dürfen nicht auf c_int abgeschnitten werden)."""
+    import ctypes
+    from ctypes import wintypes
+    u, k = ctypes.windll.user32, ctypes.windll.kernel32
+    if getattr(u, "_cw_sig", False):
+        return u, k
+    u.IsWindowVisible.argtypes = [wintypes.HWND]
+    u.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+    u.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    u.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    u.GetWindowThreadProcessId.restype = wintypes.DWORD
+    u.GetForegroundWindow.restype = wintypes.HWND
+    u.SetForegroundWindow.argtypes = [wintypes.HWND]
+    u.BringWindowToTop.argtypes = [wintypes.HWND]
+    u.IsIconic.argtypes = [wintypes.HWND]
+    u.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+    u.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
+    k.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    k.OpenProcess.restype = wintypes.HANDLE
+    k.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD,
+                                             wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+    k.CloseHandle.argtypes = [wintypes.HANDLE]
+    k.GetCurrentThreadId.restype = wintypes.DWORD
+    u._cw_sig = True
+    return u, k
+
+
 class EntryWindowTyper:
     """Tippt Text in das N1MM Entry Window (nur Windows, via ctypes/user32)."""
 
-    def __init__(self, process_hint: str = "N1MMLogger", title_hint: str = "", wipe: bool = True):
-        self.process_hint = process_hint.lower()
-        self.title_hint = title_hint.lower()
+    def __init__(self, process_hint: str = "N1MMLogger", title_hint: str = "",
+                 wipe: bool = True, vfo: str = "A"):
+        self.process_hint = process_hint.lower()   # Teil des Exe-Namens (N1MMLogger.net.exe)
+        self.title_hint = title_hint                # Fallback, falls der Titel anders aussieht
+        self.vfo = vfo
         self.wipe = wipe
         self.available = sys.platform.startswith("win")
+        self.last_titles = []                       # zuletzt gefundene Fenster des Prozesses
 
     # -- Fenstersuche ------------------------------------------------------
-    def find_window(self):
+    def process_windows(self):
+        """Alle sichtbaren Top-Level-Fenster des N1MM-Prozesses: [(hwnd, titel)]."""
         if not self.available:
-            return None
+            return []
         import ctypes
+        import os
         from ctypes import wintypes
-        user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
+        user32, kernel32 = _win32()
         found = []
 
-        @ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+        @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
         def enum_cb(hwnd, _):
             if not user32.IsWindowVisible(hwnd):
                 return True
@@ -146,12 +211,23 @@ class EntryWindowTyper:
                 if kernel32.QueryFullProcessImageNameW(h, 0, pbuf, ctypes.byref(size)):
                     exe = pbuf.value
                 kernel32.CloseHandle(h)
-            if self.process_hint in exe.lower() and self.title_hint in title.lower():
+            if self.process_hint in os.path.basename(exe).lower():
                 found.append((hwnd, title))
             return True
 
         user32.EnumWindows(enum_cb, 0)
-        return found[0] if found else None
+        return found
+
+    def find_window(self):
+        wins = self.process_windows()
+        self.last_titles = [t for _, t in wins]
+        # Für den ersten echten Test: alles ausgeben, was der Prozess an Fenstern hat
+        print(f"[n1mm] {len(wins)} Fenster von '{self.process_hint}': "
+              + ", ".join(repr(t) for t in self.last_titles), file=sys.stderr)
+        win = pick_entry_window(wins, self.vfo, self.title_hint)
+        if win:
+            print(f"[n1mm] Entry Window: {win[1]!r}", file=sys.stderr)
+        return win
 
     # -- Tippen --------------------------------------------------------------
     def type_call(self, call: str) -> bool:
@@ -159,8 +235,7 @@ class EntryWindowTyper:
         if not win:
             print("[n1mm] Entry Window nicht gefunden (läuft N1MM?)", file=sys.stderr)
             return False
-        import ctypes
-        user32 = ctypes.windll.user32
+        user32, _ = _win32()
         hwnd, title = win
         user32.SetForegroundWindow(hwnd)
         time.sleep(0.05)

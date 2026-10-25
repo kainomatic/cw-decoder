@@ -2,8 +2,8 @@
 """Fehlermeldungen für Menschen (ADR-0007).
 
 classify_error(exc) -> ErrorInfo
-    Ordnet erwartete Fehler (Soundkarte, Port belegt, N1MM-Fenster, Config)
-    einem Klartext mit Handlungshinweis zu. Alles andere ist ein
+    Ordnet erwartete Fehler (Soundkarte, Port belegt, N1MM-Fenster, Config,
+    Update) einem Klartext mit Handlungshinweis zu. Alles andere ist ein
     "Unerwarteter Fehler" mit Traceback im Detailbereich. Reine Logik,
     ohne Display testbar.
 
@@ -45,6 +45,13 @@ _TITLE_CONFIG = "Einstellungen ungültig"
 _MSG_CONFIG = ("Die Einstellungsdatei war beschädigt und wurde beiseitegelegt. "
                "Es gelten die Standardwerte; bitte Gerät und Optionen neu wählen.")
 _STATUS_CONFIG = "Einstellungen zurückgesetzt"
+
+_TITLE_UPDATE = "Update nicht möglich"
+_MSG_UPDATE = ("Die Suche nach Updates bzw. der Download hat nicht geklappt.\n\n"
+               "Bitte die Internetverbindung prüfen und es später erneut versuchen. "
+               "Neue Versionen gibt es auch unter "
+               "https://github.com/kainomatic/cw-decoder/releases.")
+_STATUS_UPDATE = "Update-Prüfung fehlgeschlagen"
 
 _TITLE_UNEXPECTED = "Unerwarteter Fehler"
 _MSG_UNEXPECTED = ("Es ist ein unerwarteter Fehler aufgetreten:\n{err}\n\n"
@@ -93,6 +100,7 @@ def classify_error(exc: BaseException) -> ErrorInfo:
     """Ausnahme auf eine Meldung für Menschen abbilden."""
     from .config import ConfigError
     from .n1mm import EntryWindowNotFoundError
+    from .updater import UpdateError
 
     detail = str(exc) or None
     if _is_audio_error(exc):
@@ -101,6 +109,8 @@ def classify_error(exc: BaseException) -> ErrorInfo:
         return ErrorInfo(_TITLE_PORT, _MSG_PORT, _STATUS_PORT, True, detail)
     if isinstance(exc, EntryWindowNotFoundError):
         return ErrorInfo(_TITLE_N1MM, _MSG_N1MM, _STATUS_N1MM, True, detail)
+    if isinstance(exc, UpdateError):
+        return ErrorInfo(_TITLE_UPDATE, _MSG_UPDATE, _STATUS_UPDATE, True, detail)
     if isinstance(exc, ConfigError):
         return ErrorInfo(_TITLE_CONFIG, _MSG_CONFIG, _STATUS_CONFIG, True, detail)
     err = f"{type(exc).__name__}: {exc}"

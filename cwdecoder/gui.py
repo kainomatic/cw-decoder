@@ -28,6 +28,7 @@ import numpy as np
 from . import config as config_mod
 from . import error_report
 from . import utf8_console
+from . import updater
 from .__version__ import APP_NAME, CHANNEL, REPO_URL, __version__
 from .decoder import DecoderConfig
 from .gui_error_report import ErrorReportDialog, open_folder_or_report
@@ -62,6 +63,7 @@ _LBL_MENU_REPORT = "Fehler melden…"
 _LBL_MENU_ABOUT = "Über CW Decoder"
 _LBL_ABOUT_TITLE = "Über CW Decoder"
 _LBL_ABOUT_CLOSE = "Schließen"
+_LBL_OK = "OK"
 
 # -- Meldungen -------------------------------------------------------------
 _MSG_READY = "bereit"
@@ -94,8 +96,13 @@ _MSG_AUDIO_RATE = "{fs} Hz"
 _MSG_AUDIO_RATE_LAST = "zuletzt {fs} Hz"
 _MSG_AUDIO_NOT_STARTED = "nicht gestartet"
 _MSG_UPDATE_TITLE = "Nach Updates suchen"
-_MSG_UPDATE_SOON = ("Die Update-Prüfung kommt mit dem nächsten Release.\n\n"
-                    "Bis dahin: neue Versionen stehen unter {url}/releases.")
+_MSG_UPDATE_CHECKING = "Suche nach Updates …"
+_MSG_UPDATE_CURRENT = "Der CW Decoder v{version} ist aktuell."
+_MSG_UPDATE_HINT = "⬆ Update auf v{version} verfügbar"
+_MSG_UPDATE_OPTED_OUT = ("Automatische Update-Prüfung beim Start ist aus "
+                         "(Hilfe → Nach Updates suchen geht weiterhin).")
+_MSG_CTX_UPDATE = "Update-Prüfung"
+_MSG_CTX_INSTALL = "Update-Installation"
 _MSG_ABOUT = ("Version {version} ({channel})\n\n"
               "Live-Morsedecoder für Audio vom Funkgerät mit Anbindung an "
               "N1MM Logger+.\n\n"
@@ -128,8 +135,10 @@ _TT_N1MM = ("N1MM Logger+ anbinden: empfängt Frequenz per UDP 12060 und bietet 
 _TT_WIPE = "Vor dem Eintippen Alt+W senden, damit das Entry Window leer ist."
 _TT_N1MM_STATUS = "Zustand der N1MM-Anbindung und Ergebnis der letzten Übergabe."
 _TT_REPO_LINK = "Projektseite im Browser öffnen."
+_TT_UPDATE_OK = "Dialog schließen."
 
 NO_DEVICE = _LBL_NO_DEVICE
+UPDATE_CHECK_DELAY_MS = 1500
 
 
 def window_title(channel=CHANNEL, version=__version__):
@@ -169,6 +178,15 @@ class App(tk.Tk):
         self.rec_path = None
         self.shown_errors = []  # angezeigte Fehler (ErrorInfo), für Tests
         self.last_fs = None     # Abtastrate des letzten Laufs (Fehlerbericht)
+        # Self-Update (ADR-0013); main() setzt Lock und Mutex, damit sie vor
+        # dem Installer-Start freigegeben werden können
+        self.instance_lock = None
+        self.app_mutex = None
+        self.update_checking = False
+        self.pending_update = None      # Ergebnis nach "Später" (Hinweis im Menü)
+        self.update_dialog = None
+        self.check_for_update = updater.check_for_update    # Tests ersetzen das
+        self.launch_installer = updater.launch_installer_and_exit
         self._build_menu()
         self._build()
         self._fill_devices()
@@ -184,7 +202,7 @@ class App(tk.Tk):
         m_file.add_command(label=_LBL_MENU_QUIT, command=self._quit)
         bar.add_cascade(label=_LBL_MENU_FILE, menu=m_file)
         m_help = tk.Menu(bar, tearoff=False)
-        m_help.add_command(label=_LBL_MENU_UPDATE, command=self.show_update)
+        m_help.add_command(label=_LBL_MENU_UPDATE, command=self.check_updates_manual)
         m_help.add_separator()
         m_help.add_command(label=_LBL_MENU_LOGDIR, command=self.open_log_dir)
         m_help.add_command(label=_LBL_MENU_REPORT, command=self.open_error_report)
@@ -193,6 +211,8 @@ class App(tk.Tk):
         bar.add_cascade(label=_LBL_MENU_HELP, menu=m_help)
         self.configure(menu=bar)
         self.menubar = bar
+        self.help_menu = m_help
+        self.update_hint = None     # Beschriftung des Hinweis-Eintrags im Hilfe-Menü
 
     def _build(self):
         top = ttk.Frame(self, padding=6)
@@ -406,10 +426,125 @@ class App(tk.Tk):
     def open_recordings_dir(self):
         open_folder_or_report(self, get_recordings_dir())
 
-    def show_update(self):
-        from tkinter import messagebox
-        messagebox.showinfo(_MSG_UPDATE_TITLE, _MSG_UPDATE_SOON.format(url=REPO_URL),
-                            parent=self)
+    # -- Self-Update (ADR-0013) ----------------------------------------
+    def schedule_update_check(self):
+        """Automatische Prüfung kurz nach dem Start, wenn update_check an ist."""
+        if self.cfg.get("update_check", True):
+            self.after(UPDATE_CHECK_DELAY_MS, lambda: self.start_update_check(manual=False))
+        else:
+            log.info("Automatische Update-Prüfung ist abgeschaltet")
+
+    def check_updates_manual(self):
+        """Hilfe → Nach Updates suchen (auch bei update_check false)."""
+        self.start_update_check(manual=True)
+
+    def start_update_check(self, manual):
+        if self.update_checking:
+            return
+        if self.update_dialog is not None:
+            self.update_dialog.top.lift()
+            return
+        self.update_checking = True
+        if manual:
+            self.status.set(_MSG_UPDATE_CHECKING)
+        check = self.check_for_update
+
+        def run():
+            """Läuft im Hintergrund-Thread: kein tk-Aufruf."""
+            try:
+                result = check(__version__, CHANNEL)
+            except Exception as e:  # noqa: BLE001 - check_for_update wirft eigentlich nicht
+                result = updater.UpdateCheckResult(updater.UpdateStatus.ERROR,
+                                                   error_message=str(e))
+            self.msgs.put(("update", 0, (result, manual)))
+
+        threading.Thread(target=run, daemon=True, name="update-check").start()
+
+    def handle_update_result(self, result, manual):
+        """Ergebnis der Prüfung im tk-Thread auswerten."""
+        self.update_checking = False
+        if self.status.get() == _MSG_UPDATE_CHECKING:
+            self.status.set(_MSG_READY)
+        if result.status is updater.UpdateStatus.UPDATE_AVAILABLE:
+            return self.show_update_dialog(result)
+        if result.status is updater.UpdateStatus.UP_TO_DATE:
+            self.set_update_hint(None)
+            if manual:
+                return self._info_dialog(_MSG_UPDATE_TITLE,
+                                         _MSG_UPDATE_CURRENT.format(version=__version__))
+            return None
+        # Fehler: beim Auto-Check nur ins Log (schreibt updater), sonst Dialog
+        if manual:
+            self.report_error(updater.UpdateError(result.error_message), _MSG_CTX_UPDATE)
+        return None
+
+    def show_update_dialog(self, result):
+        from .gui_update import UpdateDialog
+        if self.update_dialog is not None:
+            self.update_dialog.top.lift()
+            return self.update_dialog
+
+        def later():
+            self.update_dialog = None
+            self.set_update_hint(result)
+
+        def opt_out():
+            later()
+            self._save_config(update_check=False)
+            log.info("Automatische Update-Prüfung vom Nutzer abgeschaltet")
+            self.status.set(_MSG_UPDATE_OPTED_OUT)
+
+        def install(path):
+            self.update_dialog = None
+            self.install_update(path)
+
+        self.update_dialog = UpdateDialog(self, __version__, result, on_install=install,
+                                          on_later=later, on_opt_out=opt_out)
+        return self.update_dialog
+
+    def set_update_hint(self, result):
+        """Hinweis "Update auf vX.Y.Z verfügbar" oben im Hilfe-Menü (None = weg)."""
+        self.pending_update = result
+        if self.update_hint is not None:
+            self.help_menu.delete(0)
+            self.update_hint = None
+        if result is not None:
+            self.update_hint = _MSG_UPDATE_HINT.format(version=result.new_version)
+            self.help_menu.insert_command(0, label=self.update_hint,
+                                          command=lambda: self.show_update_dialog(result))
+
+    def install_update(self, installer_path):
+        """Vor dem Installer: Audio stoppen, N1MM-Ports schließen, Lock und
+        Mutex freigeben; dann Installer starten und beenden."""
+        log.info("Update wird installiert, Programm beendet sich")
+        self._stop()
+        if self.n1mm:
+            self.n1mm.stop()
+            self.n1mm = None
+        if self.instance_lock is not None:
+            self.instance_lock.release()
+        if self.app_mutex is not None:
+            self.app_mutex.close()
+        try:
+            self.launch_installer(installer_path, self._quit)
+        except OSError as e:
+            self.report_error(e, _MSG_CTX_INSTALL)
+
+    def _info_dialog(self, title, message):
+        dlg = tk.Toplevel(self)
+        dlg.title(title)
+        dlg.resizable(False, False)
+        dlg.transient(self)
+        frm = ttk.Frame(dlg, padding=16)
+        frm.pack(fill="both", expand=True)
+        ttk.Label(frm, text=message, wraplength=380, justify="left").pack(anchor="w")
+        btn = ttk.Button(frm, text=_LBL_OK, command=dlg.destroy)
+        btn.pack(anchor="e", pady=(12, 0))
+        attach_tooltip(btn, _TT_UPDATE_OK)
+        btn.focus_set()
+        dlg.bind("<Return>", lambda _e: dlg.destroy())
+        dlg.bind("<Escape>", lambda _e: dlg.destroy())
+        return dlg
 
     def show_about(self):
         import webbrowser
@@ -536,6 +671,8 @@ class App(tk.Tk):
                     self._show_status(val)
                 elif kind == "call":
                     self._add_call(val)
+                elif kind == "update":
+                    self.handle_update_result(*val)
         except queue.Empty:
             pass
         if self.live:
@@ -616,7 +753,7 @@ class App(tk.Tk):
             self.report_error(self.n1mm.last_failure, _MSG_CTX_N1MM)
 
 
-def main():
+def main(argv=None):
     utf8_console()
     from .logging_setup import install_exception_hooks, log_startup, setup_logging
     setup_logging()
@@ -626,8 +763,9 @@ def main():
     p = argparse.ArgumentParser(description="CW Decoder – Oberfläche")
     p.add_argument("--n1mm", action="store_true", default=None,
                    help="N1MM-Anbindung für diesen Lauf einschalten (UDP 12060, Telnet 7373)")
-    a = p.parse_args()
+    a = p.parse_args(argv)
 
+    from .app_mutex import create_app_mutex
     from .instance_lock import InstanceLock
     lock = InstanceLock()
     if not lock.acquire():
@@ -639,13 +777,18 @@ def main():
         root.destroy()
         log.info("Zweite Instanz beendet sich")
         return
+    # Für den Installer (AppMutex); Handle bis Prozessende halten
+    mutex = create_app_mutex()
     try:
         config_path = config_mod.get_config_path()
         cfg = config_mod.load(config_path)
         app = App(n1mm=a.n1mm, cfg=cfg, config_path=config_path)
+        app.instance_lock = lock
+        app.app_mutex = mutex
         notice = config_mod.pop_broken_notice(config_path)
         if notice:
             app.after(300, lambda: app.show_config_notice(*notice))
+        app.schedule_update_check()
         app.mainloop()
         # Tk-Objekte im Hauptthread abräumen, bevor ein noch laufender
         # Hintergrund-Thread die Garbage Collection auslöst (Tcl verträgt

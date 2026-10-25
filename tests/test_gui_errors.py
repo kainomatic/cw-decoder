@@ -9,6 +9,7 @@ from cwdecoder.config import ConfigError
 from cwdecoder.gui_errors import classify_error
 from cwdecoder.live import AudioDeviceError
 from cwdecoder.n1mm import EntryWindowNotFoundError, PortInUseError
+from cwdecoder.updater import UpdateError
 
 
 class PortAudioError(Exception):
@@ -22,6 +23,7 @@ class PortAudioError(Exception):
     (OSError(errno.EADDRINUSE, "Address already in use"), "Port belegt"),
     (EntryWindowNotFoundError("Entry Window nicht gefunden"), "N1MM-Fenster nicht gefunden"),
     (ConfigError("kein gültiges JSON"), "Einstellungen ungültig"),
+    (UpdateError("Keine Verbindung zu GitHub"), "Update nicht möglich"),
 ])
 def test_expected_errors(exc, title):
     info = classify_error(exc)

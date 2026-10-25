@@ -130,7 +130,9 @@ class App(tk.Tk):
             self.live.recorder = WavRecorder(name, fs)
             self.msgs.put(("text", f"[Aufnahme: {name}]\n"))
         holder["live"] = self.live
-        self.thread = threading.Thread(target=lambda: self.live.run(0.25), daemon=True)
+        # gebundene Methode statt lambda: der Thread darf nicht erst beim
+        # Anlaufen self.live nachschlagen (kann nach schnellem Stop None sein)
+        self.thread = threading.Thread(target=self.live.run, args=(0.25,), daemon=True)
         self.thread.start()
         self.btn_start.configure(text="Stop")
 
@@ -140,6 +142,11 @@ class App(tk.Tk):
         if self.stream:
             self.stream.stop()
             self.stream.close()
+        # Decoder-Thread auslaufen lassen, bevor die WAV-Datei geschlossen
+        # wird, sonst schreibt er ggf. noch in die geschlossene Datei
+        if self.thread:
+            self.thread.join(timeout=2.0)
+            self.thread = None
         if self.live and self.live.recorder:
             self.live.recorder.close()
         self.live = None

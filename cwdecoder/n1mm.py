@@ -170,6 +170,47 @@ def _win32():
     return u, k
 
 
+def copy_to_clipboard(text: str) -> bool:
+    """Text als Unicode in die Windows-Zwischenablage legen (ctypes, kein Tk
+    nötig; bleibt auch nach Programmende erhalten)."""
+    if not sys.platform.startswith("win"):
+        return False
+    import ctypes
+    from ctypes import wintypes
+    u, k = ctypes.windll.user32, ctypes.windll.kernel32
+    u.OpenClipboard.argtypes = [wintypes.HWND]
+    u.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+    u.SetClipboardData.restype = wintypes.HANDLE
+    k.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+    k.GlobalAlloc.restype = ctypes.c_void_p
+    k.GlobalLock.argtypes = [ctypes.c_void_p]
+    k.GlobalLock.restype = ctypes.c_void_p
+    k.GlobalUnlock.argtypes = [ctypes.c_void_p]
+    k.GlobalFree.argtypes = [ctypes.c_void_p]
+    CF_UNICODETEXT, GMEM_MOVEABLE = 13, 0x0002
+    data = (text + "\0").encode("utf-16-le")
+    for _ in range(10):             # Zwischenablage kann kurz von anderen belegt sein
+        if u.OpenClipboard(None):
+            break
+        time.sleep(0.02)
+    else:
+        return False
+    try:
+        u.EmptyClipboard()
+        h = k.GlobalAlloc(GMEM_MOVEABLE, len(data))
+        if not h:
+            return False
+        p = k.GlobalLock(h)
+        ctypes.memmove(p, data, len(data))
+        k.GlobalUnlock(h)
+        if not u.SetClipboardData(CF_UNICODETEXT, h):
+            k.GlobalFree(h)         # gehört nur bei Erfolg dem System
+            return False
+        return True
+    finally:
+        u.CloseClipboard()
+
+
 class EntryWindowTyper:
     """Tippt Text in das N1MM Entry Window (nur Windows, via ctypes/user32)."""
 
@@ -458,10 +499,13 @@ class SpotServer(threading.Thread):
 # --------------------------------------------------------------------------
 class N1MMBridge:
     """Bündelt alles: Frequenz von N1MM lesen, Rufzeichen per Tastatur oder
-    Spot übergeben."""
+    Spot übergeben; klappt das Tippen nicht, landet das Rufzeichen in der
+    Zwischenablage (Strg+V in N1MM)."""
 
     def __init__(self, udp_port: int = 12060, spot_port: int = 7373,
-                 use_typer: bool = True, use_spots: bool = True, wipe: bool = True):
+                 use_typer: bool = True, use_spots: bool = True, wipe: bool = True,
+                 use_clipboard: bool = True):
+        self.use_clipboard = use_clipboard
         self.errors = []    # Klartext-Meldungen für die GUI (z. B. Port belegt)
         self.radio = RadioInfoListener(udp_port)
         if self.radio.bind():
@@ -480,9 +524,13 @@ class N1MMBridge:
     def send_call(self, call: str, snr_db: float = 20, wpm: float = 25) -> str:
         """Rufzeichen an N1MM geben. Liefert eine Statusmeldung."""
         msgs = []
+        typed = False
         if self.typer and self.typer.available:
-            ok, msg = self.typer.type_call(call)
+            typed, msg = self.typer.type_call(call)
             msgs.append(msg)
+        if not typed and self.use_clipboard and copy_to_clipboard(call):
+            # Rückfallweg: Tippen ging nicht, der Operator fügt selbst ein
+            msgs.append("in der Zwischenablage – Strg+V in N1MM")
         if self.spots and self.spots.spot(call, self.radio.freq_khz, snr_db, wpm):
             msgs.append(f"als Spot auf {self.radio.freq_khz:.1f} kHz gesendet")
         if not msgs:

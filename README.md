@@ -93,7 +93,11 @@ Spektrumdaten und QSY auf Port 13064), deshalb zwei Wege:
 
 - **Tastatur** (Standard): Klick auf ein Rufzeichen holt das N1MM-Fenster in
   den Vordergrund, sendet optional Alt+W (Wipe) und tippt das Rufzeichen in
-  das Entry Window.
+  das Entry Window. Das Entry Window wird am Titel erkannt
+  ("14053.63 CW Elecraft K3 VFO A": Frequenz, Mode, Radio, VFO A/B); alle
+  Fenstertitel von N1MM stehen im Log. Lässt sich N1MM nicht in den
+  Vordergrund holen, wird nichts getippt, sondern das Rufzeichen in die
+  Zwischenablage gelegt (Strg+V in N1MM).
 - **Spots**: Das Programm ist ein Mini-DX-Cluster auf `127.0.0.1:7373`.
   In N1MM: Window → Telnet → Adresse `127.0.0.1`, Port `7373` eintragen und
   verbinden. Angeklickte Rufzeichen erscheinen als Skimmer-Spot auf der

@@ -27,9 +27,10 @@ import numpy as np
 from . import config as config_mod
 from . import utf8_console
 from .decoder import DecoderConfig
+from .gui_errors import report_exception
 from .gui_tooltip import attach_tooltip
 from .live import AudioDeviceError, LiveDecoder, open_stream, WavRecorder
-from .n1mm import N1MMBridge
+from .n1mm import N1MMBridge, PortInUseError
 from .paths import get_recordings_dir
 
 log = logging.getLogger(__name__)
@@ -68,9 +69,11 @@ _MSG_N1MM_IDLE = "N1MM: –"
 _MSG_N1MM_RADIO = "N1MM: {freq:.1f} kHz {mode}  ({call})"
 _MSG_N1MM_NO_BROADCAST = "N1MM: keine Broadcasts (Port 12060)"
 _MSG_N1MM_DISABLED = "N1MM-Anbindung ist aus"
-_MSG_CONFIG_RESET_TITLE = "Einstellungen zurückgesetzt"
-_MSG_CONFIG_RESET = ("Die Einstellungsdatei war beschädigt ({reason}) und wurde als "
-                     "{name} beiseitegelegt. Es gelten die Standardwerte.")
+_MSG_CONFIG_RESET_DETAIL = "Beiseitegelegt als: {name}\nGrund: {reason}"
+_MSG_CTX_GUI = "Fehler in der Oberfläche"
+_MSG_CTX_DECODER = "Decoder abgebrochen"
+_MSG_CTX_N1MM = "N1MM-Anbindung"
+_MSG_DECODER_CRASHED = "Decoder abgebrochen – Details im Fehlerdialog"
 
 # -- Tooltips --------------------------------------------------------------
 _TT_DEVICE = ("Audio-Eingang mit dem Empfängersignal: USB-Audio des Funkgeräts, "
@@ -125,6 +128,7 @@ class App(tk.Tk):
         # wird erst beim ersten Aufnehmen angelegt; Tests setzen einen Temp-Ordner
         self.rec_dir = None
         self.rec_path = None
+        self.shown_errors = []  # angezeigte Fehler (ErrorInfo), für Tests
         self._build()
         self._fill_devices()
         self._poll_id = self.after(60, self._poll)
@@ -280,6 +284,7 @@ class App(tk.Tk):
             self.stream, fs = open_stream(idx, cb)
         except AudioDeviceError as e:
             self.status.set(str(e))
+            self.report_error(e, f"Start mit {self.dev_var.get()}")
             return
         log.info("Decoder gestartet: %s, %d Hz, Ton %s", self.dev_var.get(), fs,
                  "automatisch" if cfg.tracker.fixed_freq is None
@@ -309,9 +314,27 @@ class App(tk.Tk):
         holder["live"] = self.live
         # gebundene Methode statt lambda: der Thread darf nicht erst beim
         # Anlaufen self.live nachschlagen (kann nach schnellem Stop None sein)
-        self.thread = threading.Thread(target=self.live.run, args=(0.25,), daemon=True)
+        self.thread = threading.Thread(target=self._run_decoder, args=(self.live, g),
+                                       daemon=True, name="decoder")
         self.thread.start()
         self.btn_start.configure(text=_LBL_STOP)
+
+    def _run_decoder(self, live, gen):
+        """Läuft im Decoder-Thread: kein tk-Aufruf, Fehler über die Queue."""
+        try:
+            live.run(0.25)
+        except Exception as e:  # noqa: BLE001 - wird in der GUI angezeigt
+            self.msgs.put(("error", gen, e))
+
+    def report_error(self, exc, context=None):
+        """Ausnahme loggen und als Dialog zeigen (nur im tk-Thread aufrufen)."""
+        info = report_exception(self, exc, context)
+        self.shown_errors.append(info)
+        return info
+
+    def report_callback_exception(self, exc_type, exc, tb):
+        """Ausnahmen aus tk-Callbacks: Dialog statt Ausgabe auf stderr."""
+        self.report_error(exc.with_traceback(tb), _MSG_CTX_GUI)
 
     def _stop(self):
         if self.live:
@@ -372,6 +395,8 @@ class App(tk.Tk):
             if self.n1mm is None:
                 log.info("N1MM-Anbindung ein (Wipe %s)", "an" if self.wipe_var.get() else "aus")
                 self.n1mm = N1MMBridge(wipe=self.wipe_var.get())
+                for msg in self.n1mm.errors:
+                    self.report_error(PortInUseError(msg), _MSG_CTX_N1MM)
             else:
                 self.n1mm.typer.wipe = self.wipe_var.get()
         else:
@@ -388,7 +413,12 @@ class App(tk.Tk):
                 kind, gen, val = self.msgs.get_nowait()
                 if kind == "status" and gen != self.gen:
                     continue    # verspätet aus einem bereits gestoppten Lauf
-                if kind == "text":
+                if kind == "error":
+                    if gen == self.gen and self.live:
+                        self._stop()
+                        self.status.set(_MSG_DECODER_CRASHED)
+                    self.report_error(val, _MSG_CTX_DECODER)
+                elif kind == "text":
                     self.text.insert("end", val)
                     self.text.see("end")
                 elif kind == "status":
@@ -448,10 +478,9 @@ class App(tk.Tk):
                       text=f"{tr.cfg.f_max:.0f} Hz")
 
     def show_config_notice(self, broken_name, reason):
-        from tkinter import messagebox
-        messagebox.showwarning(_MSG_CONFIG_RESET_TITLE,
-                               _MSG_CONFIG_RESET.format(reason=reason, name=broken_name),
-                               parent=self)
+        exc = config_mod.ConfigError(
+            _MSG_CONFIG_RESET_DETAIL.format(name=broken_name, reason=reason))
+        self.report_error(exc)
 
     def _add_call(self, call):
         if call in self.calls:
@@ -472,6 +501,8 @@ class App(tk.Tk):
         st = self.live.dec.status if self.live else {"snr_db": 20, "wpm": 25}
         msg = self.n1mm.send_call(call, st["snr_db"], st["wpm"])
         self.n1mm_note = (msg, time.monotonic() + 8.0)   # 8 s sichtbar, _poll zeigt sie an
+        if self.n1mm.last_failure is not None:
+            self.report_error(self.n1mm.last_failure, _MSG_CTX_N1MM)
 
 
 def main():

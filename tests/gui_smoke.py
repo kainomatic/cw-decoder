@@ -109,7 +109,8 @@ def run_scenario(ok_rate=48000, with_input=True, slow_recorder=False, n1mm=True)
 
     def snap(key):
         seen[key] = {"status": app.status.get(), "btn": str(app.btn_start["text"]),
-                     "calls": list(app.calls), "text": app.text.get("1.0", "end")}
+                     "calls": list(app.calls), "text": app.text.get("1.0", "end"),
+                     "dialogs": [(i.title, i.expected) for i in app.shown_errors]}
 
     steps = [
         (300, app._toggle),                                   # Start
@@ -181,9 +182,13 @@ def main():
     for name, kw in cases:
         errors, seen, recs = run_scenario(**kw)
         problems = list(errors)
+        unexpected = [t for st in seen.values() for t, ok in st["dialogs"] if not ok]
+        check(not unexpected, f"Dialog 'Unerwarteter Fehler': {unexpected}", problems)
         if kw.get("ok_rate", 48000) == 12345:
             check("nicht geöffnet" in seen["läuft"]["status"],
                   f"keine Fehlermeldung in der Statuszeile: {seen['läuft']['status']!r}", problems)
+            check(("Soundkarte nicht verfügbar", True) in seen["läuft"]["dialogs"],
+                  f"kein Fehlerdialog zur Soundkarte: {seen['läuft']['dialogs']}", problems)
         elif not kw.get("with_input", True):
             check("kein Audio-Eingangsgerät" in seen["läuft"]["status"],
                   f"kein Hinweis auf fehlendes Gerät: {seen['läuft']['status']!r}", problems)

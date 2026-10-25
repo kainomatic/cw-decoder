@@ -33,6 +33,14 @@ import xml.etree.ElementTree as ET
 log = logging.getLogger(__name__)
 
 
+class PortInUseError(OSError):
+    """UDP- oder Telnet-Port ist schon belegt (Decoder doppelt gestartet?)."""
+
+
+class EntryWindowNotFoundError(RuntimeError):
+    """N1MM-Fenster bzw. Entry Window nicht gefunden."""
+
+
 # --------------------------------------------------------------------------
 class RadioInfoListener(threading.Thread):
     def __init__(self, port: int = 12060, on_update=None):
@@ -226,6 +234,7 @@ class EntryWindowTyper:
         self.wipe = wipe
         self.available = sys.platform.startswith("win")
         self.last_titles = []                       # zuletzt gefundene Fenster des Prozesses
+        self.last_error = None                      # Ausnahme des letzten Fehlschlags
 
     # -- Fenstersuche ------------------------------------------------------
     def process_windows(self):
@@ -276,7 +285,9 @@ class EntryWindowTyper:
 
     # -- Tippen --------------------------------------------------------------
     def type_call(self, call: str):
-        """Rufzeichen ins Entry Window tippen. Liefert (ok, Meldung)."""
+        """Rufzeichen ins Entry Window tippen. Liefert (ok, Meldung);
+        bei Fehlschlag steht die Ursache zusätzlich in self.last_error."""
+        self.last_error = None
         win = self.find_window()
         if not win:
             if self.last_titles:
@@ -285,6 +296,7 @@ class EntryWindowTyper:
             else:
                 msg = "Entry Window nicht gefunden (läuft N1MM?)"
             log.warning(msg)
+            self.last_error = EntryWindowNotFoundError(msg)
             return False, msg
         hwnd, title = win
         if not self._bring_to_front(hwnd):
@@ -510,6 +522,8 @@ class N1MMBridge:
                  use_clipboard: bool = True):
         self.use_clipboard = use_clipboard
         self.errors = []    # Klartext-Meldungen für die GUI (z. B. Port belegt)
+        # Ausnahme, wenn die letzte Übergabe N1MM auf keinem Weg erreicht hat
+        self.last_failure = None
         self.radio = RadioInfoListener(udp_port)
         if self.radio.bind():
             self.radio.start()
@@ -528,16 +542,23 @@ class N1MMBridge:
         """Rufzeichen an N1MM geben. Liefert eine Statusmeldung."""
         msgs = []
         typed = False
+        clipped = spotted = False
+        self.last_failure = None
         if self.typer and self.typer.available:
             typed, msg = self.typer.type_call(call)
             msgs.append(msg)
         if not typed and self.use_clipboard and copy_to_clipboard(call):
             # Rückfallweg: Tippen ging nicht, der Operator fügt selbst ein
+            clipped = True
             msgs.append("in der Zwischenablage – Strg+V in N1MM")
         if self.spots and self.spots.spot(call, self.radio.freq_khz, snr_db, wpm):
+            spotted = True
             msgs.append(f"als Spot auf {self.radio.freq_khz:.1f} kHz gesendet")
         if not msgs:
             msgs.append("N1MM nicht erreicht (kein Entry Window, kein Telnet-Client)")
+        if not (typed or clipped or spotted):
+            self.last_failure = ((self.typer.last_error if self.typer else None)
+                                 or EntryWindowNotFoundError(msgs[-1]))
         result = f"{call}: " + ", ".join(msgs)
         log.info("Übergabe an N1MM: %s", result)
         return result

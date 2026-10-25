@@ -1,0 +1,191 @@
+# CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
+"""Fehlermeldungen für Menschen (ADR-0007).
+
+classify_error(exc) -> ErrorInfo
+    Ordnet erwartete Fehler (Soundkarte, Port belegt, N1MM-Fenster, Config)
+    einem Klartext mit Handlungshinweis zu. Alles andere ist ein
+    "Unerwarteter Fehler" mit Traceback im Detailbereich. Reine Logik,
+    ohne Display testbar.
+
+show_error(parent, title, message, detail=None)
+    Fehlerdialog mit aufklappbarem, kopierbarem Detailbereich.
+
+Im Terminal-Modus (live.py, decode_wav.py) bleiben Meldungen auf stderr.
+"""
+import errno
+import logging
+import traceback
+from dataclasses import dataclass
+
+log = logging.getLogger(__name__)
+
+_TITLE_AUDIO = "Soundkarte nicht verfügbar"
+_MSG_AUDIO = ("Der Audio-Eingang ließ sich nicht öffnen.\n\n"
+              "Bitte prüfen: Ist das Funkgerät bzw. USB-Audio angeschlossen und "
+              "eingeschaltet? Nutzt ein anderes Programm das Gerät exklusiv? "
+              "Danach ein anderes Gerät wählen oder erneut starten.")
+_STATUS_AUDIO = "Soundkarte nicht verfügbar – Gerät prüfen"
+
+_TITLE_PORT = "Port belegt"
+_MSG_PORT = ("Ein Netzwerk-Port für die N1MM-Anbindung ist bereits belegt.\n\n"
+             "Meist läuft der Decoder schon ein zweites Mal oder ein anderes "
+             "Programm empfängt die N1MM-Broadcasts (UDP 12060) bzw. nutzt "
+             "Port 7373. Das andere Programm beenden und die N1MM-Anbindung "
+             "aus- und wieder einschalten.")
+_STATUS_PORT = "N1MM: Port belegt"
+
+_TITLE_N1MM = "N1MM-Fenster nicht gefunden"
+_MSG_N1MM = ("Das Rufzeichen konnte nicht an N1MM Logger+ übergeben werden: "
+             "das Entry Window wurde nicht gefunden.\n\n"
+             "Läuft N1MM? Ist das Entry Window geöffnet? Die gefundenen "
+             "Fenstertitel stehen im Log (Hilfe → Log-Ordner öffnen).")
+_STATUS_N1MM = "N1MM-Fenster nicht gefunden"
+
+_TITLE_CONFIG = "Einstellungen ungültig"
+_MSG_CONFIG = ("Die Einstellungsdatei war beschädigt und wurde beiseitegelegt. "
+               "Es gelten die Standardwerte; bitte Gerät und Optionen neu wählen.")
+_STATUS_CONFIG = "Einstellungen zurückgesetzt"
+
+_TITLE_UNEXPECTED = "Unerwarteter Fehler"
+_MSG_UNEXPECTED = ("Es ist ein unerwarteter Fehler aufgetreten:\n{err}\n\n"
+                   "Bitte über Hilfe → Fehler melden… einen Bericht schicken.")
+_STATUS_UNEXPECTED = "Fehler: {err}"
+
+_LBL_OK = "OK"
+_LBL_SHOW_DETAILS = "▼ Details anzeigen"
+_LBL_HIDE_DETAILS = "▲ Details ausblenden"
+_LBL_COPY = "Details kopieren"
+_TT_DETAILS = "Technische Einzelheiten zum Fehler, z. B. für einen Fehlerbericht."
+_TT_COPY = "Details in die Zwischenablage kopieren."
+
+# Windows-Fehlernummer für "Adresse wird bereits verwendet"
+_WSAEADDRINUSE = 10048
+
+
+@dataclass(frozen=True)
+class ErrorInfo:
+    title: str
+    message: str
+    status: str          # kurze Zeile für die Statusleiste
+    expected: bool       # True = bekannter Fall, Klartext genügt
+    detail: str = None   # Technische Details (Traceback bei unerwarteten Fehlern)
+
+
+def _is_port_in_use(exc) -> bool:
+    from .n1mm import PortInUseError
+    if isinstance(exc, PortInUseError):
+        return True
+    return isinstance(exc, OSError) and (
+        exc.errno == errno.EADDRINUSE or getattr(exc, "winerror", None) == _WSAEADDRINUSE)
+
+
+def _is_audio_error(exc) -> bool:
+    from .live import AudioDeviceError
+    # sounddevice.PortAudioError ohne sounddevice zu importieren erkennen
+    return isinstance(exc, AudioDeviceError) or type(exc).__name__ == "PortAudioError"
+
+
+def _traceback_text(exc) -> str:
+    return "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+
+
+def classify_error(exc: BaseException) -> ErrorInfo:
+    """Ausnahme auf eine Meldung für Menschen abbilden."""
+    from .config import ConfigError
+    from .n1mm import EntryWindowNotFoundError
+
+    detail = str(exc) or None
+    if _is_audio_error(exc):
+        return ErrorInfo(_TITLE_AUDIO, _MSG_AUDIO, _STATUS_AUDIO, True, detail)
+    if _is_port_in_use(exc):
+        return ErrorInfo(_TITLE_PORT, _MSG_PORT, _STATUS_PORT, True, detail)
+    if isinstance(exc, EntryWindowNotFoundError):
+        return ErrorInfo(_TITLE_N1MM, _MSG_N1MM, _STATUS_N1MM, True, detail)
+    if isinstance(exc, ConfigError):
+        return ErrorInfo(_TITLE_CONFIG, _MSG_CONFIG, _STATUS_CONFIG, True, detail)
+    err = f"{type(exc).__name__}: {exc}"
+    return ErrorInfo(_TITLE_UNEXPECTED, _MSG_UNEXPECTED.format(err=err),
+                     _STATUS_UNEXPECTED.format(err=err), False, _traceback_text(exc))
+
+
+def show_error(parent, title, message, detail=None, wait=False):
+    """Fehlerdialog anzeigen und zurückgeben.
+
+    detail erscheint in einem aufklappbaren, schreibgeschützten Textfeld.
+    wait=True blockiert bis zum Schließen (z. B. vor dem Hauptfenster).
+    """
+    import tkinter as tk
+    from tkinter import ttk
+    from .gui_tooltip import attach_tooltip
+
+    dlg = tk.Toplevel(parent)
+    dlg.title(title)
+    dlg.resizable(True, True)
+    if parent is not None:
+        try:
+            dlg.transient(parent)
+        except tk.TclError:
+            pass
+
+    frm = ttk.Frame(dlg, padding=12)
+    frm.pack(fill="both", expand=True)
+    ttk.Label(frm, text=message, wraplength=440, justify="left").pack(anchor="w")
+
+    if detail:
+        box = ttk.Frame(frm)
+        txt = tk.Text(box, height=12, width=78, wrap="none", font=("Consolas", 9))
+        sy = ttk.Scrollbar(box, orient="vertical", command=txt.yview)
+        sx = ttk.Scrollbar(box, orient="horizontal", command=txt.xview)
+        txt.configure(yscrollcommand=sy.set, xscrollcommand=sx.set)
+        sy.pack(side="right", fill="y")
+        sx.pack(side="bottom", fill="x")
+        txt.pack(side="left", fill="both", expand=True)
+        txt.insert("1.0", detail)
+        txt.configure(state="disabled")
+        attach_tooltip(txt, _TT_DETAILS)
+
+        row = ttk.Frame(frm)
+        row.pack(fill="x", pady=(8, 0))
+        shown = {"on": False}
+
+        def toggle():
+            shown["on"] = not shown["on"]
+            if shown["on"]:
+                box.pack(fill="both", expand=True, pady=(6, 0), after=row)
+                btn.configure(text=_LBL_HIDE_DETAILS)
+            else:
+                box.pack_forget()
+                btn.configure(text=_LBL_SHOW_DETAILS)
+
+        def copy():
+            dlg.clipboard_clear()
+            dlg.clipboard_append(detail)
+
+        btn = ttk.Button(row, text=_LBL_SHOW_DETAILS, command=toggle)
+        btn.pack(side="left")
+        attach_tooltip(btn, _TT_DETAILS)
+        cbtn = ttk.Button(row, text=_LBL_COPY, command=copy)
+        cbtn.pack(side="left", padx=6)
+        attach_tooltip(cbtn, _TT_COPY)
+
+    ok = ttk.Button(frm, text=_LBL_OK, command=dlg.destroy)
+    ok.pack(side="bottom", anchor="e", pady=(12, 0))
+    dlg.bind("<Return>", lambda _e: dlg.destroy())
+    dlg.bind("<Escape>", lambda _e: dlg.destroy())
+    ok.focus_set()
+    if wait:
+        dlg.grab_set()
+        dlg.wait_window()
+    return dlg
+
+
+def report_exception(parent, exc, context=None):
+    """Ausnahme loggen und als Dialog zeigen. Liefert das ErrorInfo."""
+    info = classify_error(exc)
+    if info.expected:
+        log.warning("%s%s: %s", f"{context}: " if context else "", info.title, exc)
+    else:
+        log.error("%s", context or "Unerwarteter Fehler",
+                  exc_info=(type(exc), exc, exc.__traceback__))
+    show_error(parent, info.title, info.message, info.detail)
+    return info

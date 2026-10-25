@@ -84,6 +84,10 @@ _MSG_AUDIO_INFO = "{device}, {rate}"
 _MSG_AUDIO_RATE = "{fs} Hz"
 _MSG_AUDIO_RATE_LAST = "zuletzt {fs} Hz"
 _MSG_AUDIO_NOT_STARTED = "nicht gestartet"
+_MSG_ALREADY_RUNNING_TITLE = "CW Decoder läuft bereits"
+_MSG_ALREADY_RUNNING = ("Der CW Decoder ist bereits geöffnet (Prozess {pid}).\n\n"
+                        "Bitte das vorhandene Fenster benutzen. Zwei Instanzen würden "
+                        "sich Soundkarte und N1MM-Ports streitig machen.")
 
 # -- Tooltips --------------------------------------------------------------
 _TT_DEVICE = ("Audio-Eingang mit dem Empfängersignal: USB-Audio des Funkgeräts, "
@@ -561,13 +565,29 @@ def main():
     p.add_argument("--n1mm", action="store_true", default=None,
                    help="N1MM-Anbindung für diesen Lauf einschalten (UDP 12060, Telnet 7373)")
     a = p.parse_args()
-    config_path = config_mod.get_config_path()
-    cfg = config_mod.load(config_path)
-    app = App(n1mm=a.n1mm, cfg=cfg, config_path=config_path)
-    notice = config_mod.pop_broken_notice(config_path)
-    if notice:
-        app.after(300, lambda: app.show_config_notice(*notice))
-    app.mainloop()
+
+    from .instance_lock import InstanceLock
+    lock = InstanceLock()
+    if not lock.acquire():
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showinfo(_MSG_ALREADY_RUNNING_TITLE,
+                            _MSG_ALREADY_RUNNING.format(pid=lock.other_pid or "?"))
+        root.destroy()
+        log.info("Zweite Instanz beendet sich")
+        return
+    try:
+        config_path = config_mod.get_config_path()
+        cfg = config_mod.load(config_path)
+        app = App(n1mm=a.n1mm, cfg=cfg, config_path=config_path)
+        notice = config_mod.pop_broken_notice(config_path)
+        if notice:
+            app.after(300, lambda: app.show_config_notice(*notice))
+        app.mainloop()
+    finally:
+        lock.release()
+        log.info("GUI beendet")
 
 
 if __name__ == "__main__":

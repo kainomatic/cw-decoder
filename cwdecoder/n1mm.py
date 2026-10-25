@@ -230,20 +230,79 @@ class EntryWindowTyper:
         return win
 
     # -- Tippen --------------------------------------------------------------
-    def type_call(self, call: str) -> bool:
+    def type_call(self, call: str):
+        """Rufzeichen ins Entry Window tippen. Liefert (ok, Meldung)."""
         win = self.find_window()
         if not win:
-            print("[n1mm] Entry Window nicht gefunden (läuft N1MM?)", file=sys.stderr)
-            return False
-        user32, _ = _win32()
+            if self.last_titles:
+                msg = (f"Entry Window nicht erkannt ({len(self.last_titles)} N1MM-Fenster, "
+                       f"Titel im Log)")
+            else:
+                msg = "Entry Window nicht gefunden (läuft N1MM?)"
+            print(f"[n1mm] {msg}", file=sys.stderr)
+            return False, msg
         hwnd, title = win
-        user32.SetForegroundWindow(hwnd)
+        if not self._bring_to_front(hwnd):
+            msg = "N1MM ließ sich nicht in den Vordergrund holen (Windows-Fokussperre)"
+            print(f"[n1mm] {msg}", file=sys.stderr)
+            return False, msg
         time.sleep(0.05)
         if self.wipe:
             self._key_combo_alt("W")
             time.sleep(0.05)
         self._type_text(call)
-        return True
+        return True, "ins Entry Window getippt"
+
+    def _bring_to_front(self, hwnd, wait_s: float = 0.25) -> bool:
+        """Fenster in den Vordergrund holen und prüfen, ob es geklappt hat.
+
+        Windows erlaubt SetForegroundWindow nur dem Vordergrund-Prozess
+        (Fokussperre). Darum der Reihe nach:
+          1. einfach versuchen
+          2. AttachThreadInput an den Thread des aktuellen Vordergrundfensters
+          3. ALT antippen (gilt dann als letzte Eingabe dieses Prozesses)
+        Erfolg nur, wenn GetForegroundWindow danach wirklich hwnd ist.
+        """
+        user32, kernel32 = _win32()
+
+        def is_front():
+            t_end = time.monotonic() + wait_s
+            while True:
+                if user32.GetForegroundWindow() == hwnd:
+                    return True
+                if time.monotonic() >= t_end:
+                    return False
+                time.sleep(0.02)
+
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+        user32.SetForegroundWindow(hwnd)
+        if is_front():
+            print("[n1mm] Vordergrund: direkt", file=sys.stderr)
+            return True
+
+        fg = user32.GetForegroundWindow()
+        fg_tid = user32.GetWindowThreadProcessId(fg, None) if fg else 0
+        my_tid = kernel32.GetCurrentThreadId()
+        attached = bool(fg_tid and fg_tid != my_tid
+                        and user32.AttachThreadInput(my_tid, fg_tid, True))
+        try:
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+        finally:
+            if attached:
+                user32.AttachThreadInput(my_tid, fg_tid, False)
+        if is_front():
+            print("[n1mm] Vordergrund: per AttachThreadInput", file=sys.stderr)
+            return True
+
+        VK_MENU, KEYUP = 0x12, 0x0002
+        self._send_inputs([(VK_MENU, 0, 0), (VK_MENU, 0, KEYUP)])
+        user32.SetForegroundWindow(hwnd)
+        ok = is_front()
+        print(f"[n1mm] Vordergrund: per ALT-Trick {'ok' if ok else 'FEHLGESCHLAGEN'}",
+              file=sys.stderr)
+        return ok
 
     @staticmethod
     def _send_inputs(inputs):
@@ -421,12 +480,13 @@ class N1MMBridge:
     def send_call(self, call: str, snr_db: float = 20, wpm: float = 25) -> str:
         """Rufzeichen an N1MM geben. Liefert eine Statusmeldung."""
         msgs = []
-        if self.typer and self.typer.available and self.typer.type_call(call):
-            msgs.append("ins Entry Window getippt")
+        if self.typer and self.typer.available:
+            ok, msg = self.typer.type_call(call)
+            msgs.append(msg)
         if self.spots and self.spots.spot(call, self.radio.freq_khz, snr_db, wpm):
             msgs.append(f"als Spot auf {self.radio.freq_khz:.1f} kHz gesendet")
         if not msgs:
-            msgs.append("N1MM nicht erreicht (Fenster nicht gefunden, kein Telnet-Client)")
+            msgs.append("N1MM nicht erreicht (kein Entry Window, kein Telnet-Client)")
         return f"{call}: " + ", ".join(msgs)
 
     def stop(self):

@@ -13,6 +13,8 @@ from .decoder import DecoderConfig
 from .live import LiveDecoder, open_stream, WavRecorder
 from .n1mm import N1MMBridge
 
+NO_DEVICE = "(kein Eingangsgerät gefunden)"
+
 
 class App(tk.Tk):
     def __init__(self):
@@ -25,6 +27,7 @@ class App(tk.Tk):
         self.thread = None
         self.n1mm = None
         self.calls = []
+        self.devs = []
         self._build()
         self._fill_devices()
         self.after(60, self._poll)
@@ -85,6 +88,12 @@ class App(tk.Tk):
             return
         self.devs = [(i, d["name"]) for i, d in enumerate(sd.query_devices())
                      if d["max_input_channels"] > 0]
+        if not self.devs:
+            self.dev_box["values"] = []
+            self.dev_var.set(NO_DEVICE)
+            self.status.set("Kein Audio-Eingangsgerät gefunden – USB-Audio bzw. "
+                            "VB-Cable anschließen und Programm neu starten")
+            return
         self.dev_box["values"] = [f"{i}: {n}" for i, n in self.devs]
         default = sd.default.device[0]
         for k, (i, _) in enumerate(self.devs):
@@ -103,7 +112,8 @@ class App(tk.Tk):
             self._start()
 
     def _start(self):
-        if not self.dev_var.get():
+        if not self.devs or not self.dev_var.get() or self.dev_var.get() == NO_DEVICE:
+            self.status.set("Start nicht möglich: kein Audio-Eingangsgerät vorhanden")
             return
         idx = int(self.dev_var.get().split(":")[0])
         cfg = DecoderConfig()

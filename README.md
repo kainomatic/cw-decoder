@@ -12,8 +12,9 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Python 3.10 oder neuer. `sounddevice` bringt PortAudio mit, es muss nichts
-weiter installiert werden.
+Python 3.12 (Referenzversion). `sounddevice` bringt PortAudio mit, es muss
+nichts weiter installiert werden. Für die Tests zusätzlich
+`pip install -r requirements-dev.txt`.
 
 ## Benutzung
 
@@ -40,6 +41,17 @@ python -m cwdecoder.gui --n1mm   # N1MM-Anbindung gleich beim Start an
 Die N1MM-Anbindung ist standardmäßig aus und belegt erst Ports (UDP 12060,
 TCP 7373), wenn der Haken "N1MM-Anbindung" gesetzt wird.
 
+Die GUI merkt sich Gerät, feste Tonfrequenz und die Haken. Ablageorte:
+
+| Was | Wo (Windows) |
+|-----|--------------|
+| Einstellungen, Log, Lockfile | `%APPDATA%\CWDecoder\` (`config.json`, `logs\cwdecoder.log`) |
+| Aufnahmen (Haken "Aufnahme") | `Dokumente\CW Decoder\Aufnahmen\` (Datei → Aufnahmeordner öffnen) |
+
+Probleme melden: Hilfe → Fehler melden… zeigt einen Bericht (Version, System,
+Audiogerät, letzte Logzeilen) und öffnet auf Wunsch ein vorausgefülltes
+GitHub-Issue im Browser. Das Programm sendet selbst nichts.
+
 Ein Klick ins Spektrum setzt die Tonfrequenz fest (Haken "Ton automatisch
 suchen" geht aus); Haken wieder setzen schaltet zurück auf Automatik.
 
@@ -56,9 +68,10 @@ Testsignal erzeugen:
 python -m cwdecoder.gen "CQ TEST DE DL1ABC K" -o test.wav --wpm 28 --snr 6 --drift 60 --qsb 0.4 --qsb-depth 0.7
 ```
 
-Testmatrix (verschiedene Tempi, SNR, Drift, QSB, QRM) laufen lassen:
+Tests und Testmatrix (verschiedene Tempi, SNR, Drift, QSB, QRM):
 
 ```
+pytest
 python tests/run_matrix.py
 ```
 
@@ -121,8 +134,18 @@ cwdecoder/
   gui.py         Tkinter-Oberfläche
   callsign.py    Rufzeichen-Erkennung
   n1mm.py        RadioInfo-UDP, Tastatur-Übergabe, Spot-Server
+  __version__.py Version und Kanal (stable/beta)
+  paths.py       Ablageorte (App-Ordner, Log, Aufnahmen)
+  config.py      Einstellungen (config.json)
+  logging_setup.py  Diagnose-Log
+  gui_tooltip.py, gui_errors.py, gui_error_report.py  GUI-Bausteine
+  error_report.py   Fehlerbericht
+  instance_lock.py  Schutz gegen Doppelstart
 tests/
+  test_*.py      pytest
   run_matrix.py  Testmatrix
+  gui_smoke.py   GUI-Rauchtest mit Fake-Soundkarte
+docs/adr/        Architekturentscheidungen
 ```
 
 ## Stand / offene Punkte
@@ -135,3 +158,8 @@ tests/
 - Mögliche Erweiterungen: mehrere Signale gleichzeitig (Multi-Decoder über
   das Band), Wahrscheinlichkeits-Decoder statt harter Schwellen bei sehr
   schwachen Signalen, Rufzeichen-Plausibilität über Master-Callsign-Datei.
+
+## Lizenz
+
+Copyright (C) 2026 DF1DS (kainomatic). GNU General Public License v3.0 oder
+später (GPL-3.0-or-later), siehe `LICENSE`.

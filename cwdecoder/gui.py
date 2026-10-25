@@ -7,11 +7,16 @@
 Die Einstellungen (Gerät, feste Tonfrequenz, Haken) werden beim Start aus
 <App-Ordner>/config.json gelesen und bei jeder Änderung gespeichert.
 Kommandozeilenschalter gelten nur für den laufenden Start.
+
+Threading (ADR-0009): Kein tk-Aufruf aus anderen Threads. Decoder-Thread
+und Callbacks legen Meldungen in self.msgs, _poll() holt sie per after() ab.
+
+Alle sichtbaren Texte stehen als _LBL_*, _MSG_*, _TT_* oben im Modul
+(Vorbereitung für Übersetzungen).
 """
 import logging
 import os
 import queue
-import sys
 import threading
 import time
 from datetime import datetime
@@ -22,13 +27,73 @@ import numpy as np
 from . import config as config_mod
 from . import utf8_console
 from .decoder import DecoderConfig
+from .gui_tooltip import attach_tooltip
 from .live import AudioDeviceError, LiveDecoder, open_stream, WavRecorder
 from .n1mm import N1MMBridge
 from .paths import get_recordings_dir
 
 log = logging.getLogger(__name__)
 
-NO_DEVICE = "(kein Eingangsgerät gefunden)"
+# -- Beschriftungen --------------------------------------------------------
+_LBL_TITLE = "CW Decoder"
+_LBL_INPUT = "Eingang:"
+_LBL_START = "Start"
+_LBL_STOP = "Stop"
+_LBL_AUTO = "Ton automatisch suchen"
+_LBL_RECORD = "Aufnahme (WAV)"
+_LBL_CLEAR = "Text löschen"
+_LBL_CALLS = "Rufzeichen (Klick → N1MM)"
+_LBL_N1MM = "N1MM-Anbindung"
+_LBL_WIPE = "vorher Alt+W (Wipe)"
+_LBL_NO_DEVICE = "(kein Eingangsgerät gefunden)"
+
+# -- Meldungen -------------------------------------------------------------
+_MSG_READY = "bereit"
+_MSG_STOPPED = "gestoppt"
+_MSG_STOPPED_REC = "gestoppt – Aufnahme gespeichert: {path}"
+_MSG_NO_SOUNDDEVICE = "sounddevice fehlt: {err}  (pip install sounddevice)"
+_MSG_NO_INPUT = ("Kein Audio-Eingangsgerät gefunden – USB-Audio bzw. "
+                 "VB-Cable anschließen und Programm neu starten")
+_MSG_START_NO_INPUT = "Start nicht möglich: kein Audio-Eingangsgerät vorhanden"
+_MSG_REC_FAILED = "[Aufnahme nicht möglich: {err}]\n"
+_MSG_REC_FILE = "[Aufnahme: {path}]\n"
+_MSG_CONFIG_NOT_SAVED = "Einstellungen nicht gespeichert: {err}"
+_MSG_STATUS = ("{lock}: {freq:.0f} Hz   SNR {snr:.0f} dB   {wpm:.0f} WPM   "
+               "Filter {bw:.0f} Hz   {key}")
+_MSG_STATUS_LOCK = "Ton"
+_MSG_STATUS_NOLOCK = "kein Ton"
+_MSG_STATUS_REC = "   ● REC {name}"
+_MSG_N1MM_OFF = "N1MM: aus"
+_MSG_N1MM_IDLE = "N1MM: –"
+_MSG_N1MM_RADIO = "N1MM: {freq:.1f} kHz {mode}  ({call})"
+_MSG_N1MM_NO_BROADCAST = "N1MM: keine Broadcasts (Port 12060)"
+_MSG_N1MM_DISABLED = "N1MM-Anbindung ist aus"
+_MSG_CONFIG_RESET_TITLE = "Einstellungen zurückgesetzt"
+_MSG_CONFIG_RESET = ("Die Einstellungsdatei war beschädigt ({reason}) und wurde als "
+                     "{name} beiseitegelegt. Es gelten die Standardwerte.")
+
+# -- Tooltips --------------------------------------------------------------
+_TT_DEVICE = ("Audio-Eingang mit dem Empfängersignal: USB-Audio des Funkgeräts, "
+              "VB-Cable oder Line-In. Wird gespeichert.")
+_TT_START = "Decoder starten bzw. stoppen."
+_TT_AUTO = ("An: Der Decoder sucht den CW-Ton selbst und folgt ihm.\n"
+            "Aus: feste Tonfrequenz (per Klick ins Spektrum gesetzt).")
+_TT_RECORD = ("Beim nächsten Start das Audio als WAV mitschneiden "
+              "(Ordner Dokumente\\CW Decoder\\Aufnahmen). Hilft bei der Fehlersuche.")
+_TT_CLEAR = "Dekodierten Text löschen."
+_TT_STATUS = ("Ton: erkannte Tonfrequenz · SNR: Signal-Rausch-Abstand · "
+              "WPM: Tempo · Filter: aktuelle Bandbreite · ■ Taste gedrückt")
+_TT_SPECTRUM = ("Spektrum 300–1200 Hz. Orange Linie = verfolgter Ton.\n"
+                "Klick setzt eine feste Tonfrequenz.")
+_TT_TEXT = "Dekodierter Text, neueste Zeichen unten."
+_TT_CALLS = "Erkannte Rufzeichen, neueste oben."
+_TT_CALL_BUTTON = "Rufzeichen an N1MM übergeben (Entry Window, Zwischenablage, Spot)."
+_TT_N1MM = ("N1MM Logger+ anbinden: empfängt Frequenz per UDP 12060 und bietet "
+            "Spots auf Telnet 127.0.0.1:7373. Belegt die Ports erst beim Einschalten.")
+_TT_WIPE = "Vor dem Eintippen Alt+W senden, damit das Entry Window leer ist."
+_TT_N1MM_STATUS = "Zustand der N1MM-Anbindung und Ergebnis der letzten Übergabe."
+
+NO_DEVICE = _LBL_NO_DEVICE
 
 
 class App(tk.Tk):
@@ -43,7 +108,7 @@ class App(tk.Tk):
         self.n1mm_on_start = self.cfg["n1mm_enabled"] if n1mm is None else bool(n1mm)
         # feste Tonfrequenz (Spektrum-Klick); None = noch keine gewählt
         self.fixed_freq = self.cfg["fixed_freq"]
-        self.title("CW Decoder")
+        self.title(_LBL_TITLE)
         self.geometry("900x560")
         self.msgs = queue.Queue()
         self.live = None
@@ -69,65 +134,89 @@ class App(tk.Tk):
     def _build(self):
         top = ttk.Frame(self, padding=6)
         top.pack(fill="x")
-        ttk.Label(top, text="Eingang:").pack(side="left")
+        lbl = ttk.Label(top, text=_LBL_INPUT)
+        lbl.pack(side="left")
+        attach_tooltip(lbl, _TT_DEVICE)
         self.dev_var = tk.StringVar()
         self.dev_box = ttk.Combobox(top, textvariable=self.dev_var, width=40, state="readonly")
         self.dev_box.pack(side="left", padx=4)
         self.dev_box.bind("<<ComboboxSelected>>", self._device_changed)
-        self.btn_start = ttk.Button(top, text="Start", command=self._toggle)
+        attach_tooltip(self.dev_box, _TT_DEVICE)
+        self.btn_start = ttk.Button(top, text=_LBL_START, command=self._toggle)
         self.btn_start.pack(side="left", padx=4)
+        attach_tooltip(self.btn_start, _TT_START)
         self.auto_var = tk.BooleanVar(value=self.fixed_freq is None)
-        ttk.Checkbutton(top, text="Ton automatisch suchen", variable=self.auto_var,
-                        command=self._auto_changed).pack(side="left", padx=8)
+        cb = ttk.Checkbutton(top, text=_LBL_AUTO, variable=self.auto_var,
+                             command=self._auto_changed)
+        cb.pack(side="left", padx=8)
+        attach_tooltip(cb, _TT_AUTO)
         self.rec_var = tk.BooleanVar(value=self.cfg["record_default"])
-        ttk.Checkbutton(top, text="Aufnahme (WAV)", variable=self.rec_var,
-                        command=self._rec_changed).pack(side="left", padx=8)
-        ttk.Button(top, text="Text löschen", command=self._clear).pack(side="right")
+        cb = ttk.Checkbutton(top, text=_LBL_RECORD, variable=self.rec_var,
+                             command=self._rec_changed)
+        cb.pack(side="left", padx=8)
+        attach_tooltip(cb, _TT_RECORD)
+        btn = ttk.Button(top, text=_LBL_CLEAR, command=self._clear)
+        btn.pack(side="right")
+        attach_tooltip(btn, _TT_CLEAR)
 
-        self.status = tk.StringVar(value="bereit")
-        ttk.Label(self, textvariable=self.status, anchor="w", padding=(8, 0)).pack(fill="x")
+        self.status = tk.StringVar(value=_MSG_READY)
+        self.status_label = ttk.Label(self, textvariable=self.status, anchor="w",
+                                      padding=(8, 0))
+        self.status_label.pack(fill="x")
+        attach_tooltip(self.status_label, _TT_STATUS)
 
         self.canvas = tk.Canvas(self, height=110, bg="#101418", highlightthickness=0)
         self.canvas.pack(fill="x", padx=6, pady=(2, 4))
         self.canvas.bind("<Button-1>", self._spectrum_click)
+        attach_tooltip(self.canvas, _TT_SPECTRUM)
 
         mid = ttk.Frame(self)
         mid.pack(fill="both", expand=True, padx=6)
         self.text = tk.Text(mid, wrap="word", font=("Consolas", 16), height=10)
         self.text.pack(side="left", fill="both", expand=True)
+        attach_tooltip(self.text, _TT_TEXT)
         sb = ttk.Scrollbar(mid, command=self.text.yview)
         sb.pack(side="left", fill="y")
         self.text.configure(yscrollcommand=sb.set)
 
         right = ttk.Frame(mid, padding=(8, 0, 0, 0), width=200)
         right.pack(side="left", fill="y")
-        ttk.Label(right, text="Rufzeichen (Klick → N1MM)").pack(anchor="w")
+        lbl = ttk.Label(right, text=_LBL_CALLS)
+        lbl.pack(anchor="w")
+        attach_tooltip(lbl, _TT_CALLS)
         self.call_frame = ttk.Frame(right)
         self.call_frame.pack(fill="both", expand=True)
         # standardmäßig aus: Ports werden erst gebunden, wenn der Haken gesetzt wird
         self.n1mm_var = tk.BooleanVar(value=self.n1mm_on_start)
-        ttk.Checkbutton(right, text="N1MM-Anbindung", variable=self.n1mm_var,
-                        command=self._n1mm_changed).pack(anchor="w", pady=(6, 0))
+        cb = ttk.Checkbutton(right, text=_LBL_N1MM, variable=self.n1mm_var,
+                             command=self._n1mm_changed)
+        cb.pack(anchor="w", pady=(6, 0))
+        attach_tooltip(cb, _TT_N1MM)
         self.wipe_var = tk.BooleanVar(value=self.cfg["n1mm_wipe"])
-        ttk.Checkbutton(right, text="vorher Alt+W (Wipe)", variable=self.wipe_var,
-                        command=self._n1mm_changed).pack(anchor="w")
-        self.n1mm_status = tk.StringVar(value="N1MM: –")
-        ttk.Label(right, textvariable=self.n1mm_status, wraplength=190).pack(anchor="w", pady=4)
+        cb = ttk.Checkbutton(right, text=_LBL_WIPE, variable=self.wipe_var,
+                             command=self._n1mm_changed)
+        cb.pack(anchor="w")
+        attach_tooltip(cb, _TT_WIPE)
+        self.n1mm_status = tk.StringVar(value=_MSG_N1MM_IDLE)
+        lbl = ttk.Label(right, textvariable=self.n1mm_status, wraplength=190)
+        lbl.pack(anchor="w", pady=4)
+        attach_tooltip(lbl, _TT_N1MM_STATUS)
         self._n1mm_changed(save=False)
 
     def _fill_devices(self):
         try:
             import sounddevice as sd
         except Exception as e:  # noqa: BLE001
-            self.status.set(f"sounddevice fehlt: {e}  (pip install sounddevice)")
+            log.error("sounddevice nicht verfügbar: %s", e)
+            self.status.set(_MSG_NO_SOUNDDEVICE.format(err=e))
             return
         self.devs = [(i, d["name"]) for i, d in enumerate(sd.query_devices())
                      if d["max_input_channels"] > 0]
         if not self.devs:
+            log.warning("Kein Audio-Eingangsgerät gefunden")
             self.dev_box["values"] = []
             self.dev_var.set(NO_DEVICE)
-            self.status.set("Kein Audio-Eingangsgerät gefunden – USB-Audio bzw. "
-                            "VB-Cable anschließen und Programm neu starten")
+            self.status.set(_MSG_NO_INPUT)
             return
         self.dev_box["values"] = [f"{i}: {n}" for i, n in self.devs]
         wanted = self.cfg["device_name"]
@@ -156,7 +245,7 @@ class App(tk.Tk):
             config_mod.save(self.cfg, self.config_path)
         except OSError as e:
             log.error("Config nicht gespeichert: %s", e)
-            self.status.set(f"Einstellungen nicht gespeichert: {e}")
+            self.status.set(_MSG_CONFIG_NOT_SAVED.format(err=e))
 
     def _device_changed(self, _ev=None):
         k = self.dev_box.current()
@@ -175,11 +264,11 @@ class App(tk.Tk):
 
     def _start(self):
         if not self.devs or not self.dev_var.get() or self.dev_var.get() == NO_DEVICE:
-            self.status.set("Start nicht möglich: kein Audio-Eingangsgerät vorhanden")
+            self.status.set(_MSG_START_NO_INPUT)
             return
         idx = int(self.dev_var.get().split(":")[0])
         cfg = DecoderConfig()
-        if not self.auto_var.get() and getattr(self, "fixed_freq", None):
+        if not self.auto_var.get() and self.fixed_freq:
             cfg.tracker.fixed_freq = self.fixed_freq
         holder = {}
 
@@ -213,16 +302,16 @@ class App(tk.Tk):
             except OSError as e:
                 log.error("Aufnahme nicht möglich: %s", e)
                 self.rec_path = None
-                self.msgs.put(("text", g, f"[Aufnahme nicht möglich: {e}]\n"))
+                self.msgs.put(("text", g, _MSG_REC_FAILED.format(err=e)))
             else:
                 log.info("Aufnahme: %s", self.rec_path)
-                self.msgs.put(("text", g, f"[Aufnahme: {self.rec_path}]\n"))
+                self.msgs.put(("text", g, _MSG_REC_FILE.format(path=self.rec_path)))
         holder["live"] = self.live
         # gebundene Methode statt lambda: der Thread darf nicht erst beim
         # Anlaufen self.live nachschlagen (kann nach schnellem Stop None sein)
         self.thread = threading.Thread(target=self.live.run, args=(0.25,), daemon=True)
         self.thread.start()
-        self.btn_start.configure(text="Stop")
+        self.btn_start.configure(text=_LBL_STOP)
 
     def _stop(self):
         if self.live:
@@ -242,12 +331,12 @@ class App(tk.Tk):
             self.live.recorder.close()
         self.live = None
         self.stream = None
-        self.btn_start.configure(text="Start")
+        self.btn_start.configure(text=_LBL_START)
         if self.rec_path:
-            self.status.set(f"gestoppt – Aufnahme gespeichert: {self.rec_path}")
+            self.status.set(_MSG_STOPPED_REC.format(path=self.rec_path))
             self.rec_path = None
         else:
-            self.status.set("gestoppt")
+            self.status.set(_MSG_STOPPED)
 
     def _quit(self):
         self._stop()
@@ -263,8 +352,7 @@ class App(tk.Tk):
     def _auto_changed(self):
         self._save_config(fixed_freq=None if self.auto_var.get() else self.fixed_freq)
         if self.live:
-            self.live.dec.set_fixed_frequency(None if self.auto_var.get()
-                                              else getattr(self, "fixed_freq", None))
+            self.live.dec.set_fixed_frequency(None if self.auto_var.get() else self.fixed_freq)
 
     def _spectrum_click(self, ev):
         if not self.live:
@@ -291,7 +379,7 @@ class App(tk.Tk):
                 log.info("N1MM-Anbindung aus")
                 self.n1mm.stop()
                 self.n1mm = None
-            self.n1mm_status.set("N1MM: aus")
+            self.n1mm_status.set(_MSG_N1MM_OFF)
 
     # ------------------------------------------------------------------
     def _poll(self):
@@ -314,9 +402,10 @@ class App(tk.Tk):
         if self.n1mm:
             r = self.n1mm.radio
             if r.connected:
-                line = f"N1MM: {r.freq_khz:.1f} kHz {r.mode or ''}  ({r.mycall or ''})"
+                line = _MSG_N1MM_RADIO.format(freq=r.freq_khz, mode=r.mode or "",
+                                              call=r.mycall or "")
             else:
-                line = "N1MM: keine Broadcasts (Port 12060)"
+                line = _MSG_N1MM_NO_BROADCAST
             # Fehler (z. B. Port belegt) bleiben stehen, Meldungen eine Weile
             extra = list(self.n1mm.errors)
             if self.n1mm_note and time.monotonic() < self.n1mm_note[1]:
@@ -325,11 +414,13 @@ class App(tk.Tk):
         self._poll_id = self.after(60, self._poll)
 
     def _show_status(self, st):
-        lock = "Ton" if st["locked"] else "kein Ton"
-        self.status.set(f"{lock}: {st['freq_hz']:.0f} Hz   SNR {st['snr_db']:.0f} dB   "
-                        f"{st['wpm']:.0f} WPM   Filter {st['bw_hz']:.0f} Hz   "
-                        f"{'■' if st['key'] else '□'}"
-                        + (f"   ● REC {os.path.basename(self.rec_path)}" if self.rec_path else ""))
+        text = _MSG_STATUS.format(
+            lock=_MSG_STATUS_LOCK if st["locked"] else _MSG_STATUS_NOLOCK,
+            freq=st["freq_hz"], snr=st["snr_db"], wpm=st["wpm"], bw=st["bw_hz"],
+            key="■" if st["key"] else "□")
+        if self.rec_path:
+            text += _MSG_STATUS_REC.format(name=os.path.basename(self.rec_path))
+        self.status.set(text)
 
     def _draw_spectrum(self):
         tr = self.live.dec.tracker
@@ -358,11 +449,9 @@ class App(tk.Tk):
 
     def show_config_notice(self, broken_name, reason):
         from tkinter import messagebox
-        messagebox.showwarning(
-            "Einstellungen zurückgesetzt",
-            f"Die Einstellungsdatei war beschädigt ({reason}) und wurde als "
-            f"{broken_name} beiseitegelegt. Es gelten die Standardwerte.",
-            parent=self)
+        messagebox.showwarning(_MSG_CONFIG_RESET_TITLE,
+                               _MSG_CONFIG_RESET.format(reason=reason, name=broken_name),
+                               parent=self)
 
     def _add_call(self, call):
         if call in self.calls:
@@ -372,12 +461,13 @@ class App(tk.Tk):
         for wdg in self.call_frame.winfo_children():
             wdg.destroy()
         for cs in self.calls:
-            ttk.Button(self.call_frame, text=cs, command=lambda c=cs: self._send_call(c)
-                       ).pack(fill="x", pady=1)
+            btn = ttk.Button(self.call_frame, text=cs, command=lambda c=cs: self._send_call(c))
+            btn.pack(fill="x", pady=1)
+            attach_tooltip(btn, _TT_CALL_BUTTON)
 
     def _send_call(self, call):
         if not self.n1mm:
-            self.n1mm_status.set("N1MM-Anbindung ist aus")
+            self.n1mm_status.set(_MSG_N1MM_DISABLED)
             return
         st = self.live.dec.status if self.live else {"snr_db": 20, "wpm": 25}
         msg = self.n1mm.send_call(call, st["snr_db"], st["wpm"])

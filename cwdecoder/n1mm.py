@@ -215,7 +215,8 @@ class SpotServer(threading.Thread):
         super().__init__(daemon=True)
         self.port = port
         self.spotter_call = spotter_call
-        self.clients = []
+        self.clients = []       # eingeloggte Clients (bekommen Spots)
+        self._conns = set()     # alle offenen Verbindungen, auch beim Login
         self.srv = None
         self.error = None
         self._lock = threading.Lock()
@@ -251,6 +252,11 @@ class SpotServer(threading.Thread):
         srv.close()
 
     def _serve_client(self, conn):
+        with self._lock:
+            if self._stop_evt.is_set():
+                conn.close()
+                return
+            self._conns.add(conn)
         try:
             conn.sendall(b"login: ")
             conn.settimeout(30)
@@ -276,6 +282,7 @@ class SpotServer(threading.Thread):
             with self._lock:
                 if conn in self.clients:
                     self.clients.remove(conn)
+                self._conns.discard(conn)
             conn.close()
 
     def spot(self, call: str, freq_khz: float, snr_db: float = 20, wpm: float = 25,
@@ -299,6 +306,17 @@ class SpotServer(threading.Thread):
         self._stop_evt.set()
         if self.srv is not None:
             self.srv.close()    # Port sofort freigeben, weckt accept auf
+        # alle Clients trennen; shutdown weckt die blockierenden recv() auf
+        with self._lock:
+            conns = list(self._conns)
+            self.clients.clear()
+            self._conns.clear()
+        for c in conns:
+            try:
+                c.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            c.close()
         if self.is_alive() and threading.current_thread() is not self:
             self.join(timeout=1.0)
 

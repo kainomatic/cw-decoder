@@ -6,6 +6,7 @@ import os
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from cwdecoder import utf8_console  # noqa: E402
 from cwdecoder.gen import render  # noqa: E402
 from cwdecoder.decode_wav import decode_signal, similarity  # noqa: E402
 
@@ -41,6 +42,7 @@ CASES = [
 
 
 def main():
+    utf8_console()
     verbose = "--verbose" in sys.argv
     scores = []
     for name, text, kw in CASES:

@@ -13,6 +13,7 @@ import tkinter as tk
 from tkinter import ttk
 import numpy as np
 
+from . import utf8_console
 from .decoder import DecoderConfig
 from .live import LiveDecoder, open_stream, WavRecorder
 from .n1mm import N1MMBridge
@@ -314,6 +315,7 @@ class App(tk.Tk):
 
 
 def main():
+    utf8_console()
     import argparse
     p = argparse.ArgumentParser(description="CW Decoder – Oberfläche")
     p.add_argument("--n1mm", action="store_true",

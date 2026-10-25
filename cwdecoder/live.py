@@ -15,6 +15,7 @@ import threading
 import time
 import numpy as np
 
+from . import utf8_console
 from .decoder import CWDecoder, DecoderConfig
 from .callsign import CallsignSpotter
 
@@ -117,6 +118,7 @@ class WavRecorder:
 
 
 def main():
+    utf8_console()
     p = argparse.ArgumentParser(description="CW Live-Decoder")
     p.add_argument("--list", action="store_true", help="Audiogeräte auflisten")
     p.add_argument("--device", default=None, help="Gerätenummer oder Namensteil")

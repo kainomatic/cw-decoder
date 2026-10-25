@@ -8,6 +8,7 @@ import difflib
 import numpy as np
 from scipy.io import wavfile
 
+from . import utf8_console
 from .decoder import CWDecoder, DecoderConfig
 
 
@@ -45,6 +46,7 @@ def similarity(got: str, expect: str) -> float:
 
 
 def main():
+    utf8_console()
     p = argparse.ArgumentParser()
     p.add_argument("wav")
     p.add_argument("--expect", default=None)

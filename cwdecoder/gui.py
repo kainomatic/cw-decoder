@@ -2,9 +2,11 @@
 
     python -m cwdecoder.gui
 """
+import os
 import queue
 import sys
 import threading
+from datetime import datetime
 import tkinter as tk
 from tkinter import ttk
 import numpy as np
@@ -14,6 +16,8 @@ from .live import LiveDecoder, open_stream, WavRecorder
 from .n1mm import N1MMBridge
 
 NO_DEVICE = "(kein Eingangsgerät gefunden)"
+# Aufnahmen landen im testdata/-Ordner des Projekts, unabhängig vom Arbeitsverzeichnis
+REC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "testdata")
 
 
 class App(tk.Tk):
@@ -31,6 +35,8 @@ class App(tk.Tk):
         # Generation des laufenden Decoders; wird bei Start und Stop erhöht.
         # Meldungen tragen ihre Generation, veraltete Status werden verworfen.
         self.gen = 0
+        self.rec_dir = REC_DIR
+        self.rec_path = None
         self._build()
         self._fill_devices()
         self.after(60, self._poll)
@@ -139,11 +145,19 @@ class App(tk.Tk):
                                 on_text=lambda s: self.msgs.put(("text", g, s)),
                                 on_status=lambda d: self.msgs.put(("status", g, d)),
                                 on_call=lambda c: self.msgs.put(("call", g, c)))
+        self.rec_path = None
         if self.rec_var.get():
-            import time
-            name = time.strftime("cw_%Y%m%d_%H%M%S.wav")
-            self.live.recorder = WavRecorder(name, fs)
-            self.msgs.put(("text", g, f"[Aufnahme: {name}]\n"))
+            # Zeitstempel mit Millisekunden: schneller Neustart überschreibt nichts
+            name = datetime.now().strftime("cw_%Y%m%d_%H%M%S_%f")[:-3] + ".wav"
+            try:
+                os.makedirs(self.rec_dir, exist_ok=True)
+                self.rec_path = os.path.join(self.rec_dir, name)
+                self.live.recorder = WavRecorder(self.rec_path, fs)
+            except OSError as e:
+                self.rec_path = None
+                self.msgs.put(("text", g, f"[Aufnahme nicht möglich: {e}]\n"))
+            else:
+                self.msgs.put(("text", g, f"[Aufnahme: {self.rec_path}]\n"))
         holder["live"] = self.live
         # gebundene Methode statt lambda: der Thread darf nicht erst beim
         # Anlaufen self.live nachschlagen (kann nach schnellem Stop None sein)
@@ -168,7 +182,11 @@ class App(tk.Tk):
         self.live = None
         self.stream = None
         self.btn_start.configure(text="Start")
-        self.status.set("gestoppt")
+        if self.rec_path:
+            self.status.set(f"gestoppt – Aufnahme gespeichert: {self.rec_path}")
+            self.rec_path = None
+        else:
+            self.status.set("gestoppt")
 
     def _quit(self):
         self._stop()
@@ -234,7 +252,8 @@ class App(tk.Tk):
         lock = "Ton" if st["locked"] else "kein Ton"
         self.status.set(f"{lock}: {st['freq_hz']:.0f} Hz   SNR {st['snr_db']:.0f} dB   "
                         f"{st['wpm']:.0f} WPM   Filter {st['bw_hz']:.0f} Hz   "
-                        f"{'■' if st['key'] else '□'}")
+                        f"{'■' if st['key'] else '□'}"
+                        + (f"   ● REC {os.path.basename(self.rec_path)}" if self.rec_path else ""))
 
     def _draw_spectrum(self):
         tr = self.live.dec.tracker

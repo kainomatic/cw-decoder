@@ -35,10 +35,10 @@ class CWDecoder:
         c = self.cfg
         self.fs_in = fs_in
         self.decim = Decimator(fs_in, c.fs_internal)
-        self.fs = c.fs_internal
+        self.fs = self.decim.fs_out
         self.tracker = ToneTracker(self.fs, c.tracker)
         self.envelope = Envelope(self.fs, cutoff_hz=50.0, env_rate=c.env_rate)
-        self.thresh = Thresholder(c.env_rate, c.threshold)
+        self.thresh = Thresholder(self.envelope.env_rate, c.threshold)
         self.timing = TimingDecoder(c.timing, on_char=on_char, on_space=on_space)
         self.text = []
         self.t_ms = 0.0
@@ -54,6 +54,10 @@ class CWDecoder:
         dit = self.timing.dit_ms
         cutoff = c.bw_factor * 1000.0 / dit
         cutoff = float(np.clip(cutoff, c.bw_min_hz, c.bw_max_hz))
+        if not self.tracker.locked and not self.cfg.tracker.fixed_freq:
+            # Frequenz noch nicht gefunden: breiter hören, damit das erste
+            # Element nicht verschluckt wird
+            cutoff = max(cutoff, 80.0)
         self.envelope.set_cutoff(cutoff)
         self.thresh.set_debounce(max(3.0, 0.15 * dit))
 
@@ -68,7 +72,10 @@ class CWDecoder:
         x = self.decim.process(x)
         if len(x) == 0:
             return
+        was_locked = self.tracker.locked
         self.tracker.process(x)
+        if self.tracker.locked != was_locked:
+            self._update_bandwidth()
         env = self.envelope.process(x, self.tracker.freq)
         events = self.thresh.process(env)
         for ev in events:

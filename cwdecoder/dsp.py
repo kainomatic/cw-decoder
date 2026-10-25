@@ -22,10 +22,9 @@ from scipy.signal import butter, lfilter, lfilter_zi, firwin
 # --------------------------------------------------------------------------
 class Decimator:
     def __init__(self, fs_in: int, fs_out: int = 8000):
-        if fs_in % fs_out != 0:
-            raise ValueError(f"fs_in={fs_in} ist kein Vielfaches von fs_out={fs_out}")
-        self.factor = fs_in // fs_out
-        self.fs_out = fs_out
+        # ganzzahliger Faktor; bei 44.1 kHz wird intern mit 8820 Hz gearbeitet
+        self.factor = max(1, int(fs_in // fs_out))
+        self.fs_out = fs_in / self.factor
         if self.factor == 1:
             self.taps = None
             return
@@ -51,7 +50,7 @@ class TrackerConfig:
     f_min: float = 300.0        # Suchbereich für den CW-Ton
     f_max: float = 1200.0
     nfft: int = 1024            # 128 ms bei 8 kHz -> ~8 Hz Auflösung
-    hop: int = 256              # Aktualisierung alle 32 ms
+    hop: int = 128              # Aktualisierung alle 16 ms
     hold_decay: float = 0.985   # Max-Hold-Abklingen pro Hop (überbrückt Pausen)
     min_peak_db: float = 8.0    # Peak muss so weit über dem Median liegen
     smooth: float = 0.25        # Nachführung der Frequenz (0..1, 1 = sofort)
@@ -147,8 +146,8 @@ class Envelope:
 
     def __init__(self, fs: int, cutoff_hz: float = 50.0, env_rate: int = 1000):
         self.fs = fs
-        self.env_rate = env_rate
-        self.dec = fs // env_rate
+        self.dec = max(1, int(round(fs / env_rate)))
+        self.env_rate = fs / self.dec
         self.phase = 0.0
         self.freq = 700.0
         self.cutoff = None

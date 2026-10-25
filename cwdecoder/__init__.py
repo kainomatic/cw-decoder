@@ -8,3 +8,10 @@ def utf8_console():
     for stream in (sys.stdout, sys.stderr):
         if stream is not None and hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
+
+
+# Ohne setup_logging() (Tests, Bibliotheksnutzung) keine Ausgaben über den
+# logging-Rückfall auf stderr; setup_logging() hängt den Datei-Handler an.
+import logging as _logging  # noqa: E402
+
+_logging.getLogger("cwdecoder").addHandler(_logging.NullHandler())

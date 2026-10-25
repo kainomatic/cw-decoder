@@ -22,12 +22,15 @@ Drei Bausteine:
    Bandmap; ein Klick darauf in N1MM übernimmt Rufzeichen und Frequenz.
    Das ist der "saubere" Weg, der ohne Fenster-Fokus auskommt.
 """
+import logging
 import re
 import socket
 import sys
 import threading
 import time
 import xml.etree.ElementTree as ET
+
+log = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------
@@ -56,7 +59,7 @@ class RadioInfoListener(threading.Thread):
             s.close()
             self.error = (f"UDP-Port {self.port} belegt – Decoder doppelt gestartet "
                           f"oder anderes Programm empfängt N1MM-Broadcasts?")
-            print(f"[n1mm] {self.error} ({e})", file=sys.stderr)
+            log.warning("%s (%s)", self.error, e)
             return False
         self.sock = s
         return True
@@ -264,11 +267,11 @@ class EntryWindowTyper:
         wins = self.process_windows()
         self.last_titles = [t for _, t in wins]
         # Für den ersten echten Test: alles ausgeben, was der Prozess an Fenstern hat
-        print(f"[n1mm] {len(wins)} Fenster von '{self.process_hint}': "
-              + ", ".join(repr(t) for t in self.last_titles), file=sys.stderr)
+        log.info("%d Fenster von '%s': %s", len(wins), self.process_hint,
+                 ", ".join(repr(t) for t in self.last_titles))
         win = pick_entry_window(wins, self.vfo, self.title_hint)
         if win:
-            print(f"[n1mm] Entry Window: {win[1]!r}", file=sys.stderr)
+            log.info("Entry Window: %r", win[1])
         return win
 
     # -- Tippen --------------------------------------------------------------
@@ -281,12 +284,12 @@ class EntryWindowTyper:
                        f"Titel im Log)")
             else:
                 msg = "Entry Window nicht gefunden (läuft N1MM?)"
-            print(f"[n1mm] {msg}", file=sys.stderr)
+            log.warning(msg)
             return False, msg
         hwnd, title = win
         if not self._bring_to_front(hwnd):
             msg = "N1MM ließ sich nicht in den Vordergrund holen (Windows-Fokussperre)"
-            print(f"[n1mm] {msg}", file=sys.stderr)
+            log.warning(msg)
             return False, msg
         time.sleep(0.05)
         if self.wipe:
@@ -320,7 +323,7 @@ class EntryWindowTyper:
             user32.ShowWindow(hwnd, 9)  # SW_RESTORE
         user32.SetForegroundWindow(hwnd)
         if is_front():
-            print("[n1mm] Vordergrund: direkt", file=sys.stderr)
+            log.info("Vordergrund: direkt")
             return True
 
         fg = user32.GetForegroundWindow()
@@ -335,15 +338,14 @@ class EntryWindowTyper:
             if attached:
                 user32.AttachThreadInput(my_tid, fg_tid, False)
         if is_front():
-            print("[n1mm] Vordergrund: per AttachThreadInput", file=sys.stderr)
+            log.info("Vordergrund: per AttachThreadInput")
             return True
 
         VK_MENU, KEYUP = 0x12, 0x0002
         self._send_inputs([(VK_MENU, 0, 0), (VK_MENU, 0, KEYUP)])
         user32.SetForegroundWindow(hwnd)
         ok = is_front()
-        print(f"[n1mm] Vordergrund: per ALT-Trick {'ok' if ok else 'FEHLGESCHLAGEN'}",
-              file=sys.stderr)
+        log.info("Vordergrund: per ALT-Trick %s", "ok" if ok else "FEHLGESCHLAGEN")
         return ok
 
     @staticmethod
@@ -406,7 +408,7 @@ class SpotServer(threading.Thread):
         except OSError as e:
             srv.close()
             self.error = f"Telnet-Port {self.port} belegt – Decoder doppelt gestartet?"
-            print(f"[n1mm] {self.error} ({e})", file=sys.stderr)
+            log.warning("%s (%s)", self.error, e)
             return False
         srv.listen(2)
         srv.settimeout(0.5)
@@ -536,7 +538,9 @@ class N1MMBridge:
             msgs.append(f"als Spot auf {self.radio.freq_khz:.1f} kHz gesendet")
         if not msgs:
             msgs.append("N1MM nicht erreicht (kein Entry Window, kein Telnet-Client)")
-        return f"{call}: " + ", ".join(msgs)
+        result = f"{call}: " + ", ".join(msgs)
+        log.info("Übergabe an N1MM: %s", result)
+        return result
 
     def stop(self):
         self.radio.stop()

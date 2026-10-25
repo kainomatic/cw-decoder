@@ -4,6 +4,7 @@
     python -m cwdecoder.gui            N1MM-Anbindung aus (per Haken einschaltbar)
     python -m cwdecoder.gui --n1mm     N1MM-Anbindung gleich beim Start an
 """
+import logging
 import os
 import queue
 import sys
@@ -16,9 +17,11 @@ import numpy as np
 
 from . import utf8_console
 from .decoder import DecoderConfig
-from .live import LiveDecoder, open_stream, WavRecorder
+from .live import AudioDeviceError, LiveDecoder, open_stream, WavRecorder
 from .n1mm import N1MMBridge
 from .paths import get_recordings_dir
+
+log = logging.getLogger(__name__)
 
 NO_DEVICE = "(kein Eingangsgerät gefunden)"
 
@@ -144,9 +147,12 @@ class App(tk.Tk):
 
         try:
             self.stream, fs = open_stream(idx, cb)
-        except SystemExit as e:
+        except AudioDeviceError as e:
             self.status.set(str(e))
             return
+        log.info("Decoder gestartet: %s, %d Hz, Ton %s", self.dev_var.get(), fs,
+                 "automatisch" if cfg.tracker.fixed_freq is None
+                 else f"fest {cfg.tracker.fixed_freq:.0f} Hz")
         self.gen += 1
         g = self.gen
         self.live = LiveDecoder(fs, cfg,
@@ -163,9 +169,11 @@ class App(tk.Tk):
                 self.rec_path = os.path.join(rec_dir, name)
                 self.live.recorder = WavRecorder(self.rec_path, fs)
             except OSError as e:
+                log.error("Aufnahme nicht möglich: %s", e)
                 self.rec_path = None
                 self.msgs.put(("text", g, f"[Aufnahme nicht möglich: {e}]\n"))
             else:
+                log.info("Aufnahme: %s", self.rec_path)
                 self.msgs.put(("text", g, f"[Aufnahme: {self.rec_path}]\n"))
         holder["live"] = self.live
         # gebundene Methode statt lambda: der Thread darf nicht erst beim
@@ -175,6 +183,8 @@ class App(tk.Tk):
         self.btn_start.configure(text="Stop")
 
     def _stop(self):
+        if self.live:
+            log.info("Decoder gestoppt")
         self.gen += 1   # ab jetzt eintreffende Statusmeldungen sind veraltet
         if self.live:
             self.live.stop()
@@ -225,11 +235,13 @@ class App(tk.Tk):
     def _n1mm_changed(self):
         if self.n1mm_var.get():
             if self.n1mm is None:
+                log.info("N1MM-Anbindung ein (Wipe %s)", "an" if self.wipe_var.get() else "aus")
                 self.n1mm = N1MMBridge(wipe=self.wipe_var.get())
             else:
                 self.n1mm.typer.wipe = self.wipe_var.get()
         else:
             if self.n1mm is not None:
+                log.info("N1MM-Anbindung aus")
                 self.n1mm.stop()
                 self.n1mm = None
             self.n1mm_status.set("N1MM: aus")
@@ -319,6 +331,10 @@ class App(tk.Tk):
 
 def main():
     utf8_console()
+    from .logging_setup import install_exception_hooks, log_startup, setup_logging
+    setup_logging()
+    install_exception_hooks()
+    log_startup("GUI")
     import argparse
     p = argparse.ArgumentParser(description="CW Decoder – Oberfläche")
     p.add_argument("--n1mm", action="store_true",

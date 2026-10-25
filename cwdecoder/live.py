@@ -10,6 +10,7 @@
 Strg+C beendet.
 """
 import argparse
+import logging
 import queue
 import sys
 import threading
@@ -19,6 +20,15 @@ import numpy as np
 from . import utf8_console
 from .decoder import CWDecoder, DecoderConfig
 from .callsign import CallsignSpotter
+
+log = logging.getLogger(__name__)
+
+# Meldungen der Soundkarte (Überlauf o. ä.) höchstens so oft ins Log
+AUDIO_WARN_INTERVAL_S = 5.0
+
+
+class AudioDeviceError(RuntimeError):
+    """Soundkarte lässt sich nicht öffnen (belegt, abgezogen, falsche Rate)."""
 
 
 def list_devices():
@@ -39,11 +49,23 @@ def pick_device(spec):
     for i, d in enumerate(sd.query_devices()):
         if d["max_input_channels"] > 0 and spec_l in d["name"].lower():
             return i
-    raise SystemExit(f"Kein Eingabegerät mit '{spec}' gefunden (siehe --list)")
+    raise AudioDeviceError(f"Kein Eingabegerät mit '{spec}' gefunden (siehe --list)")
+
+
+def device_name(device):
+    """Klarname eines Geräts für Log und Fehlerbericht (None = Standard)."""
+    try:
+        import sounddevice as sd
+        idx = sd.default.device[0] if device is None else device
+        return f"{idx}: {sd.query_devices(idx)['name']}"
+    except Exception:  # noqa: BLE001
+        return str(device)
 
 
 def open_stream(device, callback, preferred=(8000, 48000, 44100, 16000)):
-    """Versucht die Soundkarte mit einer passenden Abtastrate zu öffnen."""
+    """Versucht die Soundkarte mit einer passenden Abtastrate zu öffnen.
+
+    Wirft AudioDeviceError, wenn keine der Raten klappt."""
     import sounddevice as sd
     last = None
     for fs in preferred:
@@ -52,15 +74,22 @@ def open_stream(device, callback, preferred=(8000, 48000, 44100, 16000)):
                                blocksize=int(fs * 0.02), dtype="float32",
                                callback=callback)
             s.start()
+            log.info("Eingang geöffnet: Gerät %s, %d Hz", device_name(device), fs)
             return s, fs
         except Exception as e:  # noqa: BLE001
+            log.debug("Gerät %s mit %d Hz nicht möglich: %s", device, fs, e)
             last = e
-    raise SystemExit(f"Soundkarte konnte nicht geöffnet werden: {last}")
+    log.error("Soundkarte %s konnte nicht geöffnet werden: %s", device_name(device), last)
+    raise AudioDeviceError(f"Soundkarte konnte nicht geöffnet werden: {last}")
 
 
 class LiveDecoder:
-    def __init__(self, fs, cfg=None, on_text=None, on_status=None, on_call=None):
+    def __init__(self, fs, cfg=None, on_text=None, on_status=None, on_call=None,
+                 on_audio_warning=None):
         self.q = queue.Queue()
+        # Meldungen der Soundkarte; Terminal gibt sie auf stderr aus
+        self.on_audio_warning = on_audio_warning
+        self._last_audio_log = -AUDIO_WARN_INTERVAL_S
         self.on_text = on_text or (lambda s: None)
         self.on_status = on_status or (lambda d: None)
         self.spotter = CallsignSpotter(on_call=on_call)
@@ -79,7 +108,12 @@ class LiveDecoder:
 
     def audio_callback(self, indata, frames, t, status):
         if status:
-            print(f"[audio] {status}", file=sys.stderr)
+            if self.on_audio_warning is not None:
+                self.on_audio_warning(str(status))
+            now = time.monotonic()
+            if now - self._last_audio_log >= AUDIO_WARN_INTERVAL_S:
+                self._last_audio_log = now
+                log.warning("Soundkarte meldet: %s", status)
         self.q.put(indata[:, 0].copy())
 
     def run(self, status_interval=1.0):
@@ -120,6 +154,10 @@ class WavRecorder:
 
 def main():
     utf8_console()
+    from .logging_setup import install_exception_hooks, log_startup, setup_logging
+    setup_logging()
+    install_exception_hooks()
+    log_startup("Live-Decoder (Terminal)")
     p = argparse.ArgumentParser(description="CW Live-Decoder")
     p.add_argument("--list", action="store_true", help="Audiogeräte auflisten")
     p.add_argument("--device", default=None, help="Gerätenummer oder Namensteil")
@@ -139,7 +177,12 @@ def main():
     if a.freq:
         cfg.tracker.fixed_freq = a.freq
 
-    device = pick_device(a.device)
+    try:
+        device = pick_device(a.device)
+        log.info("Gerät gewählt: %s", device_name(device))
+    except AudioDeviceError as e:
+        log.error("%s", e)
+        raise SystemExit(str(e)) from None
 
     state = {"fs": None, "live": None}
 
@@ -148,7 +191,10 @@ def main():
             state["live"].audio_callback(indata, frames, t, status)
 
     # Stream zuerst öffnen, damit die tatsächliche Abtastrate bekannt ist
-    stream, fs = open_stream(device, cb)
+    try:
+        stream, fs = open_stream(device, cb)
+    except AudioDeviceError as e:
+        raise SystemExit(str(e)) from None
     print(f"Eingang geöffnet mit {fs} Hz. Strg+C beendet.\n", file=sys.stderr)
 
     line = {"len": 0}
@@ -172,8 +218,10 @@ def main():
     def on_call(call):
         sys.stderr.write(f"\n[Rufzeichen: {call}]\n")
 
-    live = LiveDecoder(fs, cfg, on_text=on_text, on_status=on_status, on_call=on_call)
+    live = LiveDecoder(fs, cfg, on_text=on_text, on_status=on_status, on_call=on_call,
+                       on_audio_warning=lambda m: print(f"[audio] {m}", file=sys.stderr))
     if a.record:
+        log.info("Aufnahme: %s", a.record)
         live.recorder = WavRecorder(a.record, fs)
     state["live"] = live
 
@@ -182,6 +230,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        log.info("Live-Decoder beendet")
         stream.stop()
         stream.close()
         if live.recorder:

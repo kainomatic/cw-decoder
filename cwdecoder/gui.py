@@ -7,6 +7,7 @@ import os
 import queue
 import sys
 import threading
+import time
 from datetime import datetime
 import tkinter as tk
 from tkinter import ttk
@@ -32,6 +33,7 @@ class App(tk.Tk):
         self.stream = None
         self.thread = None
         self.n1mm = None
+        self.n1mm_note = None   # (Meldung, sichtbar bis time.monotonic())
         self.calls = []
         self.devs = []
         # Generation des laufenden Decoders; wird bei Start und Stop erhöht.
@@ -249,9 +251,14 @@ class App(tk.Tk):
         if self.n1mm:
             r = self.n1mm.radio
             if r.connected:
-                self.n1mm_status.set(f"N1MM: {r.freq_khz:.1f} kHz {r.mode or ''}  ({r.mycall or ''})")
+                line = f"N1MM: {r.freq_khz:.1f} kHz {r.mode or ''}  ({r.mycall or ''})"
             else:
-                self.n1mm_status.set("N1MM: keine Broadcasts (Port 12060)")
+                line = "N1MM: keine Broadcasts (Port 12060)"
+            # Fehler (z. B. Port belegt) bleiben stehen, Meldungen eine Weile
+            extra = list(self.n1mm.errors)
+            if self.n1mm_note and time.monotonic() < self.n1mm_note[1]:
+                extra.append(self.n1mm_note[0])
+            self.n1mm_status.set("\n".join([line] + extra))
         self._poll_id = self.after(60, self._poll)
 
     def _show_status(self, st):
@@ -303,7 +310,7 @@ class App(tk.Tk):
             return
         st = self.live.dec.status if self.live else {"snr_db": 20, "wpm": 25}
         msg = self.n1mm.send_call(call, st["snr_db"], st["wpm"])
-        self.n1mm_status.set(msg)
+        self.n1mm_note = (msg, time.monotonic() + 8.0)   # 8 s sichtbar, _poll zeigt sie an
 
 
 def main():

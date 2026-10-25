@@ -40,17 +40,30 @@ class RadioInfoListener(threading.Thread):
         self.mycall = None
         self.radio_nr = 1
         self.last_rx = 0.0
+        self.sock = None
+        self.error = None
         self._stop_evt = threading.Event()
 
-    def run(self):
+    def bind(self) -> bool:
+        """Port sofort binden (ohne SO_REUSEADDR: ein belegter Port soll
+        auffallen statt still geteilt zu werden). False -> self.error."""
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.settimeout(0.5)
         try:
             s.bind(("", self.port))
         except OSError as e:
-            print(f"[n1mm] UDP-Port {self.port} nicht verfügbar: {e}", file=sys.stderr)
+            s.close()
+            self.error = (f"UDP-Port {self.port} belegt – Decoder doppelt gestartet "
+                          f"oder anderes Programm empfängt N1MM-Broadcasts?")
+            print(f"[n1mm] {self.error} ({e})", file=sys.stderr)
+            return False
+        self.sock = s
+        return True
+
+    def run(self):
+        if self.sock is None and not self.bind():
             return
+        s = self.sock
         while not self._stop_evt.is_set():
             try:
                 data, _ = s.recvfrom(65535)
@@ -85,6 +98,10 @@ class RadioInfoListener(threading.Thread):
 
     def stop(self):
         self._stop_evt.set()
+        if self.sock is not None:
+            self.sock.close()   # Port sofort freigeben, weckt recvfrom auf
+        if self.is_alive() and threading.current_thread() is not self:
+            self.join(timeout=1.0)
 
     @property
     def connected(self) -> bool:
@@ -199,24 +216,37 @@ class SpotServer(threading.Thread):
         self.port = port
         self.spotter_call = spotter_call
         self.clients = []
+        self.srv = None
+        self.error = None
         self._lock = threading.Lock()
         self._stop_evt = threading.Event()
 
-    def run(self):
+    def bind(self) -> bool:
+        """Port sofort binden (ohne SO_REUSEADDR). False -> self.error."""
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             srv.bind(("127.0.0.1", self.port))
         except OSError as e:
-            print(f"[n1mm] Spot-Server Port {self.port} nicht verfügbar: {e}", file=sys.stderr)
-            return
+            srv.close()
+            self.error = f"Telnet-Port {self.port} belegt – Decoder doppelt gestartet?"
+            print(f"[n1mm] {self.error} ({e})", file=sys.stderr)
+            return False
         srv.listen(2)
         srv.settimeout(0.5)
+        self.srv = srv
+        return True
+
+    def run(self):
+        if self.srv is None and not self.bind():
+            return
+        srv = self.srv
         while not self._stop_evt.is_set():
             try:
                 conn, _ = srv.accept()
             except socket.timeout:
                 continue
+            except OSError:
+                break
             threading.Thread(target=self._serve_client, args=(conn,), daemon=True).start()
         srv.close()
 
@@ -267,6 +297,10 @@ class SpotServer(threading.Thread):
 
     def stop(self):
         self._stop_evt.set()
+        if self.srv is not None:
+            self.srv.close()    # Port sofort freigeben, weckt accept auf
+        if self.is_alive() and threading.current_thread() is not self:
+            self.join(timeout=1.0)
 
 
 # --------------------------------------------------------------------------
@@ -276,12 +310,20 @@ class N1MMBridge:
 
     def __init__(self, udp_port: int = 12060, spot_port: int = 7373,
                  use_typer: bool = True, use_spots: bool = True, wipe: bool = True):
+        self.errors = []    # Klartext-Meldungen für die GUI (z. B. Port belegt)
         self.radio = RadioInfoListener(udp_port)
-        self.radio.start()
+        if self.radio.bind():
+            self.radio.start()
+        else:
+            self.errors.append(self.radio.error)
         self.typer = EntryWindowTyper(wipe=wipe) if use_typer else None
         self.spots = SpotServer(spot_port) if use_spots else None
         if self.spots:
-            self.spots.start()
+            if self.spots.bind():
+                self.spots.start()
+            else:
+                self.errors.append(self.spots.error)
+                self.spots = None
 
     def send_call(self, call: str, snr_db: float = 20, wpm: float = 25) -> str:
         """Rufzeichen an N1MM geben. Liefert eine Statusmeldung."""

@@ -36,9 +36,16 @@ Bei `NEUE SESSION: ja` (DF1DS hat `/clear` ausgeführt) in dieser Reihenfolge:
   `origin/main` (`git log --oneline -1 origin/main`), CI-Link
   (`gh run list --workflow ci.yml --limit 1`), Abweichungen mit Begründung,
   offene Punkte.
+- **Fragen, die eine Entscheidung brauchen, stehen nur im Issue-Kommentar.**
+  Die Terminal-Ausgabe an DF1DS ist ein Einzeiler:
+  „Bericht und Fragen in Issue #N: <Link>". Nichts, was DF1DS kopieren
+  müsste.
 - Das Issue erst schließen, wenn das Review der Desktop-Session
   „bestanden" sagt: dann `Fixes #N` im nächsten Commit. Bei
   Korrekturpunkten bleibt es offen (`NEUE SESSION: nein`).
+- Verlangt der Auftrag einen Tag: Workflow abwarten (`gh run watch`),
+  Release-Link als Kommentar ins Issue, erst danach mit `Fixes #N`
+  schließen.
 - Immer nur ein `auftrag`-Issue in Arbeit. Issues ohne `auftrag` (Liste in
   `ROADMAP.md`, „Beschlossen, noch nicht umgesetzt") sind kein Auftrag.
 - Architekturfragen und größere Umbauten am Decoder-Kern gehen an die

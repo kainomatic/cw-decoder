@@ -5,6 +5,7 @@
     python tests/run_matrix.py --verbose  dazu jeden Fall mit erkanntem Text
     python tests/run_matrix.py --legacy   die alte Matrix mit zwei festen Sätzen
     python tests/run_matrix.py --n 20     Fälle pro Kategorie (Standard 10)
+    python tests/run_matrix.py --real     Texte der echten Aufnahmen (testdata/real/)
 
 Die Texte kommen aus cwdecoder.testtext (zufällige Rufzeichen, Exchanges,
 QSO-Floskeln, Fünfergruppen); Tempo, Tonhöhe und Störparameter werden je
@@ -203,12 +204,62 @@ def run_legacy(verbose: bool = False) -> float:
     return float(np.mean(scores))
 
 
+# ---------------------------------------------------------------------------
+# Echte Aufnahmen (testdata/real/, ADR-0018): Erwartungen als enthaltene
+# Fragmente statt Vollvergleich; tests/test_real.py prüft dieselbe Tabelle
+# ---------------------------------------------------------------------------
+REAL_DIR = os.path.join(os.path.dirname(__file__), "..", "testdata", "real")
+NOISE_MAX_CHARS = 5   # höchstens so viele Zeichen in der leeren Strecke
+REAL_CASES = [
+    # Datei, Fragmente im Gesamttext, leere Strecke am Anfang in s (oder None)
+    ("cw_20261026_185919_191_8k.wav", ["GRAZIE", "ANTONIO", "IK1RZD"], None),
+    ("cw_20261026_190242_839_8k.wav", ["TNX FER", "UR RST", "TALLINN", "DE ES3YJ"], None),
+    ("cw_20261026_190445_962_8k.wav", ["LY2PX LY2PX CQ CQ CQ", "WILLY", "Z4BPF"], None),
+    ("cw_20261026_190855_301_8k.wav", ["ES3YJ"], 65.0),
+]
+# Fragmente, die der Decoder an den 8-kHz-Dateien noch nicht liefert
+# (Stand #8). In test_real.py als bekannte Lücke (xfail, nicht strikt):
+# - "TALLINN": Der OP gibt mit sehr weiten Zeichenabständen, die
+#   Wortschwelle trennt "T A L L INN".
+# - "UR RST": seit der 60-ms-Vorausschau kommt "UR FST" (R -> F).
+REAL_KNOWN_GAPS = {
+    ("cw_20261026_190242_839_8k.wav", "TALLINN"),
+    ("cw_20261026_190242_839_8k.wav", "UR RST"),
+}
+
+
+def decode_real(fname: str, seconds: float = None) -> str:
+    """Decodiert eine Aufnahme aus testdata/real/ (optional nur den Anfang)."""
+    from cwdecoder.decode_wav import load_wav
+    fs, x = load_wav(os.path.join(REAL_DIR, fname))
+    if seconds is not None:
+        x = x[:int(seconds * fs)]
+    dec, _ = decode_signal(x, fs, block=512)
+    return " ".join(dec.get_text().split())
+
+
+def run_real():
+    """Druckt den Text aller echten Aufnahmen und welche Fragmente fehlen."""
+    for fname, fragments, quiet_s in REAL_CASES:
+        text = decode_real(fname)
+        missing = [f for f in fragments if f not in text]
+        print(f"\n== {fname}")
+        print(f"   {text}")
+        if quiet_s is not None:
+            n = len(decode_real(fname, quiet_s).replace(" ", ""))
+            print(f"   erste {quiet_s:.0f} s: {n} Zeichen (erlaubt {NOISE_MAX_CHARS})")
+        print("   fehlt: " + (", ".join(missing) if missing else "nichts"))
+
+
 def main():
     utf8_console()
     verbose = "--verbose" in sys.argv
     n = 10
     if "--n" in sys.argv:
         n = int(sys.argv[sys.argv.index("--n") + 1])
+    if "--real" in sys.argv:
+        run_real()
+        return
     if "--legacy" in sys.argv:
         print(f"\nMittel (alte Matrix): {100 * run_legacy(verbose):.1f} %")
         return

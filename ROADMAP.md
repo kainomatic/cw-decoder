@@ -35,9 +35,10 @@ und sag mir, was als Nächstes zu tun ist."*
 Programm-Infrastruktur stehen; das Programm ist als Setup mit Self-Update
 installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 
-- Neueste Beta: [`v0.1.0-beta7`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta7)
-  (`CWDecoder-Beta-Setup-v0.1.0.exe`, Squelch für schmale CW-Filter, Tempo
-  nach Tonverlust; #8). Self-Update beta2 → beta4 auf dem
+- Neueste Beta: [`v0.1.0-beta8`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta8)
+  (`CWDecoder-Beta-Setup-v0.1.0.exe`, Wortgrenzen bei weiten
+  Zeichenabständen, Rufzeichen ohne Wortgrenzen, Decodier-Log, Absätze;
+  #10). Self-Update beta2 → beta4 auf dem
   Entwicklungsrechner nachgewiesen. Noch keine Stable.
 - Testmatrix (`python tests/run_matrix.py`, zufällige Texte, 11 Kategorien,
   ADR-0017/0018): Mittelwert **97,7 %**, Rauschen 100 % (auch durch
@@ -46,7 +47,7 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 - Laufender Auftrag: siehe Issues mit Label `auftrag`
   (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta7`
+**Nächster Schritt:** DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta8`
 (Self-Update) und testet weiter
 mit Funkgerät und N1MM (siehe „Testablauf Installer/Beta"). Danach
 Auswertung der Aufnahmen durch die Desktop-Session und Entscheidung über die
@@ -71,7 +72,7 @@ seinem Rechner den Self-Update von Beta N auf Beta N+1 nachgewiesen hat
 Bericht). Danach laufen Testrunden über Self-Update; Aufnahmen aus
 `Dokumente\CW Decoder\Aufnahmen` gehen an die Desktop-Session.
 
-Stand: Nachweis beta2 → beta4 erbracht (Arbeitspaket 4); `v0.1.0-beta7`
+Stand: Nachweis beta2 → beta4 erbracht (Arbeitspaket 4); `v0.1.0-beta8`
 darf auf den Shack-PC.
 
 ## Beschlossen, noch nicht umgesetzt
@@ -147,6 +148,15 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
   96,4 % → **97,7 %**, Rauschen 92 % → 100 %; alte Matrix 98,5 % → 98,3 %. Squelch mit 60 ms Vorausschau, unabhängig von der Blockgröße: erstes Zeichen nach einer Pause auch bei den 20-ms-Blöcken der GUI vollständig.
 - Beta `v0.1.0-beta7`.
 
+## ✅ Wortgrenzen, Rufzeichen ohne Wortgrenzen, Decodier-Log (#10)
+
+- ✅ Wortschwelle im Einzel-Cluster-Fall 1,35 × Zeichenpause (Geber mit
+  weiten Zeichenabständen, Aufnahme 231339); Matrix unverändert.
+- ✅ Rufzeichen-Spotter findet zusammengeklebte und (wenn bekannt)
+  zerrissene Rufzeichen (ADR-0019): an 231339 16 statt 8 Vorkommen.
+- ✅ Decodier-Log `cw_….txt` neben jeder Aufnahme; Absätze im Textfenster.
+- Beta `v0.1.0-beta8`.
+
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 
 - Beta auf dem Shack-PC installieren, mit Funkgerät und N1MM testen.
@@ -169,6 +179,12 @@ USB-Audio 48 kHz, ausgewertet von der Desktop-Session, #8):
 - ✅ Die vier Aufnahmen liegen als Testdaten in `testdata/real/` (Freigabe
   DF1DS) und werden von `tests/test_real.py` geprüft. Bekannte Lücken an
   190242: `TALLINN` kommt als `T A L L INN`, `UR RST` als `UR FST`.
+
+Zweite Runde (26.10.2026, Aufnahme 231339, 500-Hz-Filter, #10): Rufzeichen,
+Rapport und Klartext kommen auch bei Fading und zwei Stationen. Hauptfehler
+waren falsche Wortgrenzen bei einem Geber mit weiten Zeichenabständen;
+verbessert in `v0.1.0-beta8`. Ein Überlappungsbereich bleibt
+(`RSTRST579`, `BUTTHEREWAS`); das liegt am Geber.
 
 Weiter offen:
 

@@ -164,6 +164,7 @@ ISCC /DAPP_VERSION=0.1.0 installer\cwdecoder.iss                       # Install
 
 Ablageorte (ADR-0003): `%APPDATA%\CWDecoder\` (`config.json`,
 `cwdecoder.lock`, `logs\cwdecoder.log`), Beta: `%APPDATA%\CWDecoder-Beta\`.
+Aufnahmen: `cw_…_NNN.wav` plus Decodier-Log `cw_…_NNN.txt` (`sekunde;zeichen`).
 
 ## Signalkette (Reihenfolge ist wichtig)
 Audio -> `Decimator` (auf ~8 kHz) -> `ToneTracker` (FFT, Tonfrequenz,

@@ -9,6 +9,15 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 ## [Unreleased]
 
 ### Added
+- Rufzeichen auch ohne Wortgrenzen: zusammengeklebte Rufzeichen
+  (`DEDJ7PR`, `IK2ULVDEOY1CT`) werden erkannt, bekannte auch zerrissen
+  (`OY 1 CT`) oder mit angeklebtem Rest (`DJ7PRRFB`) (ADR-0019, #10).
+- Decodier-Log neben jeder Aufnahme (`cw_….txt`, eine Zeile je Zeichen
+  `sekunde;zeichen`), um eine Stelle im Text in der WAV wiederzufinden (#10).
+- Absätze im Textfenster: Leerzeile nach einer Pause > 3 s oder bei
+  Tonverlust (#10).
+- Aufnahme 231339 (500-Hz-Filter, QSO mit Fading und zwei Stationen) als
+  Testdatum, mit Rufzeichen-Prüfung (`REAL_SPOTS`).
 - Installierbares Windows-Programm: Setup-Dateien
   `CWDecoder-Setup-vX.Y.Z.exe` (Stable) und
   `CWDecoder-Beta-Setup-vX.Y.Z.exe` (Beta), parallel installierbar, mit
@@ -112,6 +121,9 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   der offenen Issues.
 
 ### Fixed
+- Wortgrenzen bei Gebern mit weiten Zeichenabständen: Liegen Wort- und
+  Zeichenpausen in einem Cluster, liegt die Wortschwelle jetzt bei 1,35 ×
+  Zeichenpause statt 1,7 ×; Rufzeichen kleben seltener zusammen (#10).
 - Absturz des Decoder-Threads beendete den Lauf bisher still; jetzt stoppt
   die GUI und zeigt einen Fehlerdialog.
 - GUI-Rauchtest brach sporadisch mit „Tcl_AsyncDelete" ab (tk-Objekte wurden

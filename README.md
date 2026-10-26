@@ -155,7 +155,15 @@ jeweilige Aufnahme entfernt.
    nicht erst beim nächsten Ton. Tempo 5–60 WPM; nach Tonverlust wird es
    für die nächste Station neu eingemessen.
 5. **Rufzeichen** (`callsign.py`): Wörter, die wie Rufzeichen aussehen,
-   erscheinen als Buttons in der GUI.
+   erscheinen als Buttons in der GUI. Auch zusammengeklebte Rufzeichen
+   (`DEDJ7PR`) werden gefunden; bekannte Rufzeichen auch, wenn sie zerrissen
+   sind (`OY 1 CT`) (ADR-0019).
+
+Im Textfenster beginnt nach einer Pause von mehr als 3 s oder wenn der Ton
+weg ist ein neuer Absatz. Bei aktiver Aufnahme entsteht neben der WAV eine
+gleichnamige `.txt` mit einer Zeile je Zeichen: `sekunde;zeichen` (Sekunde
+ab Aufnahmebeginn; Wortabstand als Leerzeichen, Absatz als `¶`). Damit lässt
+sich eine Stelle im Text in der Aufnahme wiederfinden.
 
 ## N1MM Logger+
 

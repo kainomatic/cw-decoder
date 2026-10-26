@@ -164,7 +164,8 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
   vorn statt Dialog.
 - ✅ Rufzeichen-Spalte bleibt bei 125–150 % DPI sichtbar; Rufzeichen im Text
   markiert und anklickbar.
-- Beta `v0.1.0-beta9`.
+- Beta `v0.1.0-beta9`; Review bestanden, #9 geschlossen. Self-Update
+  beta8 → beta9 prüft DF1DS auf dem Shack-PC.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

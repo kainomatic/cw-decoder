@@ -19,6 +19,7 @@ anderen Programm wiederverwendet) und wird ohne Meldung übernommen.
     finally: lock.release()
 """
 import logging
+import ntpath
 import os
 import sys
 from pathlib import Path
@@ -97,11 +98,16 @@ def pid_alive(pid: int) -> bool:
     return process_info(pid) is not None
 
 
+def _basename(path: str) -> str:
+    """Dateiname aus Windows- oder POSIX-Pfad (ntpath kennt beide Trenner)."""
+    return ntpath.basename(path)
+
+
 def is_our_program(exe) -> bool:
     """Gehört der Programmpfad zum CW Decoder (EXE oder Python im Dev-Betrieb)?"""
     if not exe:
         return False
-    name = os.path.basename(exe).lower()
+    name = _basename(exe).lower()
     return name == APP_EXE or (name.startswith("python") and name.endswith(".exe"))
 
 
@@ -114,7 +120,7 @@ def own_identity():
     """(PID, Startzeit, Programmname) dieses Prozesses für die Lockdatei."""
     info = process_info(os.getpid()) or (None, None)
     exe = info[1] or sys.executable or ""
-    return os.getpid(), info[0], os.path.basename(exe)
+    return os.getpid(), info[0], _basename(exe)
 
 
 def parse_lock(text: str):
@@ -145,7 +151,7 @@ def lock_holder_running(pid, start, exe, info_fn=process_info) -> bool:
         return False        # PID gehört inzwischen einem anderen Programm
     if start is not None and run_start is not None and start != run_start:
         return False        # gleiche PID, aber ein neuerer Prozess
-    if exe and run_exe and os.path.basename(run_exe).lower() != exe.lower():
+    if exe and run_exe and _basename(run_exe).lower() != exe.lower():
         return False
     return True
 

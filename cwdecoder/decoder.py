@@ -75,10 +75,16 @@ class CWDecoder:
         if len(x) == 0:
             return
         was_locked = self.tracker.locked
-        self.tracker.process(x)
+        gate_fs = self.tracker.process(x)
         if self.tracker.locked != was_locked:
             self._update_bandwidth()
         env = self.envelope.process(x, self.tracker.freq)
+        # Gate auf das Hüllkurven-Raster bringen (hop-genau reicht)
+        if len(env):
+            pos = np.linspace(0, len(gate_fs) - 1, len(env)).astype(int)
+            gate_env = gate_fs[pos]
+        else:
+            gate_env = gate_fs[:0]
         if self.thresh.gate and not self.tracker.tone_present:
             # Ton ist weg: laufendes Zeichen abschließen und das Tempo-
             # Gedächtnis verwerfen, damit die nächste Station frisch
@@ -87,7 +93,7 @@ class CWDecoder:
             self.timing.reset_tempo()
             self._update_bandwidth()
         self.thresh.gate = self.tracker.tone_present
-        events = self.thresh.process(env)
+        events = self.thresh.process(env, gate_env)
         for ev in events:
             if ev.on:
                 self.timing.mark(ev.duration_ms)
@@ -100,6 +106,11 @@ class CWDecoder:
         self.t_ms += 1000.0 * len(x) / self.fs
 
     def flush(self):
+        for ev in self.thresh.flush():
+            if ev.on:
+                self.timing.mark(ev.duration_ms)
+            else:
+                self.timing.gap(ev.duration_ms)
         self.timing.force_flush()
 
     # ------------------------------------------------------------------

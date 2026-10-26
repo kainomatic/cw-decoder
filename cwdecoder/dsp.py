@@ -110,12 +110,23 @@ class ToneTracker:
             self.hold[:] = 0.0
 
     def process(self, x: np.ndarray):
+        """Verarbeitet einen Block und liefert pro Sample, ob ein Ton da ist
+        (Hop-genau; für den Squelch mit Vorausschau)."""
         c = self.cfg
+        n = len(x)
+        gate = np.empty(n, dtype=bool)
+        pos = 0
         self.pending = np.concatenate([self.pending, x])
         while len(self.pending) >= c.hop:
             chunk, self.pending = self.pending[:c.hop], self.pending[c.hop:]
             self.buf = np.concatenate([self.buf[c.hop:], chunk])
             self._analyze()
+            # der gerade analysierte Hop endet bei diesem Sample des Blocks
+            end = n - len(self.pending)
+            gate[pos:end] = self.tone_present
+            pos = end
+        gate[pos:] = self.tone_present
+        return gate
 
     def _analyze(self):
         c = self.cfg
@@ -257,6 +268,9 @@ class ThresholdConfig:
     min_dyn_db: float = 20.0
     dyn_hi_pct: float = 99.5          # oberes Perzentil: 0,5 % von 2 s = 10 ms Signal reichen
     dyn_window_s: float = 2.0
+    dyn_step_ms: float = 10.0         # Bewertungstakt, unabhängig von der Blockgröße
+    lookahead_ms: float = 60.0        # Vorausschau der Dynamik (= Latenz der Tastung)
+    floor_freeze_db: float = 12.0     # Werte so weit über dem Teppich gelten als Ton
     debounce_ms: float = 4.0          # Grund-Entprellzeit (wird mit Punktlänge skaliert)
     smooth_ms: float = 2.0            # kurze Glättung der Hüllkurve
 
@@ -292,18 +306,33 @@ class Thresholder:
         self._ring_filled = 0
         self._dyn_db = 0.0
         self._dyn_count = 0
+        self._freeze_ratio = 10 ** (self.cfg.floor_freeze_db / 20.0)
+        self._la = max(0, int(round(self.cfg.lookahead_ms / self.dt)))
+        self._pend_lin = np.zeros(0)
+        self._pend_db = np.zeros(0)
+        self._pend_gate = np.zeros(0, dtype=bool)
         self._init = False
         self._warm = 0
 
     def set_debounce(self, ms: float):
         self.debounce_ms = float(np.clip(ms, 2.0, 40.0))
 
-    def process(self, env: np.ndarray):
-        """Liefert eine Liste abgeschlossener KeyEvents."""
+    def process(self, env: np.ndarray, gate=None):
+        """Liefert eine Liste abgeschlossener KeyEvents.
+
+        gate: optional pro Hüllkurven-Sample True/False (Ton vorhanden laut
+        Tracker); ohne Angabe gilt self.gate für den ganzen Block.
+        """
         c = self.cfg
         events = []
         if len(env) == 0:
             return events
+        if gate is None:
+            gate_arr = np.full(len(env), bool(self.gate))
+        else:
+            gate_arr = np.asarray(gate, dtype=bool)
+            if len(gate_arr) != len(env):
+                gate_arr = np.resize(gate_arr, len(env))
         # kurze Glättung (gleitender Mittelwert über smooth_ms)
         env_lin = np.asarray(env, dtype=float)
         k = max(1, int(round(c.smooth_ms / self.dt)))
@@ -333,26 +362,72 @@ class Thresholder:
             self.floor_db = 20 * np.log10(self.floor_lin + 1e-9)
             self.peak_db = self.floor_db + 1.0
             self._init = True
-        # Dynamik-Fenster blockweise füllen, Perzentile alle 100 ms
-        n = len(env_db)
-        idx = (self._ring_i + np.arange(n)) % len(self._ring)
-        self._ring[idx] = env_db
-        self._ring_i = (self._ring_i + n) % len(self._ring)
-        self._ring_filled = min(len(self._ring), self._ring_filled + n)
-        if self._ring_filled >= len(self._ring) // 2:
-            # bei jedem Block bewerten (sonst öffnet der Squelch nach einer
-            # langen Pause erst mitten im ersten Zeichen); erst, wenn das
-            # Fenster mindestens halb voll ist
-            r = self._ring if self._ring_filled == len(self._ring) else self._ring[:self._ring_filled]
-            p10, phi = np.percentile(r, [10, c.dyn_hi_pct])
-            self._dyn_db = float(phi - p10)
-        for e, el in zip(env_db, env_lin):
+        # Vorausschau: Die Schwelle verarbeitet die Hüllkurve um lookahead_ms
+        # verzögert; der Dynamik-Ring bekommt dagegen schon die neuesten
+        # Werte. So "weiß" der Squelch beim ersten Ton nach einer Pause,
+        # dass ein Ton begonnen hat, und öffnet nicht erst mitten im
+        # Zeichen. Das Ganze läuft Sample für Sample und ist damit
+        # unabhängig von der Blockgröße des Aufrufers.
+        ring_n = len(self._ring)
+        step = max(1, int(round(c.dyn_step_ms / self.dt)))
+        L = self._la
+        all_lin = np.concatenate([self._pend_lin, env_lin])
+        all_db = np.concatenate([self._pend_db, env_db])
+        all_gate = np.concatenate([self._pend_gate, gate_arr])
+        cut = max(0, len(all_lin) - L)
+        env_lin, self._pend_lin = all_lin[:cut], all_lin[cut:]
+        env_db, self._pend_db = all_db[:cut], all_db[cut:]
+        self._pend_gate = all_gate[cut:]
+        ahead_db = all_db[L:L + cut]      # zu jedem verarbeiteten Sample der Wert L später
+        ahead_gate = all_gate[L:L + cut]  # Ton laut Tracker, L später
+        self._do_loop(events, env_db, env_lin, ahead_db, ahead_gate, ring_n, step,
+                      a_dn, a_up_off, a_up_on, decay_off, decay_on)
+        return events
+
+    def flush(self):
+        """Am Ende einer Datei die zurückgehaltenen Samples verarbeiten."""
+        c = self.cfg
+        events = []
+        if not self._init or len(self._pend_lin) == 0:
+            return events
+        env_lin, env_db, g = self._pend_lin, self._pend_db, self._pend_gate
+        self._pend_lin = np.zeros(0)
+        self._pend_db = np.zeros(0)
+        self._pend_gate = np.zeros(0, dtype=bool)
+        self._do_loop(events, env_db, env_lin, env_db, g, len(self._ring),
+                      max(1, int(round(c.dyn_step_ms / self.dt))),
+                      0.02 * self.dt, 0.006 * self.dt, 0.00005 * self.dt,
+                      c.peak_decay_db_s * self.dt / 1000.0,
+                      c.peak_decay_on_db_s * self.dt / 1000.0)
+        return events
+
+    def _do_loop(self, events, env_db, env_lin, ahead_db, ahead_gate, ring_n, step,
+                 a_dn, a_up_off, a_up_on, decay_off, decay_on):
+        c = self.cfg
+        for e, el, ea, g in zip(env_db, env_lin, ahead_db, ahead_gate):
+            # Ringpuffer (mit Vorausschau) und Dynamik
+            self._ring[self._ring_i] = ea
+            self._ring_i = (self._ring_i + 1) % ring_n
+            if self._ring_filled < ring_n:
+                self._ring_filled += 1
+            self._dyn_count += 1
+            if self._dyn_count >= step and self._ring_filled >= min(ring_n // 2, int(0.5 * self.rate)):
+                self._dyn_count = 0
+                r = self._ring if self._ring_filled == ring_n else self._ring[:self._ring_filled]
+                p10, phi = np.percentile(r, [10, c.dyn_hi_pct])
+                self._dyn_db = float(phi - p10)
+
             if el < self.floor_lin:
                 self.floor_lin += a_dn * (el - self.floor_lin)
             else:
-                # Dauerträger (> 3 s am Stück) ist kein CW: dann darf der
-                # Teppich auch bei "an" steigen, sonst bleibt er eingefroren
-                a_up = a_up_off if (not self.state or self.run_ms > 3000.0) else a_up_on
+                # Rauschteppich nur aus rauschähnlichen Werten lernen: bei
+                # Tastung "an" und bei Werten weit über dem Teppich
+                # (> floor_freeze_db, für Rayleigh-Rauschen praktisch nie)
+                # praktisch eingefroren; sonst läuft er beim ersten Ton nach
+                # einer Pause hoch, bevor der Squelch offen ist. Dauerträger
+                # (> 3 s am Stück) ist kein CW: dann darf er wieder steigen.
+                tone_like = self.state or el > self._freeze_ratio * self.floor_lin
+                a_up = a_up_off if (not tone_like or self.run_ms > 3000.0) else a_up_on
                 self.floor_lin += a_up * (el - self.floor_lin)
             self.floor_db = 20 * np.log10(self.floor_lin + 1e-9)
             # Signalpegel: zügig rauf, langsam runter
@@ -366,7 +441,7 @@ class Thresholder:
 
             span = self.peak_db - self.floor_db
             self.snr_db = span
-            squelch_open = self.gate and span >= c.min_snr_db and self._dyn_db >= c.min_dyn_db
+            squelch_open = bool(g) and span >= c.min_snr_db and self._dyn_db >= c.min_dyn_db
             # Schwellen: nahe am Signalpegel (-6/-10 dB), bei schwachem
             # Signal aber mindestens als Bruchteil des Abstands zum Rauschen
             on_thr = max(self.peak_db - c.on_below_peak_db, self.floor_db + c.on_frac * span)
@@ -398,7 +473,6 @@ class Thresholder:
             self.run_ms += self.dt
             self.t_ms += self.dt
             self.last_env_db = e
-        return events
 
     def current_run_ms(self) -> float:
         return self.run_ms

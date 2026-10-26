@@ -90,11 +90,16 @@ class TimingDecoder:
                     # Strich-Schwelle zwischen die Cluster legen (geometrisches
                     # Mittel), damit die Gewichtung des Gebers egal ist
                     self._dash_thr_ms = float(np.sqrt(np.median(lo) * np.median(hi)))
-                elif ratio > 4.5:
-                    # zu großer Abstand: lange Elemente sind wohl Striche eines
-                    # langsameren Tempos oder Störungen; nimm das untere Cluster
-                    est.append(dit_from_lo)
-                    weights.append(1.0 + len(lo))
+                elif ratio > 5.0:
+                    # zu großer Abstand: eines der Cluster passt nicht zum CW.
+                    # Das kleinere Cluster ist meist die Störung (kurze
+                    # Rauschimpulse bzw. ein einzelner langer Träger)
+                    if len(lo) < len(hi):
+                        est.append(dit_from_hi)
+                        weights.append(1.0 + len(hi))
+                    else:
+                        est.append(dit_from_lo)
+                        weights.append(1.0 + len(lo))
                 else:
                     est.append(dit_from_lo)
                     weights.append(1.0)

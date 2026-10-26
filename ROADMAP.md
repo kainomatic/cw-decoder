@@ -155,7 +155,7 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
 - ✅ Rufzeichen-Spotter findet zusammengeklebte und (wenn bekannt)
   zerrissene Rufzeichen (ADR-0019): an 231339 16 statt 8 Vorkommen.
 - ✅ Decodier-Log `cw_….txt` neben jeder Aufnahme; Absätze im Textfenster.
-- Beta `v0.1.0-beta8`.
+- Beta `v0.1.0-beta8`; Review bestanden, #10 geschlossen.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

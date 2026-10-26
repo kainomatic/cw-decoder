@@ -90,12 +90,20 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   getasteten CWs haben (Dynamik-Squelch); beide Kriterien zusammen
   (ADR-0018, #8).
 - Nach Tonverlust wird das Tempo neu eingemessen statt verschleppt.
+- Squelch mit 60 ms Vorausschau, samplegenau: Das Ergebnis hängt nicht
+  mehr von der Blockgröße ab, und das erste Zeichen nach einer Pause bleibt
+  vollständig (die Tastung läuft 60 ms hinter dem Audio).
 - Tempo-Schätzung entfernt Ausreißer vor der Clusterung (mit Ausnahme für
   Tempowechsel) und folgt schneller (`adapt` 0,5); Tempo-Suchbereich
   5–60 WPM statt 5–100 WPM.
 - Testmatrix: elfte Kategorie „CW-Filter"; die Hälfte der Rauschfälle läuft
   durch ein schmales Empfängerfilter. Generator: `--rx-filter` bzw.
   `render(rx_filter_hz=…)`.
+- Echte Aufnahmen vom Shack-PC als Testdaten (`testdata/real/`,
+  `tests/test_real.py`, `run_matrix.py --real`); Regressionstest für das
+  erste Zeichen nach einer langen Pause (`tests/test_erstes_zeichen.py`).
+- Rollen: Entscheidungen, die DF1DS gehören, stellt die Desktop-Session im
+  Chat; im Issue steht nur das Ergebnis (ADR-0016).
 - Arbeitsweise: Aufträge, Rückfragen, Berichte und Reviews laufen über
   GitHub-Issues (Label `auftrag`); die Desktop-Session schreibt im Repo nur
   Issues (ADR-0016, ersetzt ADR-0001). `CLAUDE.md` verweist für die

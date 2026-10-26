@@ -120,7 +120,13 @@ reines Rauschen; `--legacy` für die alte Matrix):
 ```
 pytest
 python tests/run_matrix.py
+python tests/run_matrix.py --real     # Texte der echten Aufnahmen
 ```
+
+Testdaten: `testdata/real/` enthält echte Aufnahmen vom Funkgerät
+(`tests/test_real.py`). Es sind Mitschnitte öffentlichen
+Amateurfunkverkehrs; auf Wunsch einer betroffenen Station wird die
+jeweilige Aufnahme entfernt.
 
 ## Wie es funktioniert
 
@@ -140,7 +146,7 @@ python tests/run_matrix.py
    Tastung an schneller, damit QSB nachgeführt wird). Ein-/Ausschaltschwelle
    liegen 6 bzw. 10 dB unter dem Signalpegel, bei schwachem Signal
    proportional zwischen Rauschen und Signal. Squelch bei < 10 dB Abstand,
-   bei zu wenig Dynamik der Hüllkurve (< 19 dB über 2 s) oder ohne Linie;
+   bei zu wenig Dynamik der Hüllkurve (< 20 dB über 2 s) oder ohne Linie;
    Entprellung relativ zur Punktlänge.
 4. **Timing** (`timing.TimingDecoder`): Punktlänge wird laufend aus den
    letzten 24 Ton- und Pausenlängen per Clusterung geschätzt (Punkte/Striche,

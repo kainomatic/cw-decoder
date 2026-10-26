@@ -39,9 +39,9 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
   nach Tonverlust; #8). Self-Update beta2 → beta4 auf dem
   Entwicklungsrechner nachgewiesen. Noch keine Stable.
 - Testmatrix (`python tests/run_matrix.py`, zufällige Texte, 11 Kategorien,
-  ADR-0017/0018): Mittelwert **97,6 %**, Rauschen 100 % (auch durch
-  CW-Filter); Stichproben Seed 5000/7777: 96,2/98,3 %. Alte Matrix
-  (`--legacy`): **98,1 %**.
+  ADR-0017/0018): Mittelwert **97,7 %**, Rauschen 100 % (auch durch
+  CW-Filter); Stichproben Seed 5000/7777: 96,7/98,4 %. Alte Matrix
+  (`--legacy`): **98,3 %**. Erstes Zeichen nach langer Pause: `tests/test_erstes_zeichen.py`.
 - Laufender Auftrag: siehe Issues mit Label `auftrag`
   (`gh issue list --label auftrag`).
 
@@ -143,7 +143,7 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
 - ✅ Linien-Gate im Tracker, Dynamik-Squelch, Tempo-Reset bei Tonverlust,
   robustere Tempo-Schätzung, Tempo 5–60 WPM (ADR-0018).
 - ✅ Matrix: Kategorie „CW-Filter", Rauschen zur Hälfte durch CW-Filter:
-  96,4 % → **97,6 %**, Rauschen 92 % → 100 %; alte Matrix 98,5 % → 98,1 %.
+  96,4 % → **97,7 %**, Rauschen 92 % → 100 %; alte Matrix 98,5 % → 98,3 %. Squelch mit 60 ms Vorausschau, unabhängig von der Blockgröße: erstes Zeichen nach einer Pause auch bei den 20-ms-Blöcken der GUI vollständig.
 - Beta `v0.1.0-beta7`.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
@@ -165,8 +165,9 @@ USB-Audio 48 kHz, ausgewertet von der Desktop-Session, #8):
   lesbar. Ein schwacher Gegenpartner (~10 dB über dem Filterrauschen) gibt
   das Rufzeichen teilweise. Eine sehr unsaubere Handtaste bleibt unlesbar;
   das ist kein Decoder-Ziel.
-- Offen: Ob die Aufnahmen als Testdaten nach `testdata/real/` dürfen,
-  entscheidet DF1DS in #8.
+- ✅ Die vier Aufnahmen liegen als Testdaten in `testdata/real/` (Freigabe
+  DF1DS) und werden von `tests/test_real.py` geprüft. Bekannte Lücken an
+  190242: `TALLINN` kommt als `T A L L INN`, `UR RST` als `UR FST`.
 
 Weiter offen:
 

@@ -248,8 +248,12 @@ class TimingDecoder:
             lo, hi = g[:k + 1], g[k + 1:]
             thr = float(np.sqrt(np.median(lo) * np.median(hi)))
         else:
-            # nur ein Cluster -> das sind Zeichenpausen; Wortpause ist länger
-            thr = float(np.median(g)) * 1.7
+            # nur ein Cluster, d. h. Wort- und Zeichenpausen liegen zu nah
+            # beieinander (Geber mit weiten Zeichenabständen, Verhältnis
+            # Wort/Zeichen nur ~1,4 statt 2,3): Schwelle knapp über die
+            # typische Zeichenpause legen; lieber ein Wort zu viel trennen
+            # als Rufzeichen zusammenkleben (Aufnahme 231339, Issue #10)
+            thr = float(np.median(g)) * 1.35
         self.word_thr_ms = max(base, thr)
 
     def poll(self, gap_so_far_ms: float):

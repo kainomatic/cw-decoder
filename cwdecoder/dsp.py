@@ -199,7 +199,7 @@ class Envelope:
 @dataclass
 class ThresholdConfig:
     peak_decay_db_s: float = 8.0      # Signalpegel-Schätzung fällt so schnell (Pause)
-    peak_decay_on_db_s: float = 15.0  # ... bzw. so schnell während eines Tons (QSB)
+    peak_decay_on_db_s: float = 40.0  # ... bzw. so schnell während eines Tons (QSB)
     peak_attack: float = 0.08         # ... und steigt mit dieser Glättung (pro ms)
     on_frac: float = 0.55             # Einschaltschwelle zwischen Floor und Peak
     off_frac: float = 0.35            # Ausschaltschwelle (Hysterese)

@@ -149,3 +149,15 @@ def test_notes_cli(tmp_path):
     out = tmp_path / "notes.md"
     assert rt.main(["notes", "--tag", "v0.1.0", "--changelog", str(cl), "-o", str(out)]) == 0
     assert out.read_text(encoding="utf-8").startswith("## CW Decoder Version 0.1.0")
+
+
+def test_notes_cli_on_cp1252_console(tmp_path, monkeypatch):
+    """Windows-Runner: stdout ist cp1252, die Notes enthalten "→"."""
+    import io
+    raw = io.BytesIO()
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(raw, encoding="cp1252"))
+    cl = tmp_path / "CHANGELOG.md"
+    cl.write_text("## [Unreleased]\n\n- Hilfe → Nach Updates suchen\n", encoding="utf-8")
+    out = tmp_path / "notes.md"
+    assert rt.main(["notes", "--tag", "v0.1.0-beta2", "--changelog", str(cl), "-o", str(out)]) == 0
+    assert "Hilfe → Nach Updates suchen" in out.read_text(encoding="utf-8")

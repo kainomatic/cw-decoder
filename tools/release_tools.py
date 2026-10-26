@@ -151,6 +151,10 @@ def _cmd_notes(a) -> None:
 
 
 def main(argv=None) -> int:
+    # Die Konsole der Windows-Runner ist cp1252; Notes enthalten z. B. "→"
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     p = argparse.ArgumentParser(description="Hilfen für den Release-Workflow")
     sub = p.add_subparsers(dest="cmd", required=True)
     pp = sub.add_parser("prepare")

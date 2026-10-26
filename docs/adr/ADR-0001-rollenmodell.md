@@ -1,6 +1,6 @@
 # ADR-0001: Rollenmodell — Desktop entwirft, Code baut, DF1DS vermittelt
 
-**Status:** Accepted
+**Status:** Superseded by ADR-0016
 
 ## Kontext
 

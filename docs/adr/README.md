@@ -37,13 +37,13 @@ Was folgt daraus, positiv wie negativ?
   `Superseded by ADR-XXXX` und bleibt stehen. ADRs werden nie gelöscht.
 - Jeder neue ADR wird unten im Index eingetragen.
 
-**Nächste freie Nummer: ADR-0016**
+**Nächste freie Nummer: ADR-0017**
 
 ## Index
 
 | ADR | Titel |
 |-----|-------|
-| [ADR-0001](ADR-0001-rollenmodell.md) | Rollenmodell — Desktop entwirft, Code baut, DF1DS vermittelt |
+| [ADR-0001](ADR-0001-rollenmodell.md) | Rollenmodell — Desktop entwirft, Code baut, DF1DS vermittelt (Superseded by ADR-0016) |
 | [ADR-0002](ADR-0002-nur-main-branch-releases-per-tag.md) | Nur der main-Branch, Releases entstehen durch Tags |
 | [ADR-0003](ADR-0003-datenablage-app-ordner-und-aufnahmen.md) | Datenablage — App-Ordner je Kanal, Aufnahmen in den Dokumenten |
 | [ADR-0004](ADR-0004-diagnose-logging.md) | Diagnose-Log (cwdecoder.log) |
@@ -58,6 +58,7 @@ Was folgt daraus, positiv wie negativ?
 | [ADR-0013](ADR-0013-self-update-lifecycle.md) | Self-Update — Prüfen, Herunterladen, Installieren, Neustart |
 | [ADR-0014](ADR-0014-release-workflow-und-versionsregeln.md) | Release-Workflow und Versionsregeln |
 | [ADR-0015](ADR-0015-kein-code-signing.md) | Kein Code-Signing, SmartScreen-Hinweis in der Doku |
+| [ADR-0016](ADR-0016-rollenmodell-issues-als-auftraege.md) | Rollenmodell mit Issue-Recht der Desktop-Session, Aufträge über Issues |
 
 ## Abgrenzung
 

@@ -1,0 +1,87 @@
+# CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
+# Release bei Tag-Push (ADR-0002, ADR-0014):
+#   vX.Y.Z        Stable-Release  (nur nach Freigabe durch DF1DS)
+#   vX.Y.Z-betaN  Beta-Pre-Release (darf Claude Code setzen)
+# __version__ im Repo trägt immer die Ziel-Stable-Nummer X.Y.Z und
+# CHANNEL = "stable". Für Betas patcht tools/release_tools.py beides im
+# Build (kein Commit). Normale Pushes testet ci.yml.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build und Release (${{ github.ref_name }})
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v7
+
+      - name: Python 3.12 einrichten
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Abhängigkeiten installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller pillow
+
+      # Tag prüfen, Versions-Sync (Basis des Tags == __version__), bei Beta
+      # CHANNEL und __version__ ephemer patchen; setzt CHANNEL, IS_PRERELEASE,
+      # APP_VERSION, FULL_VERSION, ISS_FILE, SETUP_FILE.
+      - name: Tag und Version prüfen
+        run: python tools/release_tools.py prepare --tag "${{ github.ref_name }}" --github-env "$env:GITHUB_ENV"
+
+      - name: Icon erzeugen
+        run: python tools/make_icon.py
+
+      - name: PyInstaller-Bundle bauen
+        run: pyinstaller --noconfirm cwdecoder.spec
+
+      - name: Bundle prüfen (Version und Offline-Decodierung)
+        shell: pwsh
+        run: |
+          $exe = "dist\CWDecoder\CWDecoder.exe"
+          Start-Process $exe -ArgumentList "--version" -Wait -NoNewWindow -RedirectStandardOutput version.txt -RedirectStandardError version-err.txt
+          $v = (Get-Content version.txt -Raw).Trim()
+          Write-Host "Bundle meldet: $v"
+          if ($v -ne "CW Decoder $env:FULL_VERSION ($env:CHANNEL)") { Write-Error "Falsche Version im Bundle: $v"; exit 1 }
+          python -m cwdecoder.gen "CQ TEST DE DF1DS K" -o smoke.wav --wpm 25 --snr 10
+          Start-Process $exe -ArgumentList "--decode","smoke.wav" -Wait -NoNewWindow -RedirectStandardOutput decode.txt -RedirectStandardError decode-err.txt
+          Get-Content decode-err.txt
+          $out = Get-Content decode.txt -Raw -Encoding utf8
+          Write-Host $out
+          if ($out -notmatch "CQ TEST DE DF1DS K") { Write-Error "Bundle decodiert nicht"; exit 1 }
+
+      - name: Inno Setup installieren
+        run: choco install innosetup --no-progress -y
+
+      - name: Installer bauen
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $iscc "/DAPP_VERSION=$env:APP_VERSION" $env:ISS_FILE
+          if ($LASTEXITCODE -ne 0) { Write-Error "ISCC fehlgeschlagen ($LASTEXITCODE)"; exit $LASTEXITCODE }
+          Get-Item $env:SETUP_FILE | Format-List Name, Length
+
+      - name: Release-Notes aus CHANGELOG.md
+        run: python tools/release_tools.py notes --tag "${{ github.ref_name }}" -o release_notes.md
+
+      - name: GitHub-Release anlegen
+        uses: softprops/action-gh-release@v3
+        with:
+          name: CW Decoder ${{ env.FULL_VERSION }}
+          body_path: release_notes.md
+          prerelease: ${{ env.IS_PRERELEASE }}
+          files: ${{ env.SETUP_FILE }}
+          fail_on_unmatched_files: true

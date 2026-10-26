@@ -93,7 +93,7 @@ def cat_qrm(rng):
     pitch = _u(rng, 500, 900)
     off = _u(rng, 150, 400) * (1 if rng.random() < 0.5 else -1)
     return dict(wpm=_u(rng, 15, 35), pitch=pitch, snr_db=_u(rng, 12, 20),
-                qrm_hz=pitch + off, qrm_db=_u(rng, -10, 0))
+                qrm_hz=pitch + off, qrm_db=_u(rng, -15, -3))
 
 
 def cat_timing(rng):

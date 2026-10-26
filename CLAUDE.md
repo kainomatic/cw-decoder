@@ -24,7 +24,8 @@ Bei `NEUE SESSION: ja` (DF1DS hat `/clear` ausgeführt) in dieser Reihenfolge:
 
 ## Rollen und Aufträge (ADR-0016, Playbook §1 und §3)
 - **Claude Desktop:** Architekt & Reviewer; schreibt im Repo **nur Issues**
-  (anlegen, kommentieren, Labels). **DF1DS:** Tester, startet Aufträge,
+  (anlegen, kommentieren, Labels); Push nur nach Einzelfreigabe durch
+  DF1DS, nur Daten oder Doku, nie Programmcode (Playbook §1). **DF1DS:** Tester, startet Aufträge,
   entscheidet über Stable. **Claude Code:** einziger Schreiber am Code
   (Code, Tests, Commits, Push, CI, Doku, ADRs, Tags, Releases).
 - **Aufträge über Issues:** Ein Auftrag ist ein Issue mit Label `auftrag`

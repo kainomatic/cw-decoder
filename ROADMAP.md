@@ -13,7 +13,8 @@
 
 Rechte der Desktop-Session im Repo (ADR-0016): **nur** Issues anlegen,
 kommentieren und Labels setzen. Keine Commits, kein Push, keine Tags, keine
-Releases, keine Datei-Änderungen. Kernlogik geht als Patch oder genaue
+Releases, keine Datei-Änderungen. Ausnahme: Push nach Einzelfreigabe durch
+DF1DS, nur Daten oder Doku, nie Programmcode (Playbook §1). Kernlogik geht als Patch oder genaue
 Anweisung in ein Issue; Claude Code spielt sie ein.
 
 Ablauf eines Auftrags (Details: `CLAUDE.md` und

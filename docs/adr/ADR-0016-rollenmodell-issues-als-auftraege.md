@@ -22,7 +22,7 @@ hält fest, was davon für cw-decoder gilt.
 
 | Rolle | Wer | Rechte und Aufgaben |
 |-------|-----|---------------------|
-| **Architekt & Reviewer** | Claude Desktop | Liest das Repo, entwirft Architektur und Decoder-Kern, schreibt Aufträge als Issues, reviewt Berichte gegen den Code. **Schreibt im Repo nur Issues:** anlegen, kommentieren, Labels setzen. Kein Commit, kein Push, kein Tag, keine Release-Änderung, keine Datei-Änderung. |
+| **Architekt & Reviewer** | Claude Desktop | Liest das Repo, entwirft Architektur und Decoder-Kern, schreibt Aufträge als Issues, reviewt Berichte gegen den Code. **Schreibt im Repo nur Issues:** anlegen, kommentieren, Labels setzen. Kein Commit, kein Push, kein Tag, keine Release-Änderung, keine Datei-Änderung. Ausnahme (Playbook §1, ergänzt 2026-10-26): Push nur nach ausdrücklicher Einzelfreigabe durch DF1DS, nur Daten oder Doku, nie Programmcode. |
 | **Vermittler & Tester** | DF1DS | Startet Claude Code mit „Bearbeite Issue #N", testet am Funkgerät mit N1MM, liefert Aufnahmen und Logs, entscheidet über Stable-Releases. |
 | **Ausführender Maintainer** | Claude Code | **Einziger Schreiber am Code:** Code, Tests, Commits, Push, CI, Doku, ADRs, Tags, Releases; berichtet im Auftrags-Issue. |
 

@@ -41,7 +41,8 @@ class TimingDecoder:
         self.dit_ms = self.cfg.initial_dit_ms
         self._dash_thr_ms = None     # adaptive Strich-Schwelle (aus Clustern)
         self.confident = False
-        self.symbol = ""           # aktuelle Punkt/Strich-Folge
+        self.symbol = ""           # aktuelle Punkt/Strich-Folge (Anzeige)
+        self.cur_marks = []        # Tondauern des laufenden Zeichens
         self.char_emitted = True   # wurde das Zeichen für die aktuelle Pause schon ausgegeben?
         self.space_emitted = True
         self.n_marks = 0
@@ -53,6 +54,7 @@ class TimingDecoder:
 
     def reset_text(self):
         self.symbol = ""
+        self.cur_marks = []
         self.char_emitted = True
         self.space_emitted = True
 
@@ -147,6 +149,7 @@ class TimingDecoder:
         # Plausibilität: extrem lange Töne (Träger, Störung) nicht lernen
         if duration_ms > 12 * c.dit_max_ms:
             self.symbol = ""
+            self.cur_marks = []
             return
         self.marks.append(duration_ms)
         self.n_marks += 1
@@ -154,16 +157,24 @@ class TimingDecoder:
         a = c.adapt if self.n_marks > 4 else 0.7
         self.dit_ms = float(np.exp(np.log(self.dit_ms) + a * (np.log(new) - np.log(self.dit_ms))))
         self.confident = self.n_marks >= 4
-        thr = c.dash_thr * self.dit_ms
+        # Die Elemente des laufenden Zeichens werden erst beim Zeichenende
+        # klassifiziert (siehe _flush), damit die bis dahin verbesserte
+        # Tempo-Schätzung auch für die ersten Elemente gilt (Issue #5)
+        self.cur_marks.append(duration_ms)
+        self.symbol = self._classify(self.cur_marks)
+        self.char_emitted = False
+        self.space_emitted = False
+
+    def _dash_threshold(self) -> float:
+        thr = self.cfg.dash_thr * self.dit_ms
         if self._dash_thr_ms is not None:
             # adaptiv, aber in sinnvollen Grenzen um die feste Schwelle
             thr = float(np.clip(self._dash_thr_ms, 1.4 * self.dit_ms, 2.6 * self.dit_ms))
-        if duration_ms < thr:
-            self.symbol += "."
-        else:
-            self.symbol += "-"
-        self.char_emitted = False
-        self.space_emitted = False
+        return thr
+
+    def _classify(self, marks) -> str:
+        thr = self._dash_threshold()
+        return "".join("." if m < thr else "-" for m in marks)
 
     def gap(self, duration_ms: float):
         """Eine Pause (Tastung aus) ist zu Ende, weil ein neuer Ton beginnt."""
@@ -211,8 +222,10 @@ class TimingDecoder:
     def _flush(self, gap_ms: float):
         c = self.cfg
         if not self.char_emitted and gap_ms >= c.char_thr * self.dit_ms:
+            self.symbol = self._classify(self.cur_marks)
             ch = decode_symbol(self.symbol)
             self.symbol = ""
+            self.cur_marks = []
             self.char_emitted = True
             if ch:
                 self.on_char(ch)

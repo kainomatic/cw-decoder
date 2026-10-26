@@ -17,10 +17,17 @@ import numpy as np
 from .morse import decode_symbol
 
 
+# Tempo-Suchbereich. Punktlänge in ms = 1200 / WPM. Schneller als 60 WPM
+# gibt niemand; die Grenzen dienen nur der Robustheit gegen Störimpulse
+# und Träger.
+DIT_MIN_MS = 20.0   # 60 WPM
+DIT_MAX_MS = 240.0  # 5 WPM
+
+
 @dataclass
 class TimingConfig:
-    dit_min_ms: float = 12.0      # ~100 WPM
-    dit_max_ms: float = 240.0     # ~5 WPM
+    dit_min_ms: float = DIT_MIN_MS
+    dit_max_ms: float = DIT_MAX_MS
     dash_thr: float = 2.0         # Ton länger als dash_thr * dit => Strich
     char_thr: float = 2.2         # Pause länger als char_thr * dit => Zeichenende
     word_thr: float = 5.0         # Pause länger als word_thr * dit => Wortende

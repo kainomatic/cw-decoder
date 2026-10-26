@@ -3,6 +3,28 @@
 > Steuert die **Reihenfolge** der Arbeit. Lebendes Dokument: Status bei jedem
 > Auftrag aktualisieren (`✅` erledigt, `🔧 IN ARBEIT`, `➡️` als Nächstes,
 > `⏳` später). Entscheidungen stehen in `docs/adr/`, Aufgaben in GitHub-Issues.
+> Erste Datei, die jede neue Session liest.
+
+---
+
+## Einstieg für eine neue Desktop-Session
+
+> Lies `CLAUDE.md`, diese ROADMAP, `docs/adr/README.md` und die offenen Issues (`gh issue list` oder GitHub). Du bist Architekt und Reviewer: Du liest das Repo, schreibst Aufträge für Claude Code (Kopf `NEUE SESSION: ja/nein`), reviewst Berichte gegen den Code und legst Issues an. Du pushst nie. Der Stand steht in "Aktueller Stand", der Plan unter "Beschlossen, noch nicht umgesetzt".
+
+Rechte der Desktop-Session im Repo (ADR-0016): **nur** Issues anlegen,
+kommentieren und Labels setzen. Keine Commits, kein Push, keine Tags, keine
+Releases, keine Datei-Änderungen. Kernlogik geht als Patch oder genaue
+Anweisung in ein Issue; Claude Code spielt sie ein.
+
+Ablauf eines Auftrags (Details: `CLAUDE.md` und
+[claude-playbook](https://github.com/kainomatic/claude-playbook)):
+Issue mit Label `auftrag` → DF1DS startet Claude Code mit „Bearbeite Issue
+#N" → Rückfragen und Abschlussbericht als Kommentar im Issue → Review als
+Kommentar darunter → bei „bestanden" schließt Claude Code das Issue mit
+`Fixes #N`. Immer nur ein `auftrag`-Issue in Arbeit.
+
+Startsatz: *„Lies das Repo kainomatic/cw-decoder, fang mit ROADMAP.md an,
+und sag mir, was als Nächstes zu tun ist."*
 
 ---
 
@@ -10,11 +32,58 @@
 
 **Ziel-Version 0.1.0, Beta-Phase.** Decoder-Kern, GUI und
 Programm-Infrastruktur stehen; das Programm ist als Setup mit Self-Update
-installierbar (Stable/Beta getrennt). Stable `v0.1.0` erst nach Freigabe
-durch DF1DS.
+installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 
-Testmatrix (`python tests/run_matrix.py`): Mittelwert **95,4 %**
-(Stand Arbeitspaket 4, unverändert gegenüber vorher).
+- Neueste Beta: [`v0.1.0-beta4`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta4)
+  (`CWDecoder-Beta-Setup-v0.1.0.exe`). Self-Update beta2 → beta4 auf dem
+  Entwicklungsrechner nachgewiesen. Noch keine Stable.
+- Testmatrix (`python tests/run_matrix.py`): Mittelwert **95,4 %**
+  (Stand Arbeitspaket 4, unverändert gegenüber vorher).
+- Laufender Auftrag: siehe Issues mit Label `auftrag`
+  (`gh issue list --label auftrag`).
+
+**Nächster Schritt:** DF1DS installiert die Beta auf dem Shack-PC und testet
+mit Funkgerät und N1MM (siehe „Testablauf Installer/Beta"). Danach
+Auswertung der Aufnahmen durch die Desktop-Session und Entscheidung über die
+Stable `v0.1.0`.
+
+---
+
+## Leitlinie
+
+Ziel ist ein guter Decoder, der den Operator unterstützt, nicht ersetzt.
+Keine 99 %. Bei brauchbaren Signalen sauberer Text; bei schwachen Signalen
+Rufzeichen und Rapport so weit, dass man sie mit einem zweiten Hören
+bestätigen kann; bei reinem Rauschen kein Müll im Textfenster (wichtiger als
+die letzten Prozent). Kein Wahrscheinlichkeits-Decoder für −5 dB, solange
+DF1DS es nicht vermisst.
+
+## Testablauf Installer/Beta
+
+Die Beta wird auf dem Shack-PC erst installiert, nachdem Claude Code auf
+seinem Rechner den Self-Update von Beta N auf Beta N+1 nachgewiesen hat
+(Dialog, Download, Silent-Install, Neustart mit neuer Version, Logauszug im
+Bericht). Danach laufen Testrunden über Self-Update; Aufnahmen aus
+`Dokumente\CW Decoder\Aufnahmen` gehen an die Desktop-Session.
+
+Stand: Nachweis beta2 → beta4 erbracht (Arbeitspaket 4); die Beta darf auf
+den Shack-PC.
+
+## Beschlossen, noch nicht umgesetzt
+
+Offene Aufgaben-Issues (noch kein Auftrag, bis sie das Label `auftrag`
+bekommen):
+
+| Issue | Thema | Bereich |
+|-------|-------|---------|
+| [#1](https://github.com/kainomatic/cw-decoder/issues/1) | Testmatrix mit zufälligen Texten statt zwei festen Sätzen | dsp |
+| [#2](https://github.com/kainomatic/cw-decoder/issues/2) | Tonverfolgung bei Drift und schwachem Signal bricht ein | dsp |
+| [#3](https://github.com/kainomatic/cw-decoder/issues/3) | N1MM: direkter Weg ins Rufzeichenfeld? | n1mm |
+| [#5](https://github.com/kainomatic/cw-decoder/issues/5) | Erstes Zeichen bei ~10 dB SNR oft falsch (C → F), solange das Tempo noch nicht gelernt ist | dsp |
+| [#6](https://github.com/kainomatic/cw-decoder/issues/6) | Updater: heruntergeladene Setup-Datei bleibt in `%TEMP%` liegen | Updater |
+
+Issues zum Decoder-Kern (`dsp`) entwirft die Desktop-Session; Claude Code
+setzt um und misst die Testmatrix vorher/nachher.
 
 ---
 
@@ -50,8 +119,7 @@ Fehlerbericht, Single-Instance, Menüleiste, ADRs 0001–0010, pytest + CI
   (`-beta1` und `-beta3` ohne Release: Workflow-Fehler, behoben).
 - ✅ Update-Nachweis auf dem Build-Rechner: installierte beta2 fand beta4,
   lud sie, installierte still und startete als beta4 neu.
-- Offen: Setup-Datei bleibt nach dem Update in `%TEMP%` (Issue #6);
-  erstes Zeichen bei ~10 dB SNR oft falsch (Issue #5, Decoder-Kern).
+- Folge-Issues: #5, #6 (siehe „Beschlossen, noch nicht umgesetzt").
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

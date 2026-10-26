@@ -17,7 +17,7 @@ PREFIXES_1L = ["W", "K", "N", "G", "M", "F", "I"]
 PREFIXES_DIGIT = ["9A", "4X", "5B", "3A", "4O", "9H", "5P", "7S", "2E", "2M"]
 WORDS = ["CQ", "TEST", "DE", "K", "KN", "TU", "73", "88", "GM", "GA", "GE", "GN",
          "UR", "RST", "599", "5NN", "ENN", "HW", "HW?", "BK", "AGN", "PSE", "QRZ",
-         "QSY", "QTH", "NAME", "OP", "WX", "RIG", "ANT", "PWR", "TNX", "FB", "ES",
+         "QSL", "QTH", "NAME", "OP", "WX", "RIG", "ANT", "PWR", "TNX", "FB", "ES",
          "HPE", "CUAGN", "SRI", "QRM", "QSB", "DX", "VY", "NR", "NW", "NIL", "R"]
 NAMES = ["STEFAN", "KLAUS", "PETER", "JOHN", "MIKE", "HANS", "JIRI", "PIET",
          "OLE", "JUAN", "IVAN", "JIM", "TOM", "BOB", "DAVE", "FRANK", "UWE"]

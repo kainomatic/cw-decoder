@@ -82,6 +82,9 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 - Schwellen: Einschalten bei 65 %, Ausschalten bei 45 % des Abstands
   Rauschen/Signal (vorher 55/35 %); der Signalpegel folgt QSB während der
   Tastung mit 40 dB/s (vorher 15 dB/s).
+- Namensregel präzisiert: Verboten ist nur der Projektname des
+  Referenzprojekts, die Q-Gruppe QSL ist erlaubt und steht wieder in den
+  Testtexten (`CLAUDE.md`, #7).
 - Arbeitsweise: Aufträge, Rückfragen, Berichte und Reviews laufen über
   GitHub-Issues (Label `auftrag`); die Desktop-Session schreibt im Repo nur
   Issues (ADR-0016, ersetzt ADR-0001). `CLAUDE.md` verweist für die

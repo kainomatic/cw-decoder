@@ -93,6 +93,12 @@ im Playbook (§2, §4). Projektspezifisch:
 ## Arbeitsregeln (projektspezifisch)
 - Kopfzeile in jeder Python-Datei:
   `# CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later`
+- Der Projektname des Referenzprojekts (als zusammenhängendes Wort,
+  Buchstaben plus Zahl) erscheint nirgends im Repo, auch nicht in
+  Commit-Messages. Vor dem Push: `git grep -inE "qsl ?73"` und
+  `git log --format=%B origin/main..HEAD | grep -iE "qsl ?73"` müssen leer
+  sein. Die Q-Gruppe QSL und die Zahl 73 sind normale Funkbegriffe und
+  überall erlaubt (#7).
 - Tuning-Parameter liegen in den `*Config`-Dataclasses (`TrackerConfig`,
   `ThresholdConfig`, `TimingConfig`, `DecoderConfig`).
 - Laufzeit-Abhängigkeiten nur numpy, scipy, sounddevice (weitere nur nach

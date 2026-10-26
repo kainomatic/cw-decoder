@@ -7,14 +7,10 @@ eine Untergrenze mit etwas Abstand, damit ein grober Einbruch in CI auffällt.
 Die Kategorie "Rauschen" wird zusätzlich einzeln geprüft: bei reinem Rauschen
 darf der Decoder nichts ausgeben (Leitlinie in ROADMAP.md).
 """
-import numpy as np
 import os
 import sys
 
 import pytest
-
-from cwdecoder.decode_wav import decode_signal, similarity
-from cwdecoder.gen import render
 
 sys.path.insert(0, os.path.dirname(__file__))
 import run_matrix  # noqa: E402

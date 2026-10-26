@@ -2,6 +2,9 @@
 
 **Status:** Accepted
 
+Ergänzt durch ADR-0018: elfte Kategorie „CW-Filter"; die Hälfte der
+Rauschfälle läuft durch ein schmales Empfängerfilter.
+
 ## Kontext
 
 Die bisherige Testmatrix (`tests/run_matrix.py`) prüfte 22 feste Fälle mit

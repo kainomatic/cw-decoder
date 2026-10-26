@@ -37,7 +37,7 @@ Was folgt daraus, positiv wie negativ?
   `Superseded by ADR-XXXX` und bleibt stehen. ADRs werden nie gelöscht.
 - Jeder neue ADR wird unten im Index eingetragen.
 
-**Nächste freie Nummer: ADR-0018**
+**Nächste freie Nummer: ADR-0019**
 
 ## Index
 
@@ -60,6 +60,7 @@ Was folgt daraus, positiv wie negativ?
 | [ADR-0015](ADR-0015-kein-code-signing.md) | Kein Code-Signing, SmartScreen-Hinweis in der Doku |
 | [ADR-0016](ADR-0016-rollenmodell-issues-als-auftraege.md) | Rollenmodell mit Issue-Recht der Desktop-Session, Aufträge über Issues |
 | [ADR-0017](ADR-0017-testmatrix-zufallstexte-rauschkategorie.md) | Testmatrix mit zufälligen Texten und Rauschkategorie |
+| [ADR-0018](ADR-0018-schmales-empfaengerfilter-linien-gate-dynamik-squelch.md) | Schmales Empfängerfilter — Linien-Gate und Dynamik-Squelch |
 
 ## Abgrenzung
 

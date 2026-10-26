@@ -57,3 +57,10 @@ def test_ensure_output_keeps_streams(monkeypatch):
     monkeypatch.setattr(sys, "stdout", io.StringIO())
     monkeypatch.setattr(sys, "stderr", io.StringIO())
     assert app_main.ensure_output() is None
+
+
+def test_decode_missing_file_returns_error(tmp_path, capsys):
+    """Kein unbehandelter Fehler: die Fenster-EXE würde sonst mit einem
+    Dialog blockieren (CI hängt)."""
+    assert app_main.main(["--decode", str(tmp_path / "fehlt.wav")]) == 1
+    assert "Fehler:" in capsys.readouterr().err

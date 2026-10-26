@@ -71,25 +71,34 @@ def build_parser():
     return p
 
 
+def _run_cli(a, rest) -> int:
+    if a.version:
+        print(version_text())
+    elif a.list_devices:
+        from . import utf8_console
+        from .live import list_devices
+        utf8_console()
+        list_devices()
+    else:
+        from .decode_wav import main as decode_main
+        decode_main([a.decode] + rest)
+    return 0
+
+
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if any(a.split("=")[0] in _CLI_FLAGS for a in argv):
         ensure_output()
     p = build_parser()
     a, rest = p.parse_known_args(argv)
-    if a.version:
-        print(version_text())
-        return 0
-    if a.list_devices:
-        from . import utf8_console
-        from .live import list_devices
-        utf8_console()
-        list_devices()
-        return 0
-    if a.decode:
-        from .decode_wav import main as decode_main
-        decode_main([a.decode] + rest)
-        return 0
+    if a.version or a.list_devices or a.decode:
+        try:
+            return _run_cli(a, rest)
+        except Exception as e:  # noqa: BLE001 - sonst blockiert ein Fehlerfenster der EXE
+            import traceback
+            traceback.print_exc()
+            print(f"Fehler: {e}", file=sys.stderr)
+            return 1
     if rest:
         p.error(f"unbekannte Argumente: {' '.join(rest)}")
     from .gui import main as gui_main

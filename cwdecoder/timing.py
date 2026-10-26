@@ -25,7 +25,7 @@ class TimingConfig:
     char_thr: float = 2.2         # Pause länger als char_thr * dit => Zeichenende
     word_thr: float = 5.0         # Pause länger als word_thr * dit => Wortende
     history: int = 24             # Fenster für die Geschwindigkeitsschätzung
-    adapt: float = 0.35           # Nachführung der Punktlänge (0..1)
+    adapt: float = 0.5            # Nachführung der Punktlänge (0..1)
     initial_dit_ms: float = 60.0  # Startwert (20 WPM), bis genug Daten da sind
 
 
@@ -101,6 +101,11 @@ class TimingDecoder:
             lo_, hi_ = s_[:k_ + 1], s_[k_ + 1:]
             small, big = (lo_, hi_) if len(lo_) <= len(hi_) else (hi_, lo_)
             tiny = len(small) < max(2, 0.2 * len(marks))
+            # Ausnahme: Sind die neuesten Elemente alle im kleinen Cluster,
+            # ist das kein Ausreißer, sondern ein Tempowechsel
+            recent = np.array(list(self.marks)[-3:], dtype=float)
+            if len(recent) == 3 and np.all((recent >= small.min()) & (recent <= small.max())):
+                break
             if tiny or np.median(hi_) / np.median(lo_) > 5.0:
                 marks = big
             else:

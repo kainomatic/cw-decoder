@@ -2,6 +2,8 @@
 """Update-Prüfung (ADR-0013). Kein Netz: API und Downloads sind gemockt."""
 import io
 import json
+import os
+import sys
 import urllib.error
 
 import pytest
@@ -268,3 +270,44 @@ def test_launch_installer_and_exit(tmp_path):
                               popen=lambda cmd, **kw: calls.append(cmd))
     assert calls == [[str(exe), "/SILENT", "/RESTARTCWDECODER"], "exit"]
     assert installer_command(exe)[1:] == ["/SILENT", "/RESTARTCWDECODER"]
+
+
+# -- Aufräumen alter Setup-Dateien (Issue #6) ---------------------------------
+def _make(path, age_s, now):
+    path.write_bytes(b"MZ")
+    os.utime(path, (now - age_s, now - age_s))
+    return path
+
+
+def test_cleanup_removes_old_installers(tmp_path):
+    now = 1_800_000_000.0
+    old1 = _make(tmp_path / "CWDecoder-Update-abc.exe", 3600, now)
+    old2 = _make(tmp_path / "CWDecoder-Update-xyz.exe", 60, now)
+    young = _make(tmp_path / "CWDecoder-Update-neu.exe", 1, now)
+    other = _make(tmp_path / "anderes-setup.exe", 3600, now)
+    other2 = _make(tmp_path / "CWDecoder-Update-abc.log", 3600, now)
+    assert updater.cleanup_old_installers(tmp_path, now=now) == 2
+    assert not old1.exists() and not old2.exists()
+    assert young.exists() and other.exists() and other2.exists()
+
+
+def test_cleanup_missing_dir_does_not_raise(tmp_path):
+    assert updater.cleanup_old_installers(tmp_path / "gibtsnicht") == 0
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Dateisperre nur unter Windows")
+def test_cleanup_skips_locked_file(tmp_path):
+    now = 1_800_000_000.0
+    locked = _make(tmp_path / "CWDecoder-Update-laeuft.exe", 3600, now)
+    free = _make(tmp_path / "CWDecoder-Update-frei.exe", 3600, now)
+    with open(locked, "rb"):          # wie ein noch laufender Installer
+        assert updater.cleanup_old_installers(tmp_path, now=now) == 1
+    assert locked.exists() and not free.exists()
+    assert updater.cleanup_old_installers(tmp_path, now=now) == 1   # nächster Start
+
+
+def test_download_uses_cleanup_pattern(tmp_path):
+    data = b"MZ" * 10
+    p = download_update(AssetInfo("x.exe", GOOD_URL, len(data)), dest_dir=tmp_path,
+                        opener=_Opener(data))
+    assert p.name.startswith(updater.DOWNLOAD_PREFIX) and p.suffix == updater.DOWNLOAD_SUFFIX

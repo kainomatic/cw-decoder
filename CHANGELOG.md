@@ -83,3 +83,6 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   werden jetzt übersprungen.
 - Release-Workflow brach beim Schreiben der Release-Notes auf der
   cp1252-Konsole des Windows-Runners ab (v0.1.0-beta1 ohne Release).
+- Nach einem Self-Update blieb die heruntergeladene Setup-Datei (ca. 40 MB)
+  in `%TEMP%` liegen; der nächste Start räumt alte `CWDecoder-Update-*.exe`
+  jetzt auf (#6).

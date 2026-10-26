@@ -80,7 +80,6 @@ bekommen):
 | [#2](https://github.com/kainomatic/cw-decoder/issues/2) | Tonverfolgung bei Drift und schwachem Signal bricht ein | dsp |
 | [#3](https://github.com/kainomatic/cw-decoder/issues/3) | N1MM: direkter Weg ins Rufzeichenfeld? | n1mm |
 | [#5](https://github.com/kainomatic/cw-decoder/issues/5) | Erstes Zeichen bei ~10 dB SNR oft falsch (C → F), solange das Tempo noch nicht gelernt ist | dsp |
-| [#6](https://github.com/kainomatic/cw-decoder/issues/6) | Updater: heruntergeladene Setup-Datei bleibt in `%TEMP%` liegen | Updater |
 
 Issues zum Decoder-Kern (`dsp`) entwirft die Desktop-Session; Claude Code
 setzt um und misst die Testmatrix vorher/nachher.
@@ -119,7 +118,8 @@ Fehlerbericht, Single-Instance, Menüleiste, ADRs 0001–0010, pytest + CI
   (`-beta1` und `-beta3` ohne Release: Workflow-Fehler, behoben).
 - ✅ Update-Nachweis auf dem Build-Rechner: installierte beta2 fand beta4,
   lud sie, installierte still und startete als beta4 neu.
-- Folge-Issues: #5, #6 (siehe „Beschlossen, noch nicht umgesetzt").
+- Folge-Issues: #5 (siehe „Beschlossen, noch nicht umgesetzt"); #6
+  (Setup-Datei blieb in `%TEMP%`) erledigt, kommt mit der nächsten Beta.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

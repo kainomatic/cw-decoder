@@ -779,6 +779,9 @@ def main(argv=None):
         return
     # Für den Installer (AppMutex); Handle bis Prozessende halten
     mutex = create_app_mutex()
+    # Setup-Dateien früherer Updates aus %TEMP% entfernen (ohne tk, im Hintergrund)
+    threading.Thread(target=updater.cleanup_old_installers, daemon=True,
+                     name="update-cleanup").start()
     try:
         config_path = config_mod.get_config_path()
         cfg = config_mod.load(config_path)

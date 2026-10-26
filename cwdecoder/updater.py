@@ -12,6 +12,10 @@ download_update(asset, on_progress) -> Path
     Wirft UpdateError.
 launch_installer_and_exit(path, exit_fn)
     Startet "<installer> /SILENT /RESTARTCWDECODER" und ruft exit_fn().
+cleanup_old_installers()
+    Löscht beim Start alte CWDecoder-Update-*.exe aus %TEMP% (Issue #6).
+    Gesperrte Dateien (Installer läuft noch) bleiben bis zum nächsten Start;
+    Fehler nur ins Log.
 
 Kanäle: stable = prerelease false und Tag vX.Y.Z,
         beta   = prerelease true  und Tag vX.Y.Z-betaN.
@@ -25,6 +29,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -38,6 +43,11 @@ log = logging.getLogger(__name__)
 API_URL = "https://api.github.com/repos/kainomatic/cw-decoder/releases"
 API_TIMEOUT_S = 8
 DOWNLOAD_TIMEOUT_S = 60
+DOWNLOAD_PREFIX = "CWDecoder-Update-"
+DOWNLOAD_SUFFIX = ".exe"
+# Jüngere Dateien nicht anfassen: Eine parallel laufende Instanz (anderer
+# Kanal) könnte ihren Installer gerade fertig geladen haben.
+CLEANUP_MIN_AGE_S = 5.0
 CHUNK_BYTES = 64 * 1024
 USER_AGENT = "CWDecoder-Updater/1"
 ALLOWED_DOWNLOAD_PREFIXES = (
@@ -235,7 +245,7 @@ def download_update(asset, on_progress=None, dest_dir=None,
     if not is_allowed_url(asset.url):
         raise UpdateError(_MSG_BAD_URL.format(url=asset.url))
     dest_dir = Path(dest_dir) if dest_dir is not None else Path(tempfile.gettempdir())
-    fd, tmp = tempfile.mkstemp(prefix="CWDecoder-Update-", suffix=".exe", dir=dest_dir)
+    fd, tmp = tempfile.mkstemp(prefix=DOWNLOAD_PREFIX, suffix=DOWNLOAD_SUFFIX, dir=dest_dir)
     path = Path(tmp)
     sha = hashlib.sha256()
     done = 0
@@ -267,6 +277,34 @@ def download_update(asset, on_progress=None, dest_dir=None,
         raise UpdateError(_MSG_SIZE.format(actual=actual, expected=asset.size))
     log.info("Update heruntergeladen: %s, %d Bytes, SHA256 %s", path, actual, sha.hexdigest())
     return path
+
+
+def cleanup_old_installers(temp_dir=None, min_age_s=CLEANUP_MIN_AGE_S, now=None) -> int:
+    """Heruntergeladene Setup-Dateien früherer Updates löschen.
+
+    Liefert die Zahl der gelöschten Dateien. Wirft nie."""
+    try:
+        temp_dir = Path(temp_dir) if temp_dir is not None else Path(tempfile.gettempdir())
+        now = time.time() if now is None else now
+        files = list(temp_dir.glob(f"{DOWNLOAD_PREFIX}*{DOWNLOAD_SUFFIX}"))
+    except Exception as e:  # noqa: BLE001 - Aufräumen darf den Start nie stören
+        log.warning("Alte Update-Dateien nicht auffindbar: %s", e)
+        return 0
+    removed = 0
+    for f in files:
+        try:
+            if now - f.stat().st_mtime < min_age_s:
+                continue
+            f.unlink()
+        except FileNotFoundError:
+            continue
+        except OSError as e:
+            # z. B. Installer läuft noch und sperrt die Datei: nächster Start
+            log.info("Alte Update-Datei bleibt vorerst liegen: %s (%s)", f.name, e)
+            continue
+        removed += 1
+        log.info("Alte Update-Datei gelöscht: %s", f.name)
+    return removed
 
 
 def installer_command(installer_path):

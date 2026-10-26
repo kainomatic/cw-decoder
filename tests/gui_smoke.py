@@ -210,8 +210,13 @@ def main():
             check(seen["aufnahme gestoppt"]["status"].startswith("gestoppt – Aufnahme gespeichert"),
                   f"Status nach Aufnahme-Stop: {seen['aufnahme gestoppt']['status']!r}", problems)
             # Starts mit Aufnahme: 1x normal, 1x sofort, 3x schnell, 1x vor Beenden
-            check(len(recs) == 6 and all(r.endswith(".wav") for r in recs),
+            wavs = [r for r in recs if r.endswith(".wav")]
+            logs = [r for r in recs if r.endswith(".txt")]
+            check(len(wavs) == 6 and len(recs) == 12,
                   f"erwartet 6 getrennte Aufnahmen, gefunden: {recs}", problems)
+            # zu jeder Aufnahme ein Decodier-Log mit gleichem Namen (#10)
+            check(sorted(w[:-4] for w in wavs) == sorted(t[:-4] for t in logs),
+                  f"Decodier-Log fehlt: {recs}", problems)
         print(("ok  " if not problems else "FEHLER  ") + name)
         for p in problems:
             print("    " + p.replace("\n", "\n    "))

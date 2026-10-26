@@ -34,7 +34,8 @@ from .decoder import DecoderConfig
 from .gui_error_report import ErrorReportDialog, open_folder_or_report
 from .gui_errors import report_exception
 from .gui_tooltip import attach_tooltip
-from .live import AudioDeviceError, LiveDecoder, open_stream, WavRecorder
+from .live import (AudioDeviceError, DecodeLog, LiveDecoder, WavRecorder,
+                   decode_log_path, open_stream)
 from .n1mm import N1MMBridge, PortInUseError
 from .paths import get_log_dir, get_recordings_dir
 
@@ -384,6 +385,8 @@ class App(tk.Tk):
                 os.makedirs(rec_dir, exist_ok=True)
                 self.rec_path = os.path.join(rec_dir, name)
                 self.live.recorder = WavRecorder(self.rec_path, fs)
+                # Decodier-Log neben der Aufnahme: Zeit je Zeichen (#10)
+                self.live.decode_log = DecodeLog(decode_log_path(self.rec_path))
             except OSError as e:
                 log.error("Aufnahme nicht möglich: %s", e)
                 self.rec_path = None
@@ -598,6 +601,8 @@ class App(tk.Tk):
             self.thread = None
         if self.live and self.live.recorder:
             self.live.recorder.close()
+        if self.live and self.live.decode_log:
+            self.live.decode_log.close()
         self.live = None
         self.stream = None
         self.btn_start.configure(text=_LBL_START)

@@ -11,6 +11,7 @@ Strg+C beendet.
 """
 import argparse
 import logging
+import os
 import queue
 import sys
 import threading
@@ -93,18 +94,32 @@ class LiveDecoder:
         self.on_text = on_text or (lambda s: None)
         self.on_status = on_status or (lambda d: None)
         self.spotter = CallsignSpotter(on_call=on_call)
-        self.dec = CWDecoder(fs, cfg, on_char=self._char, on_space=self._space)
+        self.dec = CWDecoder(fs, cfg, on_char=self._char, on_space=self._space,
+                             on_paragraph=self._paragraph)
         self.fs = fs
         self.running = False
         self.recorder = None
+        self.decode_log = None   # DecodeLog neben der Aufnahme (optional)
+
+    def _log(self, token):
+        if self.decode_log is not None:
+            self.decode_log.write(self.dec.t_ms / 1000.0, token)
 
     def _char(self, ch):
         self.on_text(ch)
         self.spotter.feed(ch)
+        self._log(ch)
 
     def _space(self):
         self.on_text(" ")
         self.spotter.feed(" ")
+        self._log(" ")
+
+    def _paragraph(self):
+        # Leerzeile im Textfenster; der Spotter sieht ein Wortende
+        self.on_text("\n\n")
+        self.spotter.feed(" ")
+        self._log(DecodeLog.PARAGRAPH)
 
     def audio_callback(self, indata, frames, t, status):
         if status:
@@ -135,6 +150,31 @@ class LiveDecoder:
 
     def stop(self):
         self.running = False
+
+
+class DecodeLog:
+    """Decodier-Log neben einer Aufnahme: je Zeichen eine Zeile
+    `sekunde;zeichen` (Sekunde relativ zum Aufnahmebeginn, 2 Nachkommastellen).
+    Wortabstand = Leerzeichen, Absatz = `¶`. Dient dazu, eine Stelle im Text
+    der passenden Stelle in der WAV zuzuordnen. Zeit = Ausgabezeitpunkt des
+    Zeichens (kurz nach dessen Ende).
+    """
+    PARAGRAPH = "¶"
+
+    def __init__(self, path):
+        self.f = open(path, "w", encoding="utf-8", newline="\n")
+
+    def write(self, t_s: float, token: str):
+        self.f.write(f"{t_s:.2f};{token}\n")
+
+    def close(self):
+        self.f.close()
+
+
+def decode_log_path(wav_path: str) -> str:
+    """`…_217.wav` -> `…_217.txt`."""
+    root, _ext = os.path.splitext(wav_path)
+    return root + ".txt"
 
 
 class WavRecorder:
@@ -223,6 +263,7 @@ def main():
     if a.record:
         log.info("Aufnahme: %s", a.record)
         live.recorder = WavRecorder(a.record, fs)
+        live.decode_log = DecodeLog(decode_log_path(a.record))
     state["live"] = live
 
     try:
@@ -236,6 +277,8 @@ def main():
         if live.recorder:
             live.recorder.close()
             print(f"\nAufnahme gespeichert: {a.record}", file=sys.stderr)
+        if live.decode_log:
+            live.decode_log.close()
         print()
 
 

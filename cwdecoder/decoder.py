@@ -21,17 +21,23 @@ class DecoderConfig:
     bw_factor: float = 1.5
     bw_min_hz: float = 25.0
     bw_max_hz: float = 150.0
+    # Absatz im Live-Text nach so langer Pause (oder bei Tonverlust)
+    paragraph_gap_ms: float = 3000.0
 
 
 class CWDecoder:
     """Verbindet alle Stufen. Aufruf: process(samples) beliebig oft.
 
     Callbacks:
-        on_char(ch)   neues Zeichen (Buchstabe, Ziffer, '*' für unbekannt, <AR> usw.)
-        on_space()    Wortende
+        on_char(ch)     neues Zeichen (Buchstabe, Ziffer, '*' für unbekannt, <AR> usw.)
+        on_space()      Wortende
+        on_paragraph()  Absatz: Pause > paragraph_gap_ms oder Tonverlust, und
+                        seit dem letzten Absatz kam Text (nur für die
+                        Anzeige; get_text() enthält keine Absätze)
     """
 
-    def __init__(self, fs_in: int, cfg: DecoderConfig = None, on_char=None, on_space=None):
+    def __init__(self, fs_in: int, cfg: DecoderConfig = None, on_char=None, on_space=None,
+                 on_paragraph=None):
         self.cfg = cfg or DecoderConfig()
         c = self.cfg
         self.fs_in = fs_in
@@ -40,16 +46,25 @@ class CWDecoder:
         self.tracker = ToneTracker(self.fs, c.tracker)
         self.envelope = Envelope(self.fs, cutoff_hz=50.0, env_rate=c.env_rate)
         self.thresh = Thresholder(self.envelope.env_rate, c.threshold)
-        self.timing = TimingDecoder(c.timing, on_char=on_char, on_space=on_space)
         self.text = []
         self.t_ms = 0.0
-        if on_char is None:
-            self.timing.on_char = lambda ch: self.text.append(ch)
-        if on_space is None:
-            self.timing.on_space = lambda: self.text.append(" ")
+        self._out_char = on_char or (lambda ch: self.text.append(ch))
+        self._out_space = on_space or (lambda: self.text.append(" "))
+        self._out_paragraph = on_paragraph or (lambda: None)
+        self._since_paragraph = False   # Text seit dem letzten Absatz?
+        self.timing = TimingDecoder(c.timing, on_char=self._on_char, on_space=self._out_space)
         self._update_bandwidth()
 
     # ------------------------------------------------------------------
+    def _on_char(self, ch):
+        self._since_paragraph = True
+        self._out_char(ch)
+
+    def _paragraph(self):
+        if self._since_paragraph:
+            self._since_paragraph = False
+            self._out_paragraph()
+
     def _update_bandwidth(self):
         c = self.cfg
         dit = self.timing.dit_ms
@@ -92,6 +107,7 @@ class CWDecoder:
             self.timing.force_flush()
             self.timing.reset_tempo()
             self._update_bandwidth()
+            self._paragraph()
         self.thresh.gate = self.tracker.tone_present
         events = self.thresh.process(env, gate_env)
         for ev in events:
@@ -103,6 +119,8 @@ class CWDecoder:
         # Live-Ausgabe von Zeichen/Wortabstand während einer laufenden Pause
         if not self.thresh.state:
             self.timing.poll(self.thresh.current_run_ms())
+            if self.thresh.current_run_ms() > self.cfg.paragraph_gap_ms:
+                self._paragraph()
         self.t_ms += 1000.0 * len(x) / self.fs
 
     def flush(self):

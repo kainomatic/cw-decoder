@@ -45,7 +45,7 @@ Ergebnis: `dist\CWDecoder\CWDecoder.exe` mit dem Ordner `_internal\`
 Schnelltest:
 
 ```
-python -m cwdecoder.gen "CQ TEST DE DF1DS K" -o t.wav --wpm 25 --snr 10
+python -m cwdecoder.gen "CQ TEST DE DF1DS K" -o t.wav --wpm 25 --snr 20 --seed 1
 dist\CWDecoder\CWDecoder.exe --decode t.wav --expect "CQ TEST DE DF1DS K" > out.txt
 type out.txt
 dist\CWDecoder\CWDecoder.exe --version > out.txt & type out.txt

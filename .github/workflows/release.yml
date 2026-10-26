@@ -56,7 +56,7 @@ jobs:
           $v = (Get-Content version.txt -Raw).Trim()
           Write-Host "Bundle meldet: $v"
           if ($v -ne "CW Decoder $env:FULL_VERSION ($env:CHANNEL)") { Write-Error "Falsche Version im Bundle: $v"; exit 1 }
-          python -m cwdecoder.gen "CQ TEST DE DF1DS K" -o smoke.wav --wpm 25 --snr 10
+          python -m cwdecoder.gen "CQ TEST DE DF1DS K" -o smoke.wav --wpm 25 --snr 20 --seed 1
           Start-Process $exe -ArgumentList "--decode","smoke.wav" -Wait -NoNewWindow -RedirectStandardOutput decode.txt -RedirectStandardError decode-err.txt
           Get-Content decode-err.txt
           $out = Get-Content decode.txt -Raw -Encoding utf8

@@ -37,7 +37,7 @@ Was folgt daraus, positiv wie negativ?
   `Superseded by ADR-XXXX` und bleibt stehen. ADRs werden nie gelöscht.
 - Jeder neue ADR wird unten im Index eingetragen.
 
-**Nächste freie Nummer: ADR-0011**
+**Nächste freie Nummer: ADR-0016**
 
 ## Index
 
@@ -53,6 +53,11 @@ Was folgt daraus, positiv wie negativ?
 | [ADR-0008](ADR-0008-fehlerbericht.md) | Fehlerbericht auf Anfrage — Vorschau, lokal speichern, GitHub im Browser |
 | [ADR-0009](ADR-0009-gui-threading-queue-und-after.md) | GUI-Threading — Arbeit in Threads, tk nur im Hauptthread (Queue + after) |
 | [ADR-0010](ADR-0010-single-instance-lock.md) | Nur eine GUI-Instanz je Kanal (PID-Lockfile) |
+| [ADR-0011](ADR-0011-pyinstaller-build.md) | Build mit PyInstaller als onedir-Bundle |
+| [ADR-0012](ADR-0012-inno-setup-installer-stable-beta.md) | Inno-Setup-Installer, Stable und Beta parallel installierbar |
+| [ADR-0013](ADR-0013-self-update-lifecycle.md) | Self-Update — Prüfen, Herunterladen, Installieren, Neustart |
+| [ADR-0014](ADR-0014-release-workflow-und-versionsregeln.md) | Release-Workflow und Versionsregeln |
+| [ADR-0015](ADR-0015-kein-code-signing.md) | Kein Code-Signing, SmartScreen-Hinweis in der Doku |
 
 ## Abgrenzung
 

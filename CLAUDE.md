@@ -34,7 +34,29 @@ Beginn jeder neuen Session in dieser Reihenfolge lesen:
 - Nur `main`. Kleine Commits direkt auf `main`, danach pushen.
 - Releases nur per Tag: `vX.Y.Z` (Stable), `vX.Y.Z-betaN` (Beta).
   Einzige Versionsquelle: `cwdecoder/__version__.py` (`__version__`, `CHANNEL`).
-  SemVer. Details zum Release-Ablauf folgen mit dem Installer.
+  SemVer.
+
+## Release (ADR-0011 bis ADR-0015, Anleitung `docs/BUILD.md`)
+- Im Repo steht immer die **Ziel-Stable-Nummer** `__version__ = "X.Y.Z"`
+  und `CHANNEL = "stable"`, auch während einer Beta-Phase. Für Betas patcht
+  der Workflow beides nur im Build (`tools/release_tools.py`).
+- **Beta-Tag** `vX.Y.Z-betaN` darf Claude Code setzen
+  (`git tag vX.Y.Z-betaN && git push origin vX.Y.Z-betaN`). Nummern nie
+  wiederverwenden; scheitert der Lauf: fixen, nächste Nummer.
+- **Stable-Tag** `vX.Y.Z` nur nach Freigabe durch DF1DS. Vorher CHANGELOG
+  einfrieren (`[Unreleased]` → `[X.Y.Z] - JJJJ-MM-TT`, neuer leerer
+  `[Unreleased]`); nur beim Stable, nie bei Betas. Danach `__version__` auf
+  die nächste Ziel-Nummer heben.
+- Tag-Push startet `.github/workflows/release.yml`: Versions-Sync
+  (Tag-Basis == `__version__`, sonst Abbruch), PyInstaller-Bundle,
+  Smoke-Test, Inno-Setup, Release-Notes aus `CHANGELOG.md`, GitHub-Release
+  mit `CWDecoder-Setup-vX.Y.Z.exe` bzw. `CWDecoder-Beta-Setup-vX.Y.Z.exe`.
+  Lauf beobachten: `gh run watch`.
+- Installer: `installer/cwdecoder.iss` und `installer/cwdecoder-beta.iss`
+  immer gemeinsam ändern; die AppId-GUIDs nie ändern.
+- Self-Update (`updater.py`, `gui_update.py`): Kanalfilter, Asset-Muster und
+  der Schalter `/RESTARTCWDECODER` hängen an den Namen oben — Umbenennen nur
+  mit neuem ADR.
 
 ## Entscheidungen und Aufgaben festhalten
 - **ADR-Pflicht:** Jede Design- oder Grundentscheidung (Architektur,
@@ -109,6 +131,9 @@ python -m cwdecoder.gui               # Oberfläche
 python -m cwdecoder.gen "CQ TEST" -o t.wav --wpm 25 --snr 6
 python -m cwdecoder.decode_wav t.wav --expect "CQ TEST"
 set CWDECODER_DEBUG=1                 # Log auf DEBUG
+python tools/make_icon.py && pyinstaller --noconfirm cwdecoder.spec   # Bundle
+dist\CWDecoder\CWDecoder.exe --decode t.wav > out.txt                  # Bundle prüfen
+ISCC /DAPP_VERSION=0.1.0 installer\cwdecoder.iss                       # Installer
 ```
 
 Ablageorte (ADR-0003): `%APPDATA%\CWDecoder\` (`config.json`,

@@ -9,6 +9,22 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 ## [Unreleased]
 
 ### Added
+- Installierbares Windows-Programm: Setup-Dateien
+  `CWDecoder-Setup-vX.Y.Z.exe` (Stable) und
+  `CWDecoder-Beta-Setup-vX.Y.Z.exe` (Beta), parallel installierbar, mit
+  Startmenü-Eintrag und Deinstallation (fragt, ob Einstellungen gelöscht
+  werden sollen; Standard Nein) (ADR-0011, ADR-0012).
+- Self-Update: Prüfung kurz nach dem Start (abschaltbar), „Hilfe → Nach
+  Updates suchen", Update-Dialog mit Release-Notes-Link, Download mit
+  Fortschritt, stille Installation und automatischem Neustart; „Später"
+  lässt einen Hinweis im Hilfe-Menü stehen. Stable sieht nur Stables, Beta
+  nur Betas (ADR-0013).
+- `CWDecoder.exe --decode datei.wav`, `--list-devices`, `--version` in der
+  installierten Version (ADR-0011).
+- Release-Workflow: Tag `vX.Y.Z` bzw. `vX.Y.Z-betaN` baut Bundle und
+  Installer und veröffentlicht das GitHub-Release mit Notes aus diesem
+  Changelog (ADR-0014). Anleitung für lokale Builds in `docs/BUILD.md`.
+- Programm-Icon (`tools/make_icon.py`).
 - Version und Release-Kanal in `cwdecoder/__version__.py` (0.1.0, stable);
   Fenstertitel „CW Decoder v0.1.0", im Beta-Kanal mit „BETA" (ADR-0003).
 - Ablageorte in `cwdecoder/paths.py`: App-Ordner `%APPDATA%\CWDecoder`
@@ -47,9 +63,15 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 - GUI-Texte als `_LBL_*`/`_MSG_*`/`_TT_*`-Konstanten (Vorbereitung i18n).
 - Einstellungen der GUI bleiben über Neustarts erhalten; `--n1mm` gilt nur
   für den laufenden Start.
+- „Hilfe → Nach Updates suchen" prüft jetzt wirklich (vorher Platzhalter).
+- Die GUI legt zusätzlich zum Lockfile einen benannten Mutex an, an dem der
+  Installer eine laufende Instanz erkennt (ADR-0013).
+- CI: `actions/checkout` und `actions/setup-python` auf v7 (Node 24).
 
 ### Fixed
 - Absturz des Decoder-Threads beendete den Lauf bisher still; jetzt stoppt
   die GUI und zeigt einen Fehlerdialog.
 - GUI-Rauchtest brach sporadisch mit „Tcl_AsyncDelete" ab (tk-Objekte wurden
   in einem Hintergrund-Thread abgeräumt).
+- Zwei GUI-Tests scheiterten ohne tkinter mit `ModuleNotFoundError`; sie
+  werden jetzt übersprungen.

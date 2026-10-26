@@ -4,7 +4,46 @@ Live-Morsedecoder für Audio vom Funkgerät (USB-Audio, VB-Cable, Line-In) mit
 automatischer Tonverfolgung, adaptiver Rauschunterdrückung, selbstlernender
 Gebegeschwindigkeit und Anbindung an N1MM Logger+.
 
-## Installation (Windows)
+## Installation (Windows, Setup-Datei)
+
+1. Unter [Releases](https://github.com/kainomatic/cw-decoder/releases) die
+   Setup-Datei herunterladen:
+   - **Stable:** `CWDecoder-Setup-vX.Y.Z.exe` — für den Funkbetrieb.
+   - **Beta:** `CWDecoder-Beta-Setup-vX.Y.Z.exe` (als „Pre-release"
+     markiert) — Vorabversion zum Testen.
+2. Setup starten und den Assistenten durchklicken (Admin-Rechte nötig,
+   Windows 10/11, 64 Bit). Danach steht „CW Decoder" im Startmenü.
+
+**SmartScreen-Warnung:** Die Setup-Dateien sind nicht signiert (ADR-0015).
+Beim ersten Start meldet Windows ggf. „Der Computer wurde durch Windows
+geschützt". Dann auf **Weitere Informationen → Trotzdem ausführen**
+klicken. Setup-Dateien nur aus den Releases dieses Repos verwenden; sie
+werden dort automatisch aus dem getaggten Quelltext gebaut.
+
+**Stable und Beta** sind zwei getrennte Programme und können gleichzeitig
+installiert sein und laufen:
+
+| | Stable | Beta |
+|---|---|---|
+| Startmenü | CW Decoder | CW Decoder Beta (Fenstertitel mit „BETA") |
+| Programmordner | `C:\Program Files\CW Decoder` | `C:\Program Files\CW Decoder Beta` |
+| Einstellungen, Log | `%APPDATA%\CWDecoder\` | `%APPDATA%\CWDecoder-Beta\` |
+| Updates | nur Stable-Releases | nur Beta-Releases |
+
+**Updates:** Kurz nach dem Start fragt das Programm bei GitHub nach einer
+neueren Version seines Kanals (abschaltbar über den Haken „Nicht mehr an
+Updates erinnern"; `update_check` in `config.json`). Ist eine da, zeigt ein
+Dialog die neue Version und einen Link zu den Änderungen.
+„Herunterladen und installieren" lädt das Setup, beendet den CW Decoder,
+installiert still (Windows fragt nach Admin-Rechten) und startet die neue
+Version. „Später" lässt einen Hinweis im Hilfe-Menü stehen. Von Hand:
+**Hilfe → Nach Updates suchen**. Ohne Internet startet das Programm normal.
+
+**Deinstallieren** über Windows-Einstellungen → Apps. Die Frage, ob
+Einstellungen und Logs gelöscht werden sollen, ist mit „Nein" vorbelegt;
+Aufnahmen bleiben immer erhalten.
+
+## Entwicklung (aus dem Quelltext)
 
 ```
 python -m venv .venv
@@ -14,7 +53,8 @@ pip install -r requirements.txt
 
 Python 3.12 (Referenzversion). `sounddevice` bringt PortAudio mit, es muss
 nichts weiter installiert werden. Für die Tests zusätzlich
-`pip install -r requirements-dev.txt`.
+`pip install -r requirements-dev.txt`. EXE und Installer selbst bauen:
+`docs/BUILD.md`.
 
 ## Benutzung
 
@@ -41,12 +81,18 @@ python -m cwdecoder.gui --n1mm   # N1MM-Anbindung gleich beim Start an
 Die N1MM-Anbindung ist standardmäßig aus und belegt erst Ports (UDP 12060,
 TCP 7373), wenn der Haken "N1MM-Anbindung" gesetzt wird.
 
+Installiert heißt das Programm `CWDecoder.exe`; dieselben Funktionen gibt
+es dort per Kommandozeile: `CWDecoder.exe --decode datei.wav`,
+`CWDecoder.exe --list-devices`, `CWDecoder.exe --version`.
+
 Die GUI merkt sich Gerät, feste Tonfrequenz und die Haken. Ablageorte:
 
 | Was | Wo (Windows) |
 |-----|--------------|
-| Einstellungen, Log, Lockfile | `%APPDATA%\CWDecoder\` (`config.json`, `logs\cwdecoder.log`) |
+| Einstellungen, Log, Lockfile | `%APPDATA%\CWDecoder\` (`config.json`, `logs\cwdecoder.log`); Beta: `%APPDATA%\CWDecoder-Beta\` |
 | Aufnahmen (Haken "Aufnahme") | `Dokumente\CW Decoder\Aufnahmen\` (Datei → Aufnahmeordner öffnen) |
+
+Den Log-Ordner öffnet auch **Hilfe → Log-Ordner öffnen**.
 
 Probleme melden: Hilfe → Fehler melden… zeigt einen Bericht (Version, System,
 Audiogerät, letzte Logzeilen) und öffnet auf Wunsch ein vorausgefülltes
@@ -141,11 +187,19 @@ cwdecoder/
   gui_tooltip.py, gui_errors.py, gui_error_report.py  GUI-Bausteine
   error_report.py   Fehlerbericht
   instance_lock.py  Schutz gegen Doppelstart
+  app_mutex.py      benannter Mutex für den Installer
+  updater.py, gui_update.py  Self-Update (Prüfung, Download, Dialog)
+  app_main.py       Einstieg der EXE (GUI, --decode, --list-devices, --version)
+run_cwdecoder.py   Einstieg für PyInstaller
+cwdecoder.spec     PyInstaller-Build
+installer/         Inno-Setup-Skripte (Stable, Beta)
+tools/             make_icon.py, release_tools.py (Release-Workflow)
 tests/
   test_*.py      pytest
   run_matrix.py  Testmatrix
   gui_smoke.py   GUI-Rauchtest mit Fake-Soundkarte
 docs/adr/        Architekturentscheidungen
+docs/BUILD.md    EXE und Installer bauen
 ```
 
 ## Stand / offene Punkte

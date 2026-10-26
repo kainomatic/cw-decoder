@@ -8,13 +8,13 @@
 
 ## Aktueller Stand
 
-**Version 0.1.0 (stable), noch kein Release-Tag.** Decoder-Kern und GUI
-laufen; Programm-Infrastruktur (Log, Config, Fehlerdialoge, Fehlerbericht,
-Single-Instance, Menü) steht. Nächster Schritt ist der Installer mit
-Self-Update.
+**Ziel-Version 0.1.0, Beta-Phase.** Decoder-Kern, GUI und
+Programm-Infrastruktur stehen; das Programm ist als Setup mit Self-Update
+installierbar (Stable/Beta getrennt). Stable `v0.1.0` erst nach Freigabe
+durch DF1DS.
 
 Testmatrix (`python tests/run_matrix.py`): Mittelwert **95,4 %**
-(Stand Arbeitspaket 3, unverändert gegenüber vorher).
+(Stand Arbeitspaket 4, unverändert gegenüber vorher).
 
 ---
 
@@ -37,15 +37,22 @@ Version/Kanal, Ablageorte, Diagnose-Log, Config, Tooltips, Fehlerdialoge,
 Fehlerbericht, Single-Instance, Menüleiste, ADRs 0001–0010, pytest + CI
 (Windows/Linux, Python 3.12), Lizenz GPL-3.0-or-later.
 
-## ➡️ Arbeitspaket 4 — Installer mit Self-Update
+## 🔧 IN ARBEIT Arbeitspaket 4 — Installer mit Self-Update
 
-- Build (Bundle für Windows) und Installer; Startmenü-Eintrag.
-- Release-Workflow über Tags `vX.Y.Z` / `vX.Y.Z-betaN` (ADR-0002),
-  Release-Notes aus diesem Changelog.
-- Update-Prüfung beim Start (Config `update_check`), „Hilfe → Nach Updates
-  suchen" ersetzt den Platzhalter; Stable/Beta getrennt.
-- Erkennen einer laufenden Instanz beim Update (ggf. benannter Mutex
-  zusätzlich zum Lockfile, ADR-0010).
+- ✅ PyInstaller-Bundle `CWDecoder.exe` mit `--decode`, `--list-devices`,
+  `--version` (ADR-0011).
+- ✅ Inno-Setup-Installer Stable und Beta, parallel installierbar (ADR-0012).
+- ✅ Self-Update: Prüfung beim Start, „Hilfe → Nach Updates suchen",
+  Dialog, Download, stille Installation, Neustart; AppMutex (ADR-0013).
+- ✅ Release-Workflow über Tags, Release-Notes aus dem Changelog
+  (ADR-0014); kein Code-Signing (ADR-0015).
+- 🔧 Erstes Beta-Release und Update-Nachweis Beta → Beta auf dem
+  Build-Rechner.
+
+## ➡️ Stable 0.1.0 (Freigabe DF1DS)
+
+- Beta auf dem Shack-PC installieren, mit Funkgerät und N1MM testen.
+- Danach CHANGELOG einfrieren und `v0.1.0` taggen (ADR-0014).
 
 ## ⏳ Live-Test am Funkgerät
 

@@ -13,6 +13,7 @@ ROOT = os.path.join(os.path.dirname(__file__), "..")
 
 
 def test_window_title():
+    pytest.importorskip("tkinter", reason="tkinter fehlt")
     from cwdecoder.__version__ import __version__
     from cwdecoder.gui import window_title
     assert window_title("stable") == f"CW Decoder v{__version__}"
@@ -22,6 +23,7 @@ def test_window_title():
 
 def test_gui_texts_are_constants():
     """Alle Tooltip-, Label- und Meldungstexte als Modulkonstanten."""
+    pytest.importorskip("tkinter", reason="tkinter fehlt")
     from cwdecoder import gui
     names = [n for n in vars(gui) if n.startswith(("_LBL_", "_MSG_", "_TT_"))]
     assert len([n for n in names if n.startswith("_TT_")]) >= 10

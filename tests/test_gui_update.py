@@ -1,6 +1,7 @@
 # CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
 """Self-Update in der GUI (ADR-0013): Auto-Check, manueller Check, Dialog,
 "Später", Opt-out, Installation. Kein Netz: Prüfung und Download sind Attrappen."""
+import gc
 import json
 import os
 import sys
@@ -54,6 +55,9 @@ def app(app_env, monkeypatch):
     if a.update_dialog is not None:
         a.update_dialog.close()
     a._quit()
+    # Tk-Objekte im Hauptthread abräumen, nicht später in einem fremden Thread
+    del a
+    gc.collect()
 
 
 def use_result(app, result):

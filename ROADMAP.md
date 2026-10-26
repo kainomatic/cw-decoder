@@ -37,7 +37,7 @@ Version/Kanal, Ablageorte, Diagnose-Log, Config, Tooltips, Fehlerdialoge,
 Fehlerbericht, Single-Instance, Menüleiste, ADRs 0001–0010, pytest + CI
 (Windows/Linux, Python 3.12), Lizenz GPL-3.0-or-later.
 
-## 🔧 IN ARBEIT Arbeitspaket 4 — Installer mit Self-Update
+## ✅ Arbeitspaket 4 — Installer mit Self-Update
 
 - ✅ PyInstaller-Bundle `CWDecoder.exe` mit `--decode`, `--list-devices`,
   `--version` (ADR-0011).
@@ -46,8 +46,12 @@ Fehlerbericht, Single-Instance, Menüleiste, ADRs 0001–0010, pytest + CI
   Dialog, Download, stille Installation, Neustart; AppMutex (ADR-0013).
 - ✅ Release-Workflow über Tags, Release-Notes aus dem Changelog
   (ADR-0014); kein Code-Signing (ADR-0015).
-- 🔧 Erstes Beta-Release und Update-Nachweis Beta → Beta auf dem
-  Build-Rechner.
+- ✅ Erste Beta-Releases `v0.1.0-beta2` und `v0.1.0-beta4`
+  (`-beta1` und `-beta3` ohne Release: Workflow-Fehler, behoben).
+- ✅ Update-Nachweis auf dem Build-Rechner: installierte beta2 fand beta4,
+  lud sie, installierte still und startete als beta4 neu.
+- Offen: Setup-Datei bleibt nach dem Update in `%TEMP%` (Issue #6);
+  erstes Zeichen bei ~10 dB SNR oft falsch (Issue #5, Decoder-Kern).
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

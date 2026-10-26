@@ -67,6 +67,12 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 - Die GUI legt zusätzlich zum Lockfile einen benannten Mutex an, an dem der
   Installer eine laufende Instanz erkennt (ADR-0013).
 - CI: `actions/checkout` und `actions/setup-python` auf v7 (Node 24).
+- Arbeitsweise: Aufträge, Rückfragen, Berichte und Reviews laufen über
+  GitHub-Issues (Label `auftrag`); die Desktop-Session schreibt im Repo nur
+  Issues (ADR-0016, ersetzt ADR-0001). `CLAUDE.md` verweist für die
+  allgemeine Arbeitsweise auf das claude-playbook; `ROADMAP.md` hat einen
+  Einstieg für neue Desktop-Sessions, Leitlinie, Testablauf und die Liste
+  der offenen Issues.
 
 ### Fixed
 - Absturz des Decoder-Threads beendete den Lauf bisher still; jetzt stoppt

@@ -1,5 +1,11 @@
 # CLAUDE.md – Projektkontext für Claude Code
 
+> Allgemeine Arbeitsweise für alle Projekte: https://github.com/kainomatic/claude-playbook (README). Dieses CLAUDE.md enthält nur, was für cw-decoder spezifisch ist.
+
+Lesen per `gh api repos/kainomatic/claude-playbook/readme --jq .content | base64 -d`
+(privates Repo). Dort stehen Rollen, Auftragsformat, Definition of Done und
+die allgemeinen Code-Regeln; hier nur Kurzfassung und Projektbesonderheiten.
+
 ## Was das ist
 Live-Morsedecoder in Python für Audio vom Funkgerät (USB-Audio oder VB-Cable
 unter Windows). Ziel: Text live anzeigen, erkannte Rufzeichen per Klick an
@@ -9,26 +15,34 @@ Geschwindigkeits-Erkennung und besserer Rauschunterdrückung.
 Lizenz GPL-3.0-or-later (`LICENSE`). Python-Referenzversion 3.12.
 
 ## Onboarding für neue Sessions
-Der Chatverlauf ist flüchtig, das Repo ist die maßgebliche Wahrheit. Zu
-Beginn jeder neuen Session in dieser Reihenfolge lesen:
-1. `CLAUDE.md` (dieses Dokument) — Arbeitsweise und Regeln
-2. `ROADMAP.md` — aktueller Stand und nächster Schritt
-3. `docs/adr/` (Index in `docs/adr/README.md`) — getroffene Entscheidungen
-4. `CHANGELOG.md` `[Unreleased]` — was seit dem letzten Release passiert ist
+Bei `NEUE SESSION: ja` (DF1DS hat `/clear` ausgeführt) in dieser Reihenfolge:
+1. das Auftrags-Issue: `gh issue view N --comments`
+2. `CLAUDE.md` (dieses Dokument), bei Bedarf das Playbook
+3. `ROADMAP.md` — Stand, Leitlinie, nächster Schritt, offene Issues
+4. `docs/adr/README.md` — Index der Entscheidungen
+5. `CHANGELOG.md` `[Unreleased]`
 
-## Rollenmodell (ADR-0001)
-| Rolle | Wer | Aufgabe |
-|-------|-----|---------|
-| Architekt & Reviewer | Claude Desktop | entwirft Architektur und Decoder-Kern, schreibt Aufträge, reviewt; schreibt nicht ins Repo |
-| Vermittler & Tester | DF1DS | überbringt Aufträge und Berichte, testet am Funkgerät mit N1MM, liefert Aufnahmen, entscheidet über Stable-Releases |
-| Ausführender Maintainer | Claude Code | Code, Tests, Commits, Push, CI, Doku, ADRs, Issues, Releases |
-
-- Jeder Auftrag beginnt mit **`NEUE SESSION: ja`** oder **`NEUE SESSION: nein`**.
-  Bei „ja" hat DF1DS vorher `/clear` ausgeführt → Onboarding wie oben.
-  Bei „nein" geht es in der laufenden Session weiter.
-- Immer nur ein Auftrag gleichzeitig am Repo.
-- Fragen zur Architektur und größere Umbauten (vor allem am Decoder-Kern)
-  gehen an die Desktop-Session. Abweichungen vom Auftrag im Bericht nennen.
+## Rollen und Aufträge (ADR-0016, Playbook §1 und §3)
+- **Claude Desktop:** Architekt & Reviewer; schreibt im Repo **nur Issues**
+  (anlegen, kommentieren, Labels). **DF1DS:** Tester, startet Aufträge,
+  entscheidet über Stable. **Claude Code:** einziger Schreiber am Code
+  (Code, Tests, Commits, Push, CI, Doku, ADRs, Tags, Releases).
+- **Aufträge über Issues:** Ein Auftrag ist ein Issue mit Label `auftrag`
+  (Kopf `NEUE SESSION: ja/nein`, Kontext, Aufgabe, Akzeptanzkriterien);
+  er kann auch als Kommentar in einem Issue stehen. Start mit
+  „Bearbeite Issue #N" → `gh issue view N --comments` lesen und beginnen.
+- Rückfragen während der Arbeit: `gh issue comment N --body-file …`.
+- **Abschlussbericht** als Kommentar im Issue: Commits, Hash von
+  `origin/main` (`git log --oneline -1 origin/main`), CI-Link
+  (`gh run list --workflow ci.yml --limit 1`), Abweichungen mit Begründung,
+  offene Punkte.
+- Das Issue erst schließen, wenn das Review der Desktop-Session
+  „bestanden" sagt: dann `Fixes #N` im nächsten Commit. Bei
+  Korrekturpunkten bleibt es offen (`NEUE SESSION: nein`).
+- Immer nur ein `auftrag`-Issue in Arbeit. Issues ohne `auftrag` (Liste in
+  `ROADMAP.md`, „Beschlossen, noch nicht umgesetzt") sind kein Auftrag.
+- Architekturfragen und größere Umbauten am Decoder-Kern gehen an die
+  Desktop-Session (als Issue-Kommentar).
 
 ## Branch und Releases (ADR-0002)
 - Nur `main`. Kleine Commits direkt auf `main`, danach pushen.
@@ -52,42 +66,31 @@ Beginn jeder neuen Session in dieser Reihenfolge lesen:
   Smoke-Test, Inno-Setup, Release-Notes aus `CHANGELOG.md`, GitHub-Release
   mit `CWDecoder-Setup-vX.Y.Z.exe` bzw. `CWDecoder-Beta-Setup-vX.Y.Z.exe`.
   Lauf beobachten: `gh run watch`.
+- Vor einer Beta für den Shack-PC: Self-Update Beta N → N+1 auf dem
+  Entwicklungsrechner nachweisen (ROADMAP, „Testablauf Installer/Beta").
 - Installer: `installer/cwdecoder.iss` und `installer/cwdecoder-beta.iss`
   immer gemeinsam ändern; die AppId-GUIDs nie ändern.
 - Self-Update (`updater.py`, `gui_update.py`): Kanalfilter, Asset-Muster und
   der Schalter `/RESTARTCWDECODER` hängen an den Namen oben — Umbenennen nur
   mit neuem ADR.
 
-## Entscheidungen und Aufgaben festhalten
-- **ADR-Pflicht:** Jede Design- oder Grundentscheidung (Architektur,
-  Datenformat, Ablageort, Fehlerverhalten, Sicherheit, Arbeitsweise, Release)
-  bekommt einen ADR in `docs/adr/` — im selben Auftrag. Format, Nummerierung
-  und Index: `docs/adr/README.md`. Status `Accepted`; bei Änderung neuer ADR,
-  alter wird `Superseded by ADR-XXXX`, nie löschen.
-- Offene Aufgaben, Bugs, Ideen → GitHub-Issue (nicht im Chat sammeln).
-- Projektstand → `ROADMAP.md`.
+## Entscheidungen, Aufgaben, Definition of Done
+ADR-Pflicht, Issues statt Chat-Notizen und die Definition of Done gelten wie
+im Playbook (§2, §4). Projektspezifisch:
+- ADR-Format, Nummerierung und Index: `docs/adr/README.md`. Bei Änderung
+  neuer ADR, der alte wird `Superseded by ADR-XXXX`, nie löschen.
+- „CI grün" heißt: GitHub Actions unter Windows **und** Linux.
+- Bei Änderungen an `dsp.py`, `timing.py`, `decoder.py`: Testmatrix vorher
+  und nachher im Bericht (siehe „Testen").
 
-## Definition of Done (je Auftrag)
-Ein Auftrag ist erst fertig, wenn alles erfüllt ist:
-1. **pytest grün** lokal **und CI grün** (GitHub Actions, Windows + Linux).
-2. **ROADMAP.md**-Status aktualisiert.
-3. **CHANGELOG.md** `[Unreleased]` ergänzt (Added/Changed/Fixed/…).
-4. Erledigte **Issues** per `Fixes #N` in der Commit-Message geschlossen.
-5. **ADR** angelegt, falls eine Entscheidung gefallen ist.
-6. **Gepusht**, und der Bericht nennt den Hash von `origin/main`
-   (`git log --oneline -1 origin/main`). „working tree clean" allein genügt nicht.
-
-## Arbeitsregeln
-- Sprache in Code-Kommentaren, Commit-Messages, Doku und Antworten: Deutsch.
+## Arbeitsregeln (projektspezifisch)
 - Kopfzeile in jeder Python-Datei:
   `# CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later`
-- Jede Änderung als eigener, kleiner Commit mit aussagekräftiger Message.
 - Tuning-Parameter liegen in den `*Config`-Dataclasses (`TrackerConfig`,
-  `ThresholdConfig`, `TimingConfig`, `DecoderConfig`). Keine Magic Numbers
-  tief im Code verstecken.
-- Keine neuen Laufzeit-Abhängigkeiten außer numpy, scipy, sounddevice ohne
-  Rückfrage (Entwicklung: pytest in `requirements-dev.txt`).
-  Die GUI bleibt bei tkinter.
+  `ThresholdConfig`, `TimingConfig`, `DecoderConfig`).
+- Laufzeit-Abhängigkeiten nur numpy, scipy, sounddevice (weitere nur nach
+  Rückfrage). Entwicklung: pytest und Pillow in `requirements-dev.txt`;
+  PyInstaller nur für den Build. Die GUI bleibt bei tkinter.
 - Aufnahmen aus der GUI landen in `Dokumente\CW Decoder\Aufnahmen`
   (ADR-0003). Gute Aufnahmen als Testdaten nach `testdata/` kopieren
   (WAV, 8–48 kHz, < 5 MB, ggf. `.gitignore` anpassen) und committen; mit
@@ -157,5 +160,6 @@ Wichtige Zusammenhänge:
   Tastpausen gehalten wird. Sprung > 40 Hz = neue Station übernehmen.
 
 ## Offene Punkte
-Stehen in `ROADMAP.md` (Live-Test am Funkgerät, N1MM am echten Logger,
-schwache Signale, Farnsworth) und als GitHub-Issues.
+Stehen als GitHub-Issues; die Übersicht steht in `ROADMAP.md` unter
+„Beschlossen, noch nicht umgesetzt" (dazu Live-Test am Funkgerät und N1MM am
+echten Logger).

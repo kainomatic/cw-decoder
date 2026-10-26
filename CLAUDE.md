@@ -46,6 +46,9 @@ Bei `NEUE SESSION: ja` (DF1DS hat `/clear` ausgeführt) in dieser Reihenfolge:
 - Verlangt der Auftrag einen Tag: Workflow abwarten (`gh run watch`),
   Release-Link als Kommentar ins Issue, erst danach mit `Fixes #N`
   schließen.
+- Entscheidungen, die DF1DS gehören, stellt die Desktop-Session im Chat mit
+  Bewertung und Empfehlung; im Issue steht nur das Ergebnis (Playbook §6,
+  ADR-0016).
 - Immer nur ein `auftrag`-Issue in Arbeit. Issues ohne `auftrag` (Liste in
   `ROADMAP.md`, „Beschlossen, noch nicht umgesetzt") sind kein Auftrag.
 - Architekturfragen und größere Umbauten am Decoder-Kern gehen an die
@@ -131,8 +134,8 @@ im Playbook (§2, §4). Projektspezifisch:
 - **Testmatrix bleibt Pflicht** vor und nach jeder Änderung an
   `cwdecoder/dsp.py`, `timing.py` oder `decoder.py`:
   `python tests/run_matrix.py`, Mittelwert vorher/nachher notieren. Er darf
-  nicht sinken (zuletzt 97,6 % bei 11 Kategorien inkl. „CW-Filter"; alte
-  Matrix `--legacy` 98,1 %), sonst begründen oder zurücknehmen. Die
+  nicht sinken (zuletzt 97,7 % bei 11 Kategorien inkl. „CW-Filter"; alte
+  Matrix `--legacy` 98,3 %), sonst begründen oder zurücknehmen. Die
   Kategorie **Rauschen** (zur Hälfte durch ein schmales CW-Filter) muss
   100 % bleiben: Bei reinem Rauschen gibt der Decoder nichts aus
   (ADR-0017, ADR-0018).
@@ -184,8 +187,15 @@ Wichtige Zusammenhänge:
 - Squelch öffnet nur, wenn **beide** unabhängigen Kriterien passen
   (ADR-0018): Linien-Gate im Tracker (Peak ≥ 9 dB über dem Umfeld
   ±20…40 Hz, schließt erst nach 0,6 s unter 6 dB) und Dynamik der Hüllkurve
-  (98.–10. Perzentil über 2 s ≥ 19 dB). Grund: Rauschen durch ein schmales
-  Empfängerfilter (~100 Hz) sieht sonst wie ein getasteter Ton aus.
+  (99,5.–10. Perzentil über 2 s ≥ 20 dB, im 10-ms-Takt). Grund: Rauschen
+  durch ein schmales Empfängerfilter (~100 Hz) sieht sonst wie ein
+  getasteter Ton aus.
+- Der `Thresholder` arbeitet mit **60 ms Vorausschau** (`lookahead_ms`):
+  Dynamik und Gate (pro Sample vom Tracker) sehen 60 ms voraus, die
+  Schwelle läuft dahinter. Damit ist das Ergebnis unabhängig von der
+  Blockgröße (GUI: 20 ms, Matrix: 64 ms), und das erste Zeichen nach
+  einer Pause bleibt vollständig (`tests/test_erstes_zeichen.py`). Nie
+  wieder Logik einbauen, die vom Blockende abhängt.
 - Fällt `tone_present` weg, schließt `CWDecoder` das Zeichen ab und setzt
   das Tempo zurück (`TimingDecoder.reset_tempo`), damit die nächste
   Station frisch eingemessen wird. Tempo-Suchbereich 5–60 WPM

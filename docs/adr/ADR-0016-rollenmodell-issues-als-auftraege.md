@@ -46,6 +46,9 @@ vorher/nachher).
   Code schließt das Issue mit `Fixes #N` im nächsten (letzten) Commit.
   Korrekturpunkte → Issue bleibt offen, Weiterarbeit mit
   `NEUE SESSION: nein`.
+- Entscheidungen, die DF1DS gehören, stellt die Desktop-Session im Chat mit
+  Bewertung und Empfehlung; im Issue steht nur das Ergebnis (Playbook §6,
+  ergänzt 2026-10-26).
 - Immer nur ein Issue mit Label `auftrag` in Arbeit.
 - Aufgaben-Issues ohne `auftrag` (z. B. #1–#3) sind Sammlung; sie werden
   erst durch das Label zum Auftrag. Die Liste steht in `ROADMAP.md` unter

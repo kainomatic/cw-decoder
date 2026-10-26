@@ -265,7 +265,7 @@ class Thresholder:
         # Schätzwert viel zu weit nach unten ziehen)
         a_dn = 0.02 * self.dt
         a_up_off = 0.006 * self.dt
-        a_up_on = 0.0008 * self.dt
+        a_up_on = 0.00005 * self.dt   # während eines Tons praktisch eingefroren
         if not self._init:
             # Einschwingen des Filters abwarten, dann auf den Pegel setzen
             self._warm += len(env_db)
@@ -280,7 +280,10 @@ class Thresholder:
             if el < self.floor_lin:
                 self.floor_lin += a_dn * (el - self.floor_lin)
             else:
-                self.floor_lin += (a_up_on if self.state else a_up_off) * (el - self.floor_lin)
+                # Dauerträger (> 3 s am Stück) ist kein CW: dann darf der
+                # Teppich auch bei "an" steigen, sonst bleibt er eingefroren
+                a_up = a_up_off if (not self.state or self.run_ms > 3000.0) else a_up_on
+                self.floor_lin += a_up * (el - self.floor_lin)
             self.floor_db = 20 * np.log10(self.floor_lin + 1e-9)
             # Signalpegel: zügig rauf, langsam runter
             if e > self.peak_db:

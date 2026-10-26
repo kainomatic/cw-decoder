@@ -39,6 +39,7 @@ class TimingDecoder:
         self.char_gaps = deque(maxlen=12)   # Pausen zwischen Zeichen (für Farnsworth)
         self.word_thr_ms = self.cfg.word_thr * self.cfg.initial_dit_ms
         self.dit_ms = self.cfg.initial_dit_ms
+        self._dash_thr_ms = None     # adaptive Strich-Schwelle (aus Clustern)
         self.confident = False
         self.symbol = ""           # aktuelle Punkt/Strich-Folge
         self.char_emitted = True   # wurde das Zeichen für die aktuelle Pause schon ausgegeben?
@@ -78,11 +79,15 @@ class TimingDecoder:
                 lo, hi = s[:k + 1], s[k + 1:]
                 dit_from_lo = np.median(lo)
                 dit_from_hi = np.median(hi) / 3.0
-                # beide Cluster müssen zueinander passen (Verhältnis ~3)
+                # beide Cluster müssen zueinander passen (Verhältnis ~3;
+                # leichte/schwere Gewichtung liefert 2..4.5)
                 ratio = np.median(hi) / dit_from_lo
-                if 2.0 <= ratio <= 4.5:
+                if 1.8 <= ratio <= 5.0:
                     est.append(0.5 * (dit_from_lo + dit_from_hi))
                     weights.append(2.0 + len(marks))
+                    # Strich-Schwelle zwischen die Cluster legen (geometrisches
+                    # Mittel), damit die Gewichtung des Gebers egal ist
+                    self._dash_thr_ms = float(np.sqrt(np.median(lo) * np.median(hi)))
                 elif ratio > 4.5:
                     # zu großer Abstand: lange Elemente sind wohl Striche eines
                     # langsameren Tempos oder Störungen; nimm das untere Cluster
@@ -149,7 +154,11 @@ class TimingDecoder:
         a = c.adapt if self.n_marks > 4 else 0.7
         self.dit_ms = float(np.exp(np.log(self.dit_ms) + a * (np.log(new) - np.log(self.dit_ms))))
         self.confident = self.n_marks >= 4
-        if duration_ms < c.dash_thr * self.dit_ms:
+        thr = c.dash_thr * self.dit_ms
+        if self._dash_thr_ms is not None:
+            # adaptiv, aber in sinnvollen Grenzen um die feste Schwelle
+            thr = float(np.clip(self._dash_thr_ms, 1.4 * self.dit_ms, 2.6 * self.dit_ms))
+        if duration_ms < thr:
             self.symbol += "."
         else:
             self.symbol += "-"

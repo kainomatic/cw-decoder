@@ -215,8 +215,8 @@ class ThresholdConfig:
     peak_decay_db_s: float = 8.0      # Signalpegel-Schätzung fällt so schnell (Pause)
     peak_decay_on_db_s: float = 40.0  # ... bzw. so schnell während eines Tons (QSB)
     peak_attack: float = 0.08         # ... und steigt mit dieser Glättung (pro ms)
-    on_frac: float = 0.55             # Einschaltschwelle zwischen Floor und Peak
-    off_frac: float = 0.35            # Ausschaltschwelle (Hysterese)
+    on_frac: float = 0.65             # Einschaltschwelle zwischen Floor und Peak
+    off_frac: float = 0.45            # Ausschaltschwelle (Hysterese)
     on_below_peak_db: float = 6.0     # ... aber höchstens so weit unter dem Signalpegel
     off_below_peak_db: float = 10.0
     min_snr_db: float = 10.0          # Squelch: darunter kein Ton

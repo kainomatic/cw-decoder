@@ -49,3 +49,11 @@ def test_real_leere_frequenz(fname, quiet_s):
     n = len(head.replace(" ", ""))
     assert n <= run_matrix.NOISE_MAX_CHARS, \
         f"{n} Zeichen in den ersten {quiet_s:.0f} s (leere Frequenz): {head}"
+
+
+@pytest.mark.parametrize("fname,calls", list(run_matrix.REAL_SPOTS.items()),
+                         ids=lambda v: str(v)[3:18] if isinstance(v, str) else "")
+def test_real_rufzeichen(fname, calls):
+    got = run_matrix.spot_real(_text(fname))
+    missing = [c for c in calls if c not in got]
+    assert not missing, f"Spotter fand {got}, es fehlt {missing}"

@@ -216,7 +216,14 @@ REAL_CASES = [
     ("cw_20261026_190242_839_8k.wav", ["TNX FER", "UR RST", "TALLINN", "DE ES3YJ"], None),
     ("cw_20261026_190445_962_8k.wav", ["LY2PX LY2PX CQ CQ CQ", "WILLY", "Z4BPF"], None),
     ("cw_20261026_190855_301_8k.wav", ["ES3YJ"], 65.0),
+    ("cw_20261026_231339_217_8k.wav",
+     ["OY1CT", "IK2ULV", "DJ7PR", "CALLED CQ", "QRM", "STRANGE"], None),
 ]
+# Rufzeichen, die der Spotter (callsign.py) im Zeichenstrom finden muss,
+# auch wenn sie an Nachbarwörtern kleben (#10)
+REAL_SPOTS = {
+    "cw_20261026_231339_217_8k.wav": ["DJ7PR", "OY1CT"],
+}
 # Fragmente, die der Decoder an den 8-kHz-Dateien noch nicht liefert
 # (Stand #8). In test_real.py als bekannte Lücke (xfail, nicht strikt):
 # - "TALLINN": Der OP gibt mit sehr weiten Zeichenabständen, die
@@ -238,6 +245,17 @@ def decode_real(fname: str, seconds: float = None) -> str:
     return " ".join(dec.get_text().split())
 
 
+def spot_real(text: str):
+    """Rufzeichen, die der Spotter im decodierten Text meldet."""
+    from cwdecoder.callsign import CallsignSpotter
+    got = []
+    sp = CallsignSpotter(on_call=got.append)
+    for ch in text:
+        sp.feed(ch)
+    sp.flush()
+    return got
+
+
 def run_real():
     """Druckt den Text aller echten Aufnahmen und welche Fragmente fehlen."""
     for fname, fragments, quiet_s in REAL_CASES:
@@ -249,6 +267,7 @@ def run_real():
             n = len(decode_real(fname, quiet_s).replace(" ", ""))
             print(f"   erste {quiet_s:.0f} s: {n} Zeichen (erlaubt {NOISE_MAX_CHARS})")
         print("   fehlt: " + (", ".join(missing) if missing else "nichts"))
+        print("   Rufzeichen: " + ", ".join(spot_real(text)))
 
 
 def main():

@@ -110,10 +110,6 @@ _MSG_ABOUT = ("Version {version} ({channel})\n\n"
               "Copyright (C) 2026 DF1DS (kainomatic)\n"
               "Lizenz: GNU General Public License v3.0 oder später "
               "(GPL-3.0-or-later). Ohne jede Gewährleistung.")
-_MSG_ALREADY_RUNNING_TITLE = "CW Decoder läuft bereits"
-_MSG_ALREADY_RUNNING = ("Der CW Decoder ist bereits geöffnet (Prozess {pid}).\n\n"
-                        "Bitte das vorhandene Fenster benutzen. Zwei Instanzen würden "
-                        "sich Soundkarte und N1MM-Ports streitig machen.")
 
 # -- Tooltips --------------------------------------------------------------
 _TT_DEVICE = ("Audio-Eingang mit dem Empfängersignal: USB-Audio des Funkgeräts, "
@@ -131,6 +127,8 @@ _TT_SPECTRUM = ("Spektrum 300–1200 Hz. Orange Linie = verfolgter Ton.\n"
 _TT_TEXT = "Dekodierter Text, neueste Zeichen unten."
 _TT_CALLS = "Erkannte Rufzeichen, neueste oben."
 _TT_CALL_BUTTON = "Rufzeichen an N1MM übergeben (Entry Window, Zwischenablage, Spot)."
+_TT_CALL_TAG = ("Erkanntes Rufzeichen. Klick übergibt es an N1MM "
+                "(wie der Knopf rechts).")
 _TT_N1MM = ("N1MM Logger+ anbinden: empfängt Frequenz per UDP 12060 und bietet "
             "Spots auf Telnet 127.0.0.1:7373. Belegt die Ports erst beim Einschalten.")
 _TT_WIPE = "Vor dem Eintippen Alt+W senden, damit das Entry Window leer ist."
@@ -140,6 +138,12 @@ _TT_UPDATE_OK = "Dialog schließen."
 
 NO_DEVICE = _LBL_NO_DEVICE
 UPDATE_CHECK_DELAY_MS = 1500
+MIN_WIDTH, MIN_HEIGHT = 760, 480   # Rufzeichen-Spalte bleibt sichtbar
+TEXT_FONT = ("Consolas", 16)
+CALL_TAG = "call"                  # Markierung erkannter Rufzeichen im Text
+CALL_TAG_PREFIX = "call:"          # zweiter Tag je Vorkommen: call:DL1ABC
+CALL_TAG_BG = "#ffe08a"
+TOKENS_KEEP = 2000                 # so viele Zeichen merkt sich die Markierung
 
 
 def window_title(channel=CHANNEL, version=__version__):
@@ -162,7 +166,14 @@ class App(tk.Tk):
         self.fixed_freq = self.cfg["fixed_freq"]
         self.title(window_title())
         self.geometry("900x560")
+        # Rufzeichen-Spalte muss immer sichtbar bleiben (auch bei 150 % DPI)
+        self.minsize(MIN_WIDTH, MIN_HEIGHT)
         self.msgs = queue.Queue()
+        # decodierte Zeichen des laufenden Decoders: Nr. im Zeichenstrom
+        # (ohne Leerzeichen) -> (Textindex Anfang, Ende); für die Markierung
+        # erkannter Rufzeichen im Text
+        self._tokens = {}
+        self._tok_n = 0
         self.live = None
         self.stream = None
         self.thread = None
@@ -256,15 +267,22 @@ class App(tk.Tk):
 
         mid = ttk.Frame(self)
         mid.pack(fill="both", expand=True, padx=6)
-        self.text = tk.Text(mid, wrap="word", font=("Consolas", 16), height=10)
+        # Rechte Spalte und Scrollbalken zuerst packen: pack verteilt den
+        # Platz in Pack-Reihenfolge, so kann der Text sie nicht verdrängen
+        # (bei 125-150 % DPI wäre ein Text mit 80 Zeichen Wunschbreite
+        # breiter als das Fenster, #9)
+        right = ttk.Frame(mid, padding=(8, 0, 0, 0), width=200)
+        right.pack(side="right", fill="y")
+        self.right_col = right
+        sb = ttk.Scrollbar(mid)
+        sb.pack(side="right", fill="y")
+        self.text = tk.Text(mid, wrap="word", font=TEXT_FONT, height=10, width=40)
         self.text.pack(side="left", fill="both", expand=True)
         attach_tooltip(self.text, _TT_TEXT)
-        sb = ttk.Scrollbar(mid, command=self.text.yview)
-        sb.pack(side="left", fill="y")
+        sb.configure(command=self.text.yview)
         self.text.configure(yscrollcommand=sb.set)
+        self._setup_call_tag()
 
-        right = ttk.Frame(mid, padding=(8, 0, 0, 0), width=200)
-        right.pack(side="left", fill="y")
         lbl = ttk.Label(right, text=_LBL_CALLS)
         lbl.pack(anchor="w")
         attach_tooltip(lbl, _TT_CALLS)
@@ -372,10 +390,14 @@ class App(tk.Tk):
                  else f"fest {cfg.tracker.fixed_freq:.0f} Hz")
         self.gen += 1
         g = self.gen
+        # neuer Decoder = neuer Zeichenstrom des Spotters (Positionen ab 0)
+        self._tokens = {}
+        self._tok_n = 0
         self.live = LiveDecoder(fs, cfg,
                                 on_text=lambda s: self.msgs.put(("text", g, s)),
                                 on_status=lambda d: self.msgs.put(("status", g, d)),
-                                on_call=lambda c: self.msgs.put(("call", g, c)))
+                                on_call=lambda c: self.msgs.put(("call", g, c)),
+                                on_call_span=lambda c, a, b: self.msgs.put(("span", g, (c, a, b))))
         self.rec_path = None
         if self.rec_var.get():
             # Zeitstempel mit Millisekunden: schneller Neustart überschreibt nichts
@@ -390,10 +412,10 @@ class App(tk.Tk):
             except OSError as e:
                 log.error("Aufnahme nicht möglich: %s", e)
                 self.rec_path = None
-                self.msgs.put(("text", g, _MSG_REC_FAILED.format(err=e)))
+                self.msgs.put(("note", g, _MSG_REC_FAILED.format(err=e)))
             else:
                 log.info("Aufnahme: %s", self.rec_path)
-                self.msgs.put(("text", g, _MSG_REC_FILE.format(path=self.rec_path)))
+                self.msgs.put(("note", g, _MSG_REC_FILE.format(path=self.rec_path)))
         holder["live"] = self.live
         # gebundene Methode statt lambda: der Thread darf nicht erst beim
         # Anlaufen self.live nachschlagen (kann nach schnellem Stop None sein)
@@ -622,6 +644,7 @@ class App(tk.Tk):
 
     def _clear(self):
         self.text.delete("1.0", "end")
+        self._tokens = {}       # Textindizes gelten nicht mehr
 
     def _auto_changed(self):
         self._save_config(fixed_freq=None if self.auto_var.get() else self.fixed_freq)
@@ -670,8 +693,13 @@ class App(tk.Tk):
                         self.status.set(_MSG_DECODER_CRASHED)
                     self.report_error(val, _MSG_CTX_DECODER)
                 elif kind == "text":
+                    self._insert_decoded(val, gen)
+                elif kind == "note":
                     self.text.insert("end", val)
                     self.text.see("end")
+                elif kind == "span":
+                    if gen == self.gen:
+                        self._mark_call(*val)
                 elif kind == "status":
                     self._show_status(val)
                 elif kind == "call":
@@ -735,6 +763,65 @@ class App(tk.Tk):
             _MSG_CONFIG_RESET_DETAIL.format(name=broken_name, reason=reason))
         self.report_error(exc)
 
+    # -- Rufzeichen im Text (#9) ------------------------------------------
+    def _insert_decoded(self, val, gen):
+        """Decodiertes Stück anhängen und Zeichen für die Markierung merken.
+
+        Der Spotter zählt jedes Zeichen außer Leerzeichen/Absätzen; dieselbe
+        Zählung hier ordnet seinen Positionen Textindizes zu."""
+        start = self.text.index("end-1c")
+        self.text.insert("end", val)
+        if gen == self.gen and val.strip():
+            self._tokens[self._tok_n] = (start, self.text.index("end-1c"))
+            self._tok_n += 1
+            self._tokens.pop(self._tok_n - TOKENS_KEEP, None)
+        self.text.see("end")
+
+    def _mark_call(self, call, a, b):
+        """Zeichen a..b-1 des Stroms als Rufzeichen markieren."""
+        first, last = self._tokens.get(a), self._tokens.get(b - 1)
+        if first is None or last is None:
+            return      # schon aus dem Speicher oder Text gelöscht
+        self.text.tag_add(CALL_TAG, first[0], last[1])
+        self.text.tag_add(CALL_TAG_PREFIX + call, first[0], last[1])
+
+    def _setup_call_tag(self):
+        family, size = TEXT_FONT
+        self.text.tag_configure(CALL_TAG, background=CALL_TAG_BG,
+                                font=(family, size, "bold"))
+        self.text.tag_bind(CALL_TAG, "<Button-1>", self._call_clicked)
+        self.text.tag_bind(CALL_TAG, "<Enter>", self._call_tag_enter)
+        self.text.tag_bind(CALL_TAG, "<Leave>", self._call_tag_leave)
+
+    def _call_at(self, x, y):
+        idx = self.text.index(f"@{x},{y}")
+        for name in self.text.tag_names(idx):
+            if name.startswith(CALL_TAG_PREFIX):
+                return name[len(CALL_TAG_PREFIX):]
+        return None
+
+    def _call_clicked(self, ev):
+        call = self._call_at(ev.x, ev.y)
+        if call:
+            log.info("Rufzeichen im Text angeklickt: %s", call)
+            self._add_call(call)
+            self._send_call(call)
+        return "break"
+
+    def _call_tag_enter(self, _ev=None):
+        self.text.configure(cursor="hand2")
+        tip = getattr(self.text, "_cw_tooltip", None)
+        if tip is not None:
+            tip.set_text(_TT_CALL_TAG)
+            tip.schedule()
+
+    def _call_tag_leave(self, _ev=None):
+        self.text.configure(cursor="xterm")
+        tip = getattr(self.text, "_cw_tooltip", None)
+        if tip is not None:
+            tip.cancel()
+            tip.set_text(_TT_TEXT)
+
     def _add_call(self, call):
         if call in self.calls:
             return
@@ -758,54 +845,43 @@ class App(tk.Tk):
             self.report_error(self.n1mm.last_failure, _MSG_CTX_N1MM)
 
 
-def main(argv=None):
-    utf8_console()
-    from .logging_setup import install_exception_hooks, log_startup, setup_logging
-    setup_logging()
-    install_exception_hooks()
-    log_startup("GUI")
-    import argparse
-    p = argparse.ArgumentParser(description="CW Decoder – Oberfläche")
-    p.add_argument("--n1mm", action="store_true", default=None,
-                   help="N1MM-Anbindung für diesen Lauf einschalten (UDP 12060, Telnet 7373)")
-    a = p.parse_args(argv)
-
+def run_app(n1mm=None, lock=None, splash=None, timer=None):
+    """Hauptfenster bauen und laufen lassen (Aufruf aus gui_start.main,
+    nachdem der Lock erworben ist und das Startfenster steht)."""
     from .app_mutex import create_app_mutex
-    from .instance_lock import InstanceLock
-    lock = InstanceLock()
-    if not lock.acquire():
-        from tkinter import messagebox
-        root = tk.Tk()
-        root.withdraw()
-        messagebox.showinfo(_MSG_ALREADY_RUNNING_TITLE,
-                            _MSG_ALREADY_RUNNING.format(pid=lock.other_pid or "?"))
-        root.destroy()
-        log.info("Zweite Instanz beendet sich")
-        return
+    from .gui_start import close_splash
     # Für den Installer (AppMutex); Handle bis Prozessende halten
     mutex = create_app_mutex()
     # Setup-Dateien früherer Updates aus %TEMP% entfernen (ohne tk, im Hintergrund)
     threading.Thread(target=updater.cleanup_old_installers, daemon=True,
                      name="update-cleanup").start()
-    try:
-        config_path = config_mod.get_config_path()
-        cfg = config_mod.load(config_path)
-        app = App(n1mm=a.n1mm, cfg=cfg, config_path=config_path)
-        app.instance_lock = lock
-        app.app_mutex = mutex
-        notice = config_mod.pop_broken_notice(config_path)
-        if notice:
-            app.after(300, lambda: app.show_config_notice(*notice))
-        app.schedule_update_check()
-        app.mainloop()
-        # Tk-Objekte im Hauptthread abräumen, bevor ein noch laufender
-        # Hintergrund-Thread die Garbage Collection auslöst (Tcl verträgt
-        # das Löschen aus fremden Threads nicht)
-        del app
-        gc.collect()
-    finally:
-        lock.release()
-        log.info("GUI beendet")
+    config_path = config_mod.get_config_path()
+    cfg = config_mod.load(config_path)
+    # Das Startfenster ist ein eigenes Tk; vor dem Hauptfenster schließen,
+    # damit tk-Variablen ohne master am Hauptfenster hängen
+    close_splash(splash)
+    app = App(n1mm=n1mm, cfg=cfg, config_path=config_path)
+    app.instance_lock = lock
+    app.app_mutex = mutex
+    notice = config_mod.pop_broken_notice(config_path)
+    if notice:
+        app.after(300, lambda: app.show_config_notice(*notice))
+    app.schedule_update_check()
+    if timer is not None:
+        app.update()
+        timer.phase("Fenster sichtbar")
+    app.mainloop()
+    # Tk-Objekte im Hauptthread abräumen, bevor ein noch laufender
+    # Hintergrund-Thread die Garbage Collection auslöst (Tcl verträgt
+    # das Löschen aus fremden Threads nicht)
+    del app
+    gc.collect()
+
+
+def main(argv=None):
+    """`python -m cwdecoder.gui`: wie die EXE über gui_start (Lock, Startfenster)."""
+    from .gui_start import main as start_main
+    start_main(argv)
 
 
 if __name__ == "__main__":

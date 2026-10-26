@@ -86,14 +86,18 @@ def open_stream(device, callback, preferred=(8000, 48000, 44100, 16000)):
 
 class LiveDecoder:
     def __init__(self, fs, cfg=None, on_text=None, on_status=None, on_call=None,
-                 on_audio_warning=None):
+                 on_audio_warning=None, on_call_span=None):
         self.q = queue.Queue()
         # Meldungen der Soundkarte; Terminal gibt sie auf stderr aus
         self.on_audio_warning = on_audio_warning
         self._last_audio_log = -AUDIO_WARN_INTERVAL_S
         self.on_text = on_text or (lambda s: None)
         self.on_status = on_status or (lambda d: None)
-        self.spotter = CallsignSpotter(on_call=on_call)
+        # on_text bekommt jedes Zeichen einzeln (Prosigns als ein Stück),
+        # dazu " " und eine Leerzeile als Absatz; on_call_span(call, start,
+        # end) zählt nur die Zeichen ohne Leerzeichen/Absätze (Rufzeichen
+        # im Text markieren)
+        self.spotter = CallsignSpotter(on_call=on_call, on_span=on_call_span)
         self.dec = CWDecoder(fs, cfg, on_char=self._char, on_space=self._space,
                              on_paragraph=self._paragraph)
         self.fs = fs

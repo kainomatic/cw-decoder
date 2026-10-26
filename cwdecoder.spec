@@ -21,6 +21,8 @@ for pkg in ("sounddevice", "_sounddevice_data"):
 # numpy und scipy bringen ihre Hooks mit (PyInstaller bzw. hooks-contrib).
 # scipy.signal und scipy.io.wavfile laden einige Erweiterungen dynamisch.
 hiddenimports += ["scipy.signal", "scipy.io.wavfile", "scipy.special._cdflib"]
+# Die GUI wird erst nach dem Startfenster importiert (gui_start.py, ADR-0020)
+hiddenimports += ["cwdecoder.gui"]
 
 a = Analysis(
     ["run_cwdecoder.py"],

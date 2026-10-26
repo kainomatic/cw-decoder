@@ -64,6 +64,14 @@ class Tooltip:
         """Text ändern; wirkt beim nächsten Einblenden."""
         self.text = text
 
+    def schedule(self):
+        """Einblenden nach der Verzögerung (z. B. für Text-Tags)."""
+        self._schedule()
+
+    def cancel(self):
+        """Ausblenden bzw. geplantes Einblenden abbrechen."""
+        self._cancel()
+
     def _schedule(self, _ev=None):
         self._cancel()
         if not self.text:

@@ -1,5 +1,6 @@
 # CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
 """GUI: Fenstertitel, Einstellungen, Menü, Rauchtest."""
+import gc
 import json
 import os
 import subprocess
@@ -43,6 +44,10 @@ def app(app_env, monkeypatch):
     a.update()
     yield a
     a._quit()
+    # Tk-Objekte im Hauptthread abräumen (sonst räumt sie später ein
+    # Hilfs-Thread ab, z. B. von subprocess, und Tcl stürzt ab)
+    del a
+    gc.collect()
 
 
 @requires_display
@@ -78,6 +83,8 @@ def test_cli_override_is_not_saved(app_env, monkeypatch):
         assert not path.exists()            # Start allein speichert nichts
     finally:
         a._quit()
+        del a
+        gc.collect()
 
 
 @requires_display
@@ -119,3 +126,64 @@ def test_gui_smoke():
                        capture_output=True, text=True, encoding="utf-8",
                        errors="replace", timeout=600)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+@requires_display
+@pytest.mark.gui
+def test_rufzeichen_spalte_bei_hoher_skalierung(app_env, monkeypatch):
+    """Bei 200 % Skalierung und 900 px Breite bleibt die rechte Spalte sichtbar (#9)."""
+    sys.path.insert(0, os.path.dirname(__file__))
+    import gui_smoke
+    import tkinter as tk
+    monkeypatch.setitem(sys.modules, "sounddevice", gui_smoke.make_fake_sounddevice(48000))
+    orig_init = tk.Tk.__init__
+
+    def scaled_init(self, *args, **kw):
+        orig_init(self, *args, **kw)
+        self.tk.call("tk", "scaling", 2.0)   # vor dem Anlegen der Widgets
+
+    monkeypatch.setattr(tk.Tk, "__init__", scaled_init)
+    from cwdecoder import config
+    from cwdecoder.gui import App
+    a = App(cfg=config.defaults(), config_path=config.get_config_path())
+    try:
+        a.geometry("900x560")
+        a.update()
+        assert a.right_col.winfo_ismapped()
+        assert a.right_col.winfo_width() > 150, a.right_col.winfo_width()
+    finally:
+        a._quit()
+        del a
+        gc.collect()
+
+
+@requires_display
+@pytest.mark.gui
+def test_rufzeichen_im_text_markiert_und_klickbar(app, monkeypatch):
+    """Spotter-Positionen werden im Text markiert, Klick übergibt das Rufzeichen (#9)."""
+    sent = []
+    monkeypatch.setattr(app, "_send_call", sent.append)
+    g = app.gen
+    # Strom wie vom LiveDecoder: "CQ DE" + zusammengeklebt "DEDJ7PR"
+    for piece in ["C", "Q", " ", "<BT>", " ", "D", "E", "D", "J", "7", "P", "R", " "]:
+        app.msgs.put(("text", g, piece))
+    # Zeichen ohne Leerzeichen: C0 Q1 <BT>2 D3 E4 D5 J6 7 7 P8 R9 -> DJ7PR = 5..10
+    app.msgs.put(("span", g, ("DJ7PR", 5, 10)))
+    app.msgs.put(("span", g + 1, ("XX1XX", 0, 2)))     # veraltete Generation: ignorieren
+    app._poll()
+    rng = app.text.tag_ranges("call")
+    assert len(rng) == 2
+    assert app.text.get(rng[0], rng[1]) == "DJ7PR"
+    assert app.text.tag_ranges("call:DJ7PR")
+    app.update()
+    x, y, _w, h = app.text.bbox(rng[0])
+    assert app._call_at(x + 1, y + h // 2) == "DJ7PR"
+
+    class Ev:
+        pass
+    ev = Ev()
+    ev.x, ev.y = x + 1, y + h // 2
+    app._call_clicked(ev)
+    assert sent == ["DJ7PR"] and app.calls[0] == "DJ7PR"
+    app._clear()
+    assert app._tokens == {}

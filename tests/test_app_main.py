@@ -28,7 +28,7 @@ def test_decode(tmp_path, capsys):
 def test_without_args_starts_gui(monkeypatch):
     pytest.importorskip("tkinter")
     calls = []
-    monkeypatch.setattr("cwdecoder.gui.main", lambda argv: calls.append(argv))
+    monkeypatch.setattr("cwdecoder.gui_start.main", lambda argv: calls.append(argv))
     app_main.main([])
     app_main.main(["--n1mm"])
     assert calls == [[], ["--n1mm"]]

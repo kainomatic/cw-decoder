@@ -94,8 +94,12 @@ class CallsignSpotter:
     (ein zweimal gehörtes Rufzeichen ist verlässlicher).
     """
 
-    def __init__(self, on_call=None, repeat_s: float = 30.0, keep: int = 20):
+    def __init__(self, on_call=None, repeat_s: float = 30.0, keep: int = 20, on_span=None):
         self.on_call = on_call or (lambda call: None)
+        # on_span(call, start, end): jedes gezählte Vorkommen mit seiner Lage
+        # im Zeichenstrom (n-tes Zeichen ohne Leerzeichen, ab 0; end exklusiv),
+        # damit die GUI es im Text markieren kann
+        self.on_span = on_span or (lambda call, start, end: None)
         self.repeat_s = repeat_s
         self.word = ""
         self.recent = OrderedDict()   # call -> (last_time, count)
@@ -155,6 +159,7 @@ class CallsignSpotter:
             if (call, a) not in self._seen:
                 self._seen.add((call, a))
                 self._hit(call)
+                self.on_span(call, a, a + len(call))
 
     def _starts_ok(self, pos: int) -> bool:
         """Beginnt der Treffer im Strom an einer Grenze?"""

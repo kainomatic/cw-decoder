@@ -101,6 +101,7 @@ def main(argv=None) -> int:
             return 1
     if rest:
         p.error(f"unbekannte Argumente: {' '.join(rest)}")
-    from .gui import main as gui_main
+    # leichter Start: Lock und Startfenster vor numpy/scipy (ADR-0020)
+    from .gui_start import main as gui_main
     gui_main(["--n1mm"] if a.n1mm else [])
     return 0

@@ -182,6 +182,107 @@ def _win32():
     return u, k
 
 
+def windows_of_pid(pid: int):
+    """Sichtbare Top-Level-Fenster eines Prozesses: [(hwnd, titel)]."""
+    if not sys.platform.startswith("win"):
+        return []
+    import ctypes
+    from ctypes import wintypes
+    user32, _kernel32 = _win32()
+    found = []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def enum_cb(hwnd, _):
+        if not user32.IsWindowVisible(hwnd):
+            return True
+        owner = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+        if owner.value != pid:
+            return True
+        length = user32.GetWindowTextLengthW(hwnd)
+        buf = ctypes.create_unicode_buffer(length + 1)
+        user32.GetWindowTextW(hwnd, buf, length + 1)
+        found.append((hwnd, buf.value))
+        return True
+
+    user32.EnumWindows(enum_cb, 0)
+    return found
+
+
+def bring_to_front(hwnd, wait_s: float = 0.25) -> bool:
+    """Fenster in den Vordergrund holen und prüfen, ob es geklappt hat.
+
+    Windows erlaubt SetForegroundWindow nur dem Vordergrund-Prozess
+    (Fokussperre). Darum der Reihe nach:
+      1. einfach versuchen
+      2. AttachThreadInput an den Thread des aktuellen Vordergrundfensters
+      3. ALT antippen (gilt dann als letzte Eingabe dieses Prozesses)
+    Erfolg nur, wenn GetForegroundWindow danach wirklich hwnd ist.
+    """
+    user32, kernel32 = _win32()
+
+    def is_front():
+        t_end = time.monotonic() + wait_s
+        while True:
+            if user32.GetForegroundWindow() == hwnd:
+                return True
+            if time.monotonic() >= t_end:
+                return False
+            time.sleep(0.02)
+
+    if user32.IsIconic(hwnd):
+        user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+    user32.SetForegroundWindow(hwnd)
+    if is_front():
+        log.info("Vordergrund: direkt")
+        return True
+
+    fg = user32.GetForegroundWindow()
+    fg_tid = user32.GetWindowThreadProcessId(fg, None) if fg else 0
+    my_tid = kernel32.GetCurrentThreadId()
+    attached = bool(fg_tid and fg_tid != my_tid
+                    and user32.AttachThreadInput(my_tid, fg_tid, True))
+    try:
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+    finally:
+        if attached:
+            user32.AttachThreadInput(my_tid, fg_tid, False)
+    if is_front():
+        log.info("Vordergrund: per AttachThreadInput")
+        return True
+
+    VK_MENU, KEYUP = 0x12, 0x0002
+    send_inputs([(VK_MENU, 0, 0), (VK_MENU, 0, KEYUP)])
+    user32.SetForegroundWindow(hwnd)
+    ok = is_front()
+    log.info("Vordergrund: per ALT-Trick %s", "ok" if ok else "FEHLGESCHLAGEN")
+    return ok
+
+
+def send_inputs(inputs):
+    import ctypes
+    from ctypes import wintypes
+    PUL = ctypes.POINTER(ctypes.c_ulong)
+
+    class KEYBDINPUT(ctypes.Structure):
+        _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD),
+                    ("dwFlags", wintypes.DWORD), ("time", wintypes.DWORD),
+                    ("dwExtraInfo", PUL)]
+
+    class INPUT(ctypes.Structure):
+        class _I(ctypes.Union):
+            _fields_ = [("ki", KEYBDINPUT), ("pad", ctypes.c_byte * 32)]
+        _anonymous_ = ("i",)
+        _fields_ = [("type", wintypes.DWORD), ("i", _I)]
+
+    arr = (INPUT * len(inputs))()
+    for n, (vk, scan, flags) in enumerate(inputs):
+        arr[n].type = 1  # INPUT_KEYBOARD
+        arr[n].ki = KEYBDINPUT(vk, scan, flags, 0, None)
+    ctypes.windll.user32.SendInput(len(inputs), arr, ctypes.sizeof(INPUT))
+
+
 def copy_to_clipboard(text: str) -> bool:
     """Text als Unicode in die Windows-Zwischenablage legen (ctypes, kein Tk
     nötig; bleibt auch nach Programmende erhalten)."""
@@ -311,77 +412,11 @@ class EntryWindowTyper:
         return True, "ins Entry Window getippt"
 
     def _bring_to_front(self, hwnd, wait_s: float = 0.25) -> bool:
-        """Fenster in den Vordergrund holen und prüfen, ob es geklappt hat.
-
-        Windows erlaubt SetForegroundWindow nur dem Vordergrund-Prozess
-        (Fokussperre). Darum der Reihe nach:
-          1. einfach versuchen
-          2. AttachThreadInput an den Thread des aktuellen Vordergrundfensters
-          3. ALT antippen (gilt dann als letzte Eingabe dieses Prozesses)
-        Erfolg nur, wenn GetForegroundWindow danach wirklich hwnd ist.
-        """
-        user32, kernel32 = _win32()
-
-        def is_front():
-            t_end = time.monotonic() + wait_s
-            while True:
-                if user32.GetForegroundWindow() == hwnd:
-                    return True
-                if time.monotonic() >= t_end:
-                    return False
-                time.sleep(0.02)
-
-        if user32.IsIconic(hwnd):
-            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
-        user32.SetForegroundWindow(hwnd)
-        if is_front():
-            log.info("Vordergrund: direkt")
-            return True
-
-        fg = user32.GetForegroundWindow()
-        fg_tid = user32.GetWindowThreadProcessId(fg, None) if fg else 0
-        my_tid = kernel32.GetCurrentThreadId()
-        attached = bool(fg_tid and fg_tid != my_tid
-                        and user32.AttachThreadInput(my_tid, fg_tid, True))
-        try:
-            user32.BringWindowToTop(hwnd)
-            user32.SetForegroundWindow(hwnd)
-        finally:
-            if attached:
-                user32.AttachThreadInput(my_tid, fg_tid, False)
-        if is_front():
-            log.info("Vordergrund: per AttachThreadInput")
-            return True
-
-        VK_MENU, KEYUP = 0x12, 0x0002
-        self._send_inputs([(VK_MENU, 0, 0), (VK_MENU, 0, KEYUP)])
-        user32.SetForegroundWindow(hwnd)
-        ok = is_front()
-        log.info("Vordergrund: per ALT-Trick %s", "ok" if ok else "FEHLGESCHLAGEN")
-        return ok
+        return bring_to_front(hwnd, wait_s)
 
     @staticmethod
     def _send_inputs(inputs):
-        import ctypes
-        from ctypes import wintypes
-        PUL = ctypes.POINTER(ctypes.c_ulong)
-
-        class KEYBDINPUT(ctypes.Structure):
-            _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD),
-                        ("dwFlags", wintypes.DWORD), ("time", wintypes.DWORD),
-                        ("dwExtraInfo", PUL)]
-
-        class INPUT(ctypes.Structure):
-            class _I(ctypes.Union):
-                _fields_ = [("ki", KEYBDINPUT), ("pad", ctypes.c_byte * 32)]
-            _anonymous_ = ("i",)
-            _fields_ = [("type", wintypes.DWORD), ("i", _I)]
-
-        arr = (INPUT * len(inputs))()
-        for n, (vk, scan, flags) in enumerate(inputs):
-            arr[n].type = 1  # INPUT_KEYBOARD
-            arr[n].ki = KEYBDINPUT(vk, scan, flags, 0, None)
-        ctypes.windll.user32.SendInput(len(inputs), arr, ctypes.sizeof(INPUT))
+        send_inputs(inputs)
 
     def _type_text(self, text: str):
         KEYEVENTF_UNICODE, KEYEVENTF_KEYUP = 0x0004, 0x0002

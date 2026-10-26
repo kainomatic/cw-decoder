@@ -40,7 +40,9 @@ Bei `NEUE SESSION: ja` (DF1DS hat `/clear` ausgeführt) in dieser Reihenfolge:
 - **Fragen, die eine Entscheidung brauchen, stehen nur im Issue-Kommentar.**
   Die Terminal-Ausgabe an DF1DS ist ein Einzeiler:
   „Bericht und Fragen in Issue #N: <Link>". Nichts, was DF1DS kopieren
-  müsste.
+  müsste. Beim bloßen Schließen eines Issues nach bestandenem Review
+  lautet die Ausgabe „Issue #N geschlossen, nichts Neues." – kein Link auf
+  den alten Bericht.
 - Das Issue erst schließen, wenn das Review der Desktop-Session
   „bestanden" sagt: dann `Fixes #N` im nächsten Commit. Bei
   Korrekturpunkten bleibt es offen (`NEUE SESSION: nein`).
@@ -124,6 +126,12 @@ im Playbook (§2, §4). Projektspezifisch:
   neue erwartbare Fehler bekommen eine eigene Ausnahmeklasse und einen
   Eintrag in `classify_error` (ADR-0007). Im Terminal-Modus bleibt stderr.
 - Logging über `logging.getLogger(__name__)`; nie Audiodaten loggen (ADR-0004).
+- Start über `cwdecoder/gui_start.py` (ADR-0020): Lock und Startfenster vor
+  den schweren Imports. `gui_start` und alles, was es vor dem Lock lädt,
+  bleiben frei von numpy/scipy/sounddevice (Test `test_gui_start.py`).
+- Layout: rechte Spalte und Scrollbalken vor dem Textfeld packen; das
+  Textfeld hat eine kleine Wunschbreite (`width=40`), sonst verdrängt es
+  bei hoher DPI-Skalierung die Spalte (Test mit `tk scaling 2.0`).
 
 ## Testen
 - Framework **pytest** (`pip install -r requirements-dev.txt`, dann `pytest`).

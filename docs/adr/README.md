@@ -37,7 +37,7 @@ Was folgt daraus, positiv wie negativ?
   `Superseded by ADR-XXXX` und bleibt stehen. ADRs werden nie gelöscht.
 - Jeder neue ADR wird unten im Index eingetragen.
 
-**Nächste freie Nummer: ADR-0020**
+**Nächste freie Nummer: ADR-0021**
 
 ## Index
 
@@ -62,6 +62,7 @@ Was folgt daraus, positiv wie negativ?
 | [ADR-0017](ADR-0017-testmatrix-zufallstexte-rauschkategorie.md) | Testmatrix mit zufälligen Texten und Rauschkategorie |
 | [ADR-0018](ADR-0018-schmales-empfaengerfilter-linien-gate-dynamik-squelch.md) | Schmales Empfängerfilter — Linien-Gate und Dynamik-Squelch |
 | [ADR-0019](ADR-0019-rufzeichen-ohne-wortgrenzen.md) | Rufzeichen ohne Wortgrenzen erkennen |
+| [ADR-0020](ADR-0020-start-lock-zweitinstanz.md) | Start, gehärteter Instanz-Lock, zweite Instanz holt die erste nach vorn |
 
 ## Abgrenzung
 

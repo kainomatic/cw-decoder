@@ -13,6 +13,12 @@ Gebegeschwindigkeit und Anbindung an N1MM Logger+.
      markiert) — Vorabversion zum Testen.
 2. Setup starten und den Assistenten durchklicken (Admin-Rechte nötig,
    Windows 10/11, 64 Bit). Danach steht „CW Decoder" im Startmenü.
+3. **Das Programm startet nach der Installation und nach einem Update von
+   selbst.** Bitte nicht zusätzlich aus dem Startmenü starten. Der erste
+   Start nach einer Installation kann einige Sekunden dauern (der
+   Virenscanner prüft die neuen Dateien); solange steht „CW Decoder startet
+   …" auf dem Bildschirm. Ein zweiter Start holt das vorhandene Fenster nach
+   vorn.
 
 **SmartScreen-Warnung:** Die Setup-Dateien sind nicht signiert (ADR-0015).
 Beim ersten Start meldet Windows ggf. „Der Computer wurde durch Windows

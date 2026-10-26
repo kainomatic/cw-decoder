@@ -35,10 +35,10 @@ und sag mir, was als Nächstes zu tun ist."*
 Programm-Infrastruktur stehen; das Programm ist als Setup mit Self-Update
 installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 
-- Neueste Beta: [`v0.1.0-beta8`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta8)
-  (`CWDecoder-Beta-Setup-v0.1.0.exe`, Wortgrenzen bei weiten
-  Zeichenabständen, Rufzeichen ohne Wortgrenzen, Decodier-Log, Absätze;
-  #10). Self-Update beta2 → beta4 auf dem
+- Neueste Beta: [`v0.1.0-beta9`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta9)
+  (`CWDecoder-Beta-Setup-v0.1.0.exe`, Startfenster, kein falsches „läuft
+  bereits", Rufzeichen-Spalte bei hoher DPI, Rufzeichen im Text
+  markiert; #9). Self-Update beta2 → beta4 auf dem
   Entwicklungsrechner nachgewiesen. Noch keine Stable.
 - Testmatrix (`python tests/run_matrix.py`, zufällige Texte, 11 Kategorien,
   ADR-0017/0018): Mittelwert **97,7 %**, Rauschen 100 % (auch durch
@@ -47,7 +47,7 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 - Laufender Auftrag: siehe Issues mit Label `auftrag`
   (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta8`
+**Nächster Schritt:** DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta9`
 (Self-Update) und testet weiter
 mit Funkgerät und N1MM (siehe „Testablauf Installer/Beta"). Danach
 Auswertung der Aufnahmen durch die Desktop-Session und Entscheidung über die
@@ -72,7 +72,7 @@ seinem Rechner den Self-Update von Beta N auf Beta N+1 nachgewiesen hat
 Bericht). Danach laufen Testrunden über Self-Update; Aufnahmen aus
 `Dokumente\CW Decoder\Aufnahmen` gehen an die Desktop-Session.
 
-Stand: Nachweis beta2 → beta4 erbracht (Arbeitspaket 4); `v0.1.0-beta8`
+Stand: Nachweis beta2 → beta4 erbracht (Arbeitspaket 4); `v0.1.0-beta9`
 darf auf den Shack-PC.
 
 ## Beschlossen, noch nicht umgesetzt
@@ -156,6 +156,15 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
   zerrissene Rufzeichen (ADR-0019): an 231339 16 statt 8 Vorkommen.
 - ✅ Decodier-Log `cw_….txt` neben jeder Aufnahme; Absätze im Textfenster.
 - Beta `v0.1.0-beta8`; Review bestanden, #10 geschlossen.
+
+## ✅ Start und GUI-Layout, Rufzeichen im Text (#9)
+
+- ✅ Startfenster vor den schweren Imports, Startphasen im Log (ADR-0020).
+- ✅ Lock mit Programm und Startzeit; zweite Instanz holt die erste nach
+  vorn statt Dialog.
+- ✅ Rufzeichen-Spalte bleibt bei 125–150 % DPI sichtbar; Rufzeichen im Text
+  markiert und anklickbar.
+- Beta `v0.1.0-beta9`.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

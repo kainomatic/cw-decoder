@@ -9,6 +9,11 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 ## [Unreleased]
 
 ### Added
+- Startfenster „CW Decoder startet …", solange numpy/scipy/sounddevice
+  laden; Startphasen mit Zeit seit Prozessstart im Log (ADR-0020, #9).
+- Erkannte Rufzeichen sind im Text markiert (fett, farbig hinterlegt); ein
+  Klick übergibt sie wie der Knopf an N1MM, auch innerhalb
+  zusammengeklebter Wörter (#9).
 - Rufzeichen auch ohne Wortgrenzen: zusammengeklebte Rufzeichen
   (`DEDJ7PR`, `IK2ULVDEOY1CT`) werden erkannt, bekannte auch zerrissen
   (`OY 1 CT`) oder mit angeklebtem Rest (`DJ7PRRFB`) (ADR-0019, #10).
@@ -68,6 +73,9 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   erweiterte `CLAUDE.md` (Onboarding, Rollen, Definition of Done).
 
 ### Changed
+- Zweiter Start holt das vorhandene Fenster nach vorn statt des Dialogs
+  „läuft bereits"; lädt die erste Instanz noch, erscheint 5 s lang „CW
+  Decoder startet gerade" (ADR-0020, #9).
 - GUI-Aufnahmen landen nicht mehr in `testdata/` des Repos, sondern im
   Aufnahmeordner unter Dokumente; `testdata/` bleibt für Testdateien.
 - Diagnose-Ausgaben der N1MM-Anbindung (Fenstertitel, Vordergrund, belegte
@@ -121,6 +129,11 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   der offenen Issues.
 
 ### Fixed
+- Rufzeichen-Spalte, N1MM-Haken und Scrollbalken fehlten bei
+  Windows-Skalierung 125–150 % (das Textfeld verdrängte sie) (#9).
+- Falsche Meldung „läuft bereits" nach einem nicht sauber beendeten Lauf,
+  wenn Windows die alte PID neu vergeben hatte: Der Lock prüft jetzt
+  Programm und Startzeit (ADR-0020, #9).
 - Wortgrenzen bei Gebern mit weiten Zeichenabständen: Liegen Wort- und
   Zeichenpausen in einem Cluster, liegt die Wortschwelle jetzt bei 1,35 ×
   Zeichenpause statt 1,7 ×; Rufzeichen kleben seltener zusammen (#10).

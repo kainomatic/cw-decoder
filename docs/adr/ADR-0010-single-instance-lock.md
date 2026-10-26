@@ -2,6 +2,9 @@
 
 **Status:** Accepted
 
+Ergänzt durch ADR-0020: Lock mit Startzeit und Programmname, zweite
+Instanz holt die erste nach vorn statt Dialog.
+
 ## Kontext
 
 Zwei gleichzeitig laufende GUIs streiten sich um Soundkarte und die

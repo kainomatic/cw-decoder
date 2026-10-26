@@ -55,6 +55,8 @@ class TrackerConfig:
     hold_decay: float = 0.985   # Max-Hold-Abklingen pro Hop (überbrückt Pausen)
     min_peak_db: float = 8.0    # Peak muss so weit über dem Median liegen
     smooth: float = 0.25        # Nachführung der Frequenz (0..1, 1 = sofort)
+    track_window_hz: float = 60.0   # im Lock: Peak-Suche nur in diesem Fenster
+    switch_margin_db: float = 3.0   # andere Linie nur, wenn so viel stärker
     fixed_freq: float = None    # feste Frequenz statt Suche
 
 
@@ -110,7 +112,19 @@ class ToneTracker:
         hold_db = 10 * np.log10(self.hold + 1e-20)
         self.spectrum_db = hold_db
         med = np.median(hold_db)
-        k = int(np.argmax(hold_db))
+        bf = self.freqs[self.band]
+        k_glob = int(np.argmax(hold_db))
+        if self.locked:
+            # Im Fenster um die aktuelle Frequenz bleiben (folgt Drift); auf
+            # eine andere Linie nur wechseln, wenn sie klar stärker ist
+            win = np.abs(bf - self.freq) <= c.track_window_hz
+            k_loc = int(np.argmax(np.where(win, hold_db, -np.inf)))
+            if hold_db[k_glob] > hold_db[k_loc] + c.switch_margin_db:
+                k = k_glob
+            else:
+                k = k_loc
+        else:
+            k = k_glob
         self.peak_db = float(hold_db[k] - med)
         if c.fixed_freq:
             return
@@ -119,7 +133,6 @@ class ToneTracker:
             self.locked = False
             return
         # Parabolische Interpolation für Sub-Bin-Genauigkeit
-        bf = self.freqs[self.band]
         if 0 < k < len(hold_db) - 1:
             a, b, g = hold_db[k - 1], hold_db[k], hold_db[k + 1]
             denom = (a - 2 * b + g)
@@ -132,10 +145,11 @@ class ToneTracker:
             self.freq = f_peak
             self.locked = True
         else:
-            # Sprung auf eine deutlich andere Linie: erst nachziehen, wenn sie
-            # klar stärker ist, sonst weich nachführen
-            if abs(f_peak - self.freq) > 40:
+            # Wechsel auf eine andere Linie: sofort übernehmen, sonst weich
+            # nachführen
+            if abs(f_peak - self.freq) > c.track_window_hz:
                 self.freq = f_peak
+                self.hold[:] = 0.0   # Gedächtnis der alten Linie löschen
             else:
                 self.freq += c.smooth * (f_peak - self.freq)
 

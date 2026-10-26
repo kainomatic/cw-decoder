@@ -81,8 +81,7 @@ bekommen):
 |-------|-------|---------|
 | [#3](https://github.com/kainomatic/cw-decoder/issues/3) | N1MM: direkter Weg ins Rufzeichenfeld? | n1mm |
 
-#1, #2 und #5 sind umgesetzt (siehe „Decoder-Tuning" unten) und werden mit
-dem Review von #2 geschlossen.
+#1, #2 und #5 sind umgesetzt und geschlossen (siehe „Decoder-Tuning" unten).
 
 Issues zum Decoder-Kern (`dsp`) entwirft die Desktop-Session; Claude Code
 setzt um und misst die Testmatrix vorher/nachher.

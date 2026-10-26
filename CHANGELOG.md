@@ -25,6 +25,11 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   Installer und veröffentlicht das GitHub-Release mit Notes aus diesem
   Changelog (ADR-0014). Anleitung für lokale Builds in `docs/BUILD.md`.
 - Programm-Icon (`tools/make_icon.py`).
+- Testmatrix mit zufälligen Texten (`cwdecoder/testtext.py`): 10 Kategorien
+  à 10 Fälle mit gestreuten Parametern und festen Seeds, darunter eine
+  Kategorie mit reinem Rauschen, in der nichts ausgegeben werden darf; die
+  alte Matrix bleibt per `--legacy` erhalten. CI-Untergrenze 95 %,
+  Rauschen 99 % (ADR-0017, #1).
 - Version und Release-Kanal in `cwdecoder/__version__.py` (0.1.0, stable);
   Fenstertitel „CW Decoder v0.1.0", im Beta-Kanal mit „BETA" (ADR-0003).
 - Ablageorte in `cwdecoder/paths.py`: App-Ordner `%APPDATA%\CWDecoder`
@@ -67,6 +72,16 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 - Die GUI legt zusätzlich zum Lockfile einen benannten Mutex an, an dem der
   Installer eine laufende Instanz erkennt (ADR-0013).
 - CI: `actions/checkout` und `actions/setup-python` auf v7 (Node 24).
+- Tonverfolgung: Im Lock sucht der Tracker nur ±60 Hz um die aktuelle
+  Frequenz und wechselt auf eine andere Linie nur, wenn sie mindestens 3 dB
+  stärker ist (neue Parameter `track_window_hz`, `switch_margin_db` in
+  `TrackerConfig`).
+- Tempo-Erkennung: Strich-Schwelle adaptiv zwischen den beiden Clustern
+  (unabhängig von der Gewichtung des Gebers); unplausible Cluster aus
+  Störimpulsen werden verworfen.
+- Schwellen: Einschalten bei 65 %, Ausschalten bei 45 % des Abstands
+  Rauschen/Signal (vorher 55/35 %); der Signalpegel folgt QSB während der
+  Tastung mit 40 dB/s (vorher 15 dB/s).
 - Arbeitsweise: Aufträge, Rückfragen, Berichte und Reviews laufen über
   GitHub-Issues (Label `auftrag`); die Desktop-Session schreibt im Repo nur
   Issues (ADR-0016, ersetzt ADR-0001). `CLAUDE.md` verweist für die
@@ -86,3 +101,11 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 - Nach einem Self-Update blieb die heruntergeladene Setup-Datei (ca. 40 MB)
   in `%TEMP%` liegen; der nächste Start räumt alte `CWDecoder-Update-*.exe`
   jetzt auf (#6).
+- Bei Drift und schwachem Signal sprang die Tonverfolgung auf Rauschspitzen
+  und lieferte Unsinn (#2).
+- Das erste Zeichen wurde bei schwachem Signal oft falsch erkannt (C → F),
+  solange das Tempo noch nicht gelernt war; Elemente werden jetzt erst am
+  Zeichenende eingeteilt (#5).
+- Bei langen Strichen stieg der geschätzte Rauschteppich so weit, dass der
+  Squelch mitten im Strich zufiel; er bleibt während eines Tons jetzt
+  stehen (bei Dauerträger über 3 s steigt er wieder).

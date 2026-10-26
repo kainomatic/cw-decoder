@@ -114,7 +114,8 @@ Testsignal erzeugen:
 python -m cwdecoder.gen "CQ TEST DE DL1ABC K" -o test.wav --wpm 28 --snr 6 --drift 60 --qsb 0.4 --qsb-depth 0.7
 ```
 
-Tests und Testmatrix (verschiedene Tempi, SNR, Drift, QSB, QRM):
+Tests und Testmatrix (zufällige Texte; Tempi, SNR, Drift, QSB, QRM, Timing,
+reines Rauschen; `--legacy` für die alte Matrix):
 
 ```
 pytest
@@ -125,8 +126,9 @@ python tests/run_matrix.py
 
 1. **Tonverfolgung** (`dsp.ToneTracker`): FFT über 128 ms, alle 16 ms, im
    Bereich 300–1200 Hz. Max-Hold mit Abklingen hält den Ton auch über
-   Tastpausen fest. Der stärkste Peak (mit Sub-Bin-Interpolation) wird weich
-   nachgeführt; springt eine deutlich andere Linie hoch, wird umgeschaltet.
+   Tastpausen fest. Der Peak (mit Sub-Bin-Interpolation) wird in einem
+   Fenster von ±60 Hz weich nachgeführt und folgt so einer Drift; auf eine
+   andere Linie wird nur umgeschaltet, wenn sie mindestens 3 dB stärker ist.
 2. **Hüllkurve** (`dsp.Envelope`): Quadraturmischer auf 0 Hz plus Tiefpass
    3. Ordnung. Die Filterbandbreite wird aus der erkannten Geschwindigkeit
    abgeleitet (langsam = schmal = weniger Rauschen, schnell = breiter), mit
@@ -204,8 +206,9 @@ docs/BUILD.md    EXE und Installer bauen
 
 ## Stand / offene Punkte
 
-- Die DSP-Kette ist gegen synthetische Signale getestet (Testmatrix ~95 %
-  Zeichen-Übereinstimmung, bis ca. 0 dB SNR in 2,4 kHz). Echte Aufnahmen
+- Die DSP-Kette ist gegen synthetische Signale getestet (Testmatrix mit
+  zufälligen Texten ~97 % Zeichen-Übereinstimmung, bis ca. 0 dB SNR in
+  2,4 kHz; bei reinem Rauschen keine Ausgabe). Echte Aufnahmen
   vom Funkgerät (`--record`) sind der nächste Schritt zum Feintuning.
 - Die GUI und die Tastatur-Übergabe an N1MM wurden unter Linux ohne
   Display geschrieben und müssen unter Windows einmal durchgeklickt werden.

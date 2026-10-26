@@ -125,7 +125,10 @@ im Playbook (§2, §4). Projektspezifisch:
 - **Testmatrix bleibt Pflicht** vor und nach jeder Änderung an
   `cwdecoder/dsp.py`, `timing.py` oder `decoder.py`:
   `python tests/run_matrix.py`, Mittelwert vorher/nachher notieren. Er darf
-  nicht sinken (zuletzt 95,4 %), sonst begründen oder zurücknehmen.
+  nicht sinken (zuletzt 97,0 %; alte Matrix `--legacy` 98,5 %), sonst
+  begründen oder zurücknehmen. Die Kategorie **Rauschen** muss 100 %
+  bleiben: Bei reinem Rauschen gibt der Decoder nichts aus (ADR-0017).
+  Stichprobe gegen Übertuning: `run_matrix.run(base_seed=5000)` bzw. `7777`.
 - Unter Windows Tests über das Bash-Tool laufen lassen (längere Läufe).
 
 ## Befehle
@@ -133,7 +136,8 @@ im Playbook (§2, §4). Projektspezifisch:
 python -m venv .venv && .venv\Scripts\activate
 pip install -r requirements-dev.txt
 pytest                                # alle Tests (GUI-Rauchtest nur mit Display)
-python tests/run_matrix.py            # Testmatrix (Störungen, Tempi, SNR)
+python tests/run_matrix.py            # Testmatrix (10 Kategorien, zufällige Texte)
+python tests/run_matrix.py --legacy   # alte Matrix (zwei feste Sätze)
 python tests/gui_smoke.py             # GUI-Rauchtest direkt
 python -m cwdecoder.live --list       # Audiogeräte
 python -m cwdecoder.live --device "USB" --record x.wav
@@ -164,7 +168,13 @@ Wichtige Zusammenhänge:
 - Der `Thresholder` schätzt den Rauschteppich im linearen Bereich (Mittel),
   nicht im dB-Bereich; das ist Absicht (Rayleigh-Einbrüche).
 - Der `ToneTracker` nutzt Max-Hold mit Abklingen, damit der Ton über
-  Tastpausen gehalten wird. Sprung > 40 Hz = neue Station übernehmen.
+  Tastpausen gehalten wird. Im Lock sucht er den Peak nur im Fenster
+  ±60 Hz um die aktuelle Frequenz (`track_window_hz`, folgt Drift) und
+  wechselt auf eine andere Linie nur, wenn sie mindestens 3 dB stärker ist
+  (`switch_margin_db`); beim Wechsel wird der Max-Hold gelöscht.
+- Elemente eines Zeichens werden erst am Zeichenende in Punkt/Strich
+  eingeteilt (`TimingDecoder._flush`); die Strich-Schwelle liegt adaptiv
+  zwischen den beiden Clustern (1,4–2,6 Punktlängen).
 
 ## Offene Punkte
 Stehen als GitHub-Issues; die Übersicht steht in `ROADMAP.md` unter

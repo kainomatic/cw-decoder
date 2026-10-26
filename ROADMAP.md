@@ -34,16 +34,18 @@ und sag mir, was als Nächstes zu tun ist."*
 Programm-Infrastruktur stehen; das Programm ist als Setup mit Self-Update
 installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 
-- Neueste Beta: [`v0.1.0-beta5`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta5)
-  (`CWDecoder-Beta-Setup-v0.1.0.exe`, räumt alte Setup-Dateien auf, #6).
-  Self-Update beta2 → beta4 auf dem Entwicklungsrechner nachgewiesen.
-  Noch keine Stable.
-- Testmatrix (`python tests/run_matrix.py`): Mittelwert **95,4 %**
-  (Stand Arbeitspaket 4, unverändert gegenüber vorher).
+- Neueste Beta: [`v0.1.0-beta6`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta6)
+  (`CWDecoder-Beta-Setup-v0.1.0.exe`, Tonverfolgung bei Drift, erstes
+  Zeichen, Schwellen; #1, #2, #5). Self-Update beta2 → beta4 auf dem
+  Entwicklungsrechner nachgewiesen. Noch keine Stable.
+- Testmatrix (`python tests/run_matrix.py`, zufällige Texte, ADR-0017):
+  Mittelwert **97,0 %**, Rauschen 100 %; Stichproben Seed 5000/7777:
+  95,7/97,8 %. Alte Matrix (`--legacy`): **98,5 %** (vorher 95,4 %).
 - Laufender Auftrag: siehe Issues mit Label `auftrag`
   (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** DF1DS installiert `v0.1.0-beta5` auf dem Shack-PC und testet
+**Nächster Schritt:** DF1DS installiert `v0.1.0-beta6` auf dem Shack-PC (oder
+aktualisiert eine installierte Beta per Self-Update) und testet
 mit Funkgerät und N1MM (siehe „Testablauf Installer/Beta"). Danach
 Auswertung der Aufnahmen durch die Desktop-Session und Entscheidung über die
 Stable `v0.1.0`.
@@ -67,7 +69,7 @@ seinem Rechner den Self-Update von Beta N auf Beta N+1 nachgewiesen hat
 Bericht). Danach laufen Testrunden über Self-Update; Aufnahmen aus
 `Dokumente\CW Decoder\Aufnahmen` gehen an die Desktop-Session.
 
-Stand: Nachweis beta2 → beta4 erbracht (Arbeitspaket 4); `v0.1.0-beta5`
+Stand: Nachweis beta2 → beta4 erbracht (Arbeitspaket 4); `v0.1.0-beta6`
 darf auf den Shack-PC.
 
 ## Beschlossen, noch nicht umgesetzt
@@ -77,10 +79,10 @@ bekommen):
 
 | Issue | Thema | Bereich |
 |-------|-------|---------|
-| [#1](https://github.com/kainomatic/cw-decoder/issues/1) | Testmatrix mit zufälligen Texten statt zwei festen Sätzen | dsp |
-| [#2](https://github.com/kainomatic/cw-decoder/issues/2) | Tonverfolgung bei Drift und schwachem Signal bricht ein | dsp |
 | [#3](https://github.com/kainomatic/cw-decoder/issues/3) | N1MM: direkter Weg ins Rufzeichenfeld? | n1mm |
-| [#5](https://github.com/kainomatic/cw-decoder/issues/5) | Erstes Zeichen bei ~10 dB SNR oft falsch (C → F), solange das Tempo noch nicht gelernt ist | dsp |
+
+#1, #2 und #5 sind umgesetzt (siehe „Decoder-Tuning" unten) und werden mit
+dem Review von #2 geschlossen.
 
 Issues zum Decoder-Kern (`dsp`) entwirft die Desktop-Session; Claude Code
 setzt um und misst die Testmatrix vorher/nachher.
@@ -121,6 +123,20 @@ Fehlerbericht, Single-Instance, Menüleiste, ADRs 0001–0010, pytest + CI
   lud sie, installierte still und startete als beta4 neu.
 - Folge-Issues: #5 (siehe „Beschlossen, noch nicht umgesetzt"); #6
   (Setup-Datei blieb in `%TEMP%`) erledigt in `v0.1.0-beta5`.
+
+## ✅ Decoder-Tuning — Testmatrix, Tonverfolgung, erstes Zeichen (#1, #2, #5)
+
+Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
+
+- ✅ Testmatrix mit zufälligen Texten, 10 Kategorien inkl. reinem Rauschen
+  (ADR-0017): 91,8 % → **97,0 %** (Seed 1000); alte Matrix 95,4 % → 98,5 %.
+- ✅ Tonverfolgung: Fenster ±60 Hz um die aktuelle Frequenz, Wechsel nur bei
+  3 dB stärkerer Linie (#2).
+- ✅ Elemente erst am Zeichenende einteilen, adaptive Strich-Schwelle:
+  erstes Zeichen falsch bei 10/6 dB in 12/30 bzw. 21/30 Läufen → 0/30 (#5).
+- ✅ Rauschteppich während eines Tons eingefroren, Schwellen 65/45 %,
+  QSB-Nachführung 40 dB/s.
+- Beta `v0.1.0-beta6`.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

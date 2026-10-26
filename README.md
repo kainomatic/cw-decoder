@@ -129,6 +129,8 @@ python tests/run_matrix.py
    Tastpausen fest. Der Peak (mit Sub-Bin-Interpolation) wird in einem
    Fenster von ±60 Hz weich nachgeführt und folgt so einer Drift; auf eine
    andere Linie wird nur umgeschaltet, wenn sie mindestens 3 dB stärker ist.
+   Als Ton gilt nur eine schmale Linie (≥ 9 dB über dem Umfeld ±20…40 Hz);
+   Rauschen hinter einem schmalen CW-Filter im Funkgerät zählt nicht.
 2. **Hüllkurve** (`dsp.Envelope`): Quadraturmischer auf 0 Hz plus Tiefpass
    3. Ordnung. Die Filterbandbreite wird aus der erkannten Geschwindigkeit
    abgeleitet (langsam = schmal = weniger Rauschen, schnell = breiter), mit
@@ -138,12 +140,14 @@ python tests/run_matrix.py
    Tastung an schneller, damit QSB nachgeführt wird). Ein-/Ausschaltschwelle
    liegen 6 bzw. 10 dB unter dem Signalpegel, bei schwachem Signal
    proportional zwischen Rauschen und Signal. Squelch bei < 10 dB Abstand,
+   bei zu wenig Dynamik der Hüllkurve (< 19 dB über 2 s) oder ohne Linie;
    Entprellung relativ zur Punktlänge.
 4. **Timing** (`timing.TimingDecoder`): Punktlänge wird laufend aus den
    letzten 24 Ton- und Pausenlängen per Clusterung geschätzt (Punkte/Striche,
    Element-/Zeichenpausen). Die Wortschwelle passt sich an gedehnte
    Zeichenabstände (Farnsworth) an. Zeichen werden per Timeout ausgegeben,
-   nicht erst beim nächsten Ton.
+   nicht erst beim nächsten Ton. Tempo 5–60 WPM; nach Tonverlust wird es
+   für die nächste Station neu eingemessen.
 5. **Rufzeichen** (`callsign.py`): Wörter, die wie Rufzeichen aussehen,
    erscheinen als Buttons in der GUI.
 

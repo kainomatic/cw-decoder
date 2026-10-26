@@ -131,9 +131,11 @@ im Playbook (§2, §4). Projektspezifisch:
 - **Testmatrix bleibt Pflicht** vor und nach jeder Änderung an
   `cwdecoder/dsp.py`, `timing.py` oder `decoder.py`:
   `python tests/run_matrix.py`, Mittelwert vorher/nachher notieren. Er darf
-  nicht sinken (zuletzt 97,0 %; alte Matrix `--legacy` 98,5 %), sonst
-  begründen oder zurücknehmen. Die Kategorie **Rauschen** muss 100 %
-  bleiben: Bei reinem Rauschen gibt der Decoder nichts aus (ADR-0017).
+  nicht sinken (zuletzt 97,6 % bei 11 Kategorien inkl. „CW-Filter"; alte
+  Matrix `--legacy` 98,1 %), sonst begründen oder zurücknehmen. Die
+  Kategorie **Rauschen** (zur Hälfte durch ein schmales CW-Filter) muss
+  100 % bleiben: Bei reinem Rauschen gibt der Decoder nichts aus
+  (ADR-0017, ADR-0018).
   Stichprobe gegen Übertuning: `run_matrix.run(base_seed=5000)` bzw. `7777`.
 - Unter Windows Tests über das Bash-Tool laufen lassen (längere Läufe).
 
@@ -142,7 +144,7 @@ im Playbook (§2, §4). Projektspezifisch:
 python -m venv .venv && .venv\Scripts\activate
 pip install -r requirements-dev.txt
 pytest                                # alle Tests (GUI-Rauchtest nur mit Display)
-python tests/run_matrix.py            # Testmatrix (10 Kategorien, zufällige Texte)
+python tests/run_matrix.py            # Testmatrix (11 Kategorien, zufällige Texte)
 python tests/run_matrix.py --legacy   # alte Matrix (zwei feste Sätze)
 python tests/gui_smoke.py             # GUI-Rauchtest direkt
 python -m cwdecoder.live --list       # Audiogeräte
@@ -160,9 +162,10 @@ Ablageorte (ADR-0003): `%APPDATA%\CWDecoder\` (`config.json`,
 `cwdecoder.lock`, `logs\cwdecoder.log`), Beta: `%APPDATA%\CWDecoder-Beta\`.
 
 ## Signalkette (Reihenfolge ist wichtig)
-Audio -> `Decimator` (auf ~8 kHz) -> `ToneTracker` (FFT, Tonfrequenz) ->
-`Envelope` (Quadraturmischer + Tiefpass, Bandbreite abhängig vom Tempo) ->
-`Thresholder` (Rauschteppich/Signalpegel, Hysterese, Squelch, Entprellung ->
+Audio -> `Decimator` (auf ~8 kHz) -> `ToneTracker` (FFT, Tonfrequenz,
+Linien-Gate `tone_present`) -> `Envelope` (Quadraturmischer + Tiefpass,
+Bandbreite abhängig vom Tempo) -> `Thresholder` (Rauschteppich/Signalpegel,
+Hysterese, Squelch aus Pegel + Dynamik + Gate, Entprellung ->
 `KeyEvent(on, duration_ms)`) -> `TimingDecoder` (Punktlänge per Clusterung,
 Zeichen/Wortgrenzen, Ausgabe per Timeout) -> `morse.decode_symbol`.
 `CWDecoder.process(samples)` verbindet alles und ist blockgrößen-unabhängig.
@@ -178,6 +181,15 @@ Wichtige Zusammenhänge:
   ±60 Hz um die aktuelle Frequenz (`track_window_hz`, folgt Drift) und
   wechselt auf eine andere Linie nur, wenn sie mindestens 3 dB stärker ist
   (`switch_margin_db`); beim Wechsel wird der Max-Hold gelöscht.
+- Squelch öffnet nur, wenn **beide** unabhängigen Kriterien passen
+  (ADR-0018): Linien-Gate im Tracker (Peak ≥ 9 dB über dem Umfeld
+  ±20…40 Hz, schließt erst nach 0,6 s unter 6 dB) und Dynamik der Hüllkurve
+  (98.–10. Perzentil über 2 s ≥ 19 dB). Grund: Rauschen durch ein schmales
+  Empfängerfilter (~100 Hz) sieht sonst wie ein getasteter Ton aus.
+- Fällt `tone_present` weg, schließt `CWDecoder` das Zeichen ab und setzt
+  das Tempo zurück (`TimingDecoder.reset_tempo`), damit die nächste
+  Station frisch eingemessen wird. Tempo-Suchbereich 5–60 WPM
+  (`timing.DIT_MIN_MS`/`DIT_MAX_MS`).
 - Elemente eines Zeichens werden erst am Zeichenende in Punkt/Strich
   eingeteilt (`TimingDecoder._flush`); die Strich-Schwelle liegt adaptiv
   zwischen den beiden Clustern (1,4–2,6 Punktlängen).

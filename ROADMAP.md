@@ -34,18 +34,19 @@ und sag mir, was als Nächstes zu tun ist."*
 Programm-Infrastruktur stehen; das Programm ist als Setup mit Self-Update
 installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 
-- Neueste Beta: [`v0.1.0-beta6`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta6)
-  (`CWDecoder-Beta-Setup-v0.1.0.exe`, Tonverfolgung bei Drift, erstes
-  Zeichen, Schwellen; #1, #2, #5). Self-Update beta2 → beta4 auf dem
+- Neueste Beta: [`v0.1.0-beta7`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta7)
+  (`CWDecoder-Beta-Setup-v0.1.0.exe`, Squelch für schmale CW-Filter, Tempo
+  nach Tonverlust; #8). Self-Update beta2 → beta4 auf dem
   Entwicklungsrechner nachgewiesen. Noch keine Stable.
-- Testmatrix (`python tests/run_matrix.py`, zufällige Texte, ADR-0017):
-  Mittelwert **97,0 %**, Rauschen 100 %; Stichproben Seed 5000/7777:
-  95,7/97,8 %. Alte Matrix (`--legacy`): **98,5 %** (vorher 95,4 %).
+- Testmatrix (`python tests/run_matrix.py`, zufällige Texte, 11 Kategorien,
+  ADR-0017/0018): Mittelwert **97,6 %**, Rauschen 100 % (auch durch
+  CW-Filter); Stichproben Seed 5000/7777: 96,2/98,3 %. Alte Matrix
+  (`--legacy`): **98,1 %**.
 - Laufender Auftrag: siehe Issues mit Label `auftrag`
   (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** DF1DS installiert `v0.1.0-beta6` auf dem Shack-PC (oder
-aktualisiert eine installierte Beta per Self-Update) und testet
+**Nächster Schritt:** DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta7`
+(Self-Update) und testet weiter
 mit Funkgerät und N1MM (siehe „Testablauf Installer/Beta"). Danach
 Auswertung der Aufnahmen durch die Desktop-Session und Entscheidung über die
 Stable `v0.1.0`.
@@ -69,7 +70,7 @@ seinem Rechner den Self-Update von Beta N auf Beta N+1 nachgewiesen hat
 Bericht). Danach laufen Testrunden über Self-Update; Aufnahmen aus
 `Dokumente\CW Decoder\Aufnahmen` gehen an die Desktop-Session.
 
-Stand: Nachweis beta2 → beta4 erbracht (Arbeitspaket 4); `v0.1.0-beta6`
+Stand: Nachweis beta2 → beta4 erbracht (Arbeitspaket 4); `v0.1.0-beta7`
 darf auf den Shack-PC.
 
 ## Beschlossen, noch nicht umgesetzt
@@ -137,12 +138,37 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
   QSB-Nachführung 40 dB/s.
 - Beta `v0.1.0-beta6`.
 
+## ✅ Schmales Empfängerfilter (#8)
+
+- ✅ Linien-Gate im Tracker, Dynamik-Squelch, Tempo-Reset bei Tonverlust,
+  robustere Tempo-Schätzung, Tempo 5–60 WPM (ADR-0018).
+- ✅ Matrix: Kategorie „CW-Filter", Rauschen zur Hälfte durch CW-Filter:
+  96,4 % → **97,6 %**, Rauschen 92 % → 100 %; alte Matrix 98,5 % → 98,1 %.
+- Beta `v0.1.0-beta7`.
+
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 
 - Beta auf dem Shack-PC installieren, mit Funkgerät und N1MM testen.
 - Danach CHANGELOG einfrieren und `v0.1.0` taggen (ADR-0014).
 
-## ⏳ Live-Test am Funkgerät
+## 🔧 Live-Test am Funkgerät
+
+Erste Runde erledigt (26.10.2026, Shack-PC mit beta6, vier Aufnahmen,
+USB-Audio 48 kHz, ausgewertet von der Desktop-Session, #8):
+
+- ✅ Aufnahme und Audio-Weg funktionieren am Shack-PC.
+- ✅ Befund: Das CW-Filter im Empfänger ist nur ~100 Hz breit. Rauschen
+  dahinter sah wie ein getasteter Ton aus → Müll bei leerer Frequenz,
+  danach verschlepptes Tempo („TTTT"). Behoben mit Linien-Gate,
+  Dynamik-Squelch und Tempo-Reset (ADR-0018, `v0.1.0-beta7`).
+- Ergebnis an den Aufnahmen: Ein sauberer QSO-Partner ist jetzt weitgehend
+  lesbar. Ein schwacher Gegenpartner (~10 dB über dem Filterrauschen) gibt
+  das Rufzeichen teilweise. Eine sehr unsaubere Handtaste bleibt unlesbar;
+  das ist kein Decoder-Ziel.
+- Offen: Ob die Aufnahmen als Testdaten nach `testdata/real/` dürfen,
+  entscheidet DF1DS in #8.
+
+Weiter offen:
 
 - `sounddevice` unter Windows: welche Host-API (MME/WASAPI/DirectSound)
   liefert 8 kHz direkt? `open_stream` probiert 8000, 48000, 44100, 16000.

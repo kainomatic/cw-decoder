@@ -85,6 +85,17 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 - Namensregel präzisiert: Verboten ist nur der Projektname des
   Referenzprojekts, die Q-Gruppe QSL ist erlaubt und steht wieder in den
   Testtexten (`CLAUDE.md`, #7).
+- Squelch für schmale Empfängerfilter: Der Ton muss eine schmale Linie im
+  Spektrum sein (Linien-Gate im Tracker), und die Hüllkurve muss die Dynamik
+  getasteten CWs haben (Dynamik-Squelch); beide Kriterien zusammen
+  (ADR-0018, #8).
+- Nach Tonverlust wird das Tempo neu eingemessen statt verschleppt.
+- Tempo-Schätzung entfernt Ausreißer vor der Clusterung (mit Ausnahme für
+  Tempowechsel) und folgt schneller (`adapt` 0,5); Tempo-Suchbereich
+  5–60 WPM statt 5–100 WPM.
+- Testmatrix: elfte Kategorie „CW-Filter"; die Hälfte der Rauschfälle läuft
+  durch ein schmales Empfängerfilter. Generator: `--rx-filter` bzw.
+  `render(rx_filter_hz=…)`.
 - Arbeitsweise: Aufträge, Rückfragen, Berichte und Reviews laufen über
   GitHub-Issues (Label `auftrag`); die Desktop-Session schreibt im Repo nur
   Issues (ADR-0016, ersetzt ADR-0001). `CLAUDE.md` verweist für die
@@ -112,3 +123,6 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 - Bei langen Strichen stieg der geschätzte Rauschteppich so weit, dass der
   Squelch mitten im Strich zufiel; er bleibt während eines Tons jetzt
   stehen (bei Dauerträger über 3 s steigt er wieder).
+- Bei leerer Frequenz hinter einem schmalen CW-Filter gab der Decoder Müll
+  aus und verschleppte danach das Tempo („TTTT" bei der nächsten Station);
+  gefunden an den ersten echten Aufnahmen vom Shack-PC (#8).

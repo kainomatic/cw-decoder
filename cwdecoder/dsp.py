@@ -254,7 +254,8 @@ class ThresholdConfig:
     # über die letzten dyn_window_s. Getastetes CW hat > 22 dB, Rauschen
     # durch ein schmales Empfängerfilter nur ~15 dB (Rayleigh), obwohl es
     # nach einer "Linie" aussieht.
-    min_dyn_db: float = 19.0
+    min_dyn_db: float = 20.0
+    dyn_hi_pct: float = 99.5          # oberes Perzentil: 0,5 % von 2 s = 10 ms Signal reichen
     dyn_window_s: float = 2.0
     debounce_ms: float = 4.0          # Grund-Entprellzeit (wird mit Punktlänge skaliert)
     smooth_ms: float = 2.0            # kurze Glättung der Hüllkurve
@@ -338,14 +339,13 @@ class Thresholder:
         self._ring[idx] = env_db
         self._ring_i = (self._ring_i + n) % len(self._ring)
         self._ring_filled = min(len(self._ring), self._ring_filled + n)
-        self._dyn_count += n
-        if self._dyn_count >= 0.1 * self.rate:
-            self._dyn_count = 0
-            if self._ring_filled >= len(self._ring) // 2:
-                # erst bewerten, wenn das Fenster mindestens halb voll ist
-                r = self._ring if self._ring_filled == len(self._ring) else self._ring[:self._ring_filled]
-                p10, p98 = np.percentile(r, [10, 98])
-                self._dyn_db = float(p98 - p10)
+        if self._ring_filled >= len(self._ring) // 2:
+            # bei jedem Block bewerten (sonst öffnet der Squelch nach einer
+            # langen Pause erst mitten im ersten Zeichen); erst, wenn das
+            # Fenster mindestens halb voll ist
+            r = self._ring if self._ring_filled == len(self._ring) else self._ring[:self._ring_filled]
+            p10, phi = np.percentile(r, [10, c.dyn_hi_pct])
+            self._dyn_db = float(phi - p10)
         for e, el in zip(env_db, env_lin):
             if el < self.floor_lin:
                 self.floor_lin += a_dn * (el - self.floor_lin)

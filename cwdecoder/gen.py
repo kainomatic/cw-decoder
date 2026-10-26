@@ -65,8 +65,15 @@ def render(text: str, fs: int = 8000, wpm: float = 25, pitch: float = 700.0,
            qsb_depth: float = 0.0, qrm_hz: float = None, qrm_db: float = -10.0,
            farnsworth_wpm: float = None, weight: float = 1.0, jitter: float = 0.0,
            rise_ms: float = 5.0, lead_s: float = 1.0, tail_s: float = 1.0,
-           ssb_filter: bool = True, seed: int = None):
-    """Erzeugt ein float32-Signal in [-1, 1]."""
+           ssb_filter: bool = True, rx_filter_hz: float = None, seed: int = None):
+    """Erzeugt ein float32-Signal in [-1, 1].
+
+    rx_filter_hz: simuliert ein schmales Empfänger-CW-Filter dieser
+    Bandbreite (z. B. 100 oder 250 Hz), zentriert auf pitch; es wirkt auf
+    Signal, Rauschen und QRM gemeinsam (wie im Funkgerät). Das Rauschen
+    bekommt dadurch selbst eine "Linie" im Spektrum, siehe ADR zur
+    Rauschkategorie. snr_db bleibt auf 2,4 kHz bezogen.
+    """
     rng = np.random.default_rng(seed)
     seq = keying_pattern(text, wpm, farnsworth_wpm, weight, jitter, rng)
 
@@ -136,6 +143,13 @@ def render(text: str, fs: int = 8000, wpm: float = 25, pitch: float = 700.0,
         qrm = qrm_key * np.sin(2 * np.pi * qrm_hz * t) * (10 ** (qrm_db / 20))
         out = out + qrm
 
+    if rx_filter_hz:
+        lo = max(50.0, pitch - rx_filter_hz / 2)
+        hi = min(fs / 2 - 50.0, pitch + rx_filter_hz / 2)
+        # steiles Filter wie ein Quarz-/DSP-CW-Filter (8. Ordnung, zweimal)
+        b, a = butter(4, [lo / (fs / 2), hi / (fs / 2)], btype="band")
+        out = lfilter(b, a, lfilter(b, a, out))
+
     peak = np.max(np.abs(out)) + 1e-9
     out = (out / peak * 0.8).astype(np.float32)
     return out
@@ -161,12 +175,13 @@ def main():
     p.add_argument("--qrm-db", type=float, default=-10)
     p.add_argument("--weight", type=float, default=1.0)
     p.add_argument("--jitter", type=float, default=0.0)
+    p.add_argument("--rx-filter", type=float, default=None, help="Empfänger-CW-Filter in Hz (z. B. 100)")
     p.add_argument("--seed", type=int, default=None)
     a = p.parse_args()
     sig = render(a.text, fs=a.fs, wpm=a.wpm, pitch=a.pitch, drift_hz=a.drift,
                  snr_db=a.snr, qsb_hz=a.qsb, qsb_depth=a.qsb_depth, qrm_hz=a.qrm,
                  qrm_db=a.qrm_db, farnsworth_wpm=a.farnsworth, weight=a.weight,
-                 jitter=a.jitter, seed=a.seed)
+                 jitter=a.jitter, rx_filter_hz=a.rx_filter, seed=a.seed)
     write_wav(a.out, sig, a.fs)
     print(f"geschrieben: {a.out} ({len(sig) / a.fs:.1f} s)")
 

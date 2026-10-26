@@ -116,9 +116,20 @@ def cat_kombiniert(rng):
     return d
 
 
+def cat_cw_filter(rng):
+    # Schmales Empfängerfilter (100-250 Hz): Rauschen sieht selbst wie eine
+    # Linie aus; Signal mittel bis schwach
+    return dict(wpm=_u(rng, 15, 35), pitch=_u(rng, 600, 900), snr_db=_u(rng, 3, 15),
+                rx_filter_hz=_u(rng, 100, 250))
+
+
 def cat_rauschen(rng):
     # Kein Signal: Text leer, nur Rauschen (lead/tail). Bewertung: nichts ausgeben.
-    return dict(wpm=25, snr_db=0, lead_s=_u(rng, 6, 10), tail_s=0.5)
+    # Jeder zweite Fall durch ein schmales CW-Filter (100-250 Hz).
+    d = dict(wpm=25, snr_db=0, lead_s=_u(rng, 6, 10), tail_s=0.5)
+    if rng.random() < 0.5:
+        d.update(pitch=_u(rng, 600, 900), rx_filter_hz=_u(rng, 100, 250))
+    return d
 
 
 CATEGORIES = [
@@ -131,6 +142,7 @@ CATEGORIES = [
     ("QRM", cat_qrm),
     ("Timing/Farnsw.", cat_timing),
     ("kombiniert", cat_kombiniert),
+    ("CW-Filter", cat_cw_filter),
     ("Rauschen", cat_rauschen),
 ]
 

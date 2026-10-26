@@ -53,7 +53,17 @@ class TrackerConfig:
     nfft: int = 1024            # 128 ms bei 8 kHz -> ~8 Hz Auflösung
     hop: int = 128              # Aktualisierung alle 16 ms
     hold_decay: float = 0.985   # Max-Hold-Abklingen pro Hop (überbrückt Pausen)
-    min_peak_db: float = 8.0    # Peak muss so weit über dem Median liegen
+    min_peak_db: float = 8.0    # Peak muss so weit über dem Band-Median liegen
+    # Ein CW-Ton ist eine schmale Linie. Rauschen durch ein schmales
+    # Empfängerfilter (100-250 Hz) bildet dagegen einen breiten Buckel, der
+    # über dem Band-Median liegt, aber keine Linie ist. Deshalb zusätzlich:
+    # Peak muss gegenüber dem Umfeld in ±line_win_hz (ohne ±line_core_hz)
+    # um min_line_db herausragen.
+    min_line_db: float = 9.0
+    line_core_hz: float = 20.0
+    line_win_hz: float = 40.0
+    line_off_db: float = 6.0        # Gate schließt erst unter diesem Wert ...
+    line_off_s: float = 0.6         # ... und wenn das so lange anhält (Drift überbrücken)
     smooth: float = 0.25        # Nachführung der Frequenz (0..1, 1 = sofort)
     track_window_hz: float = 60.0   # im Lock: Peak-Suche nur in diesem Fenster
     switch_margin_db: float = 3.0   # andere Linie nur, wenn so viel stärker
@@ -82,6 +92,9 @@ class ToneTracker:
         self.freq = c.fixed_freq if c.fixed_freq else 0.5 * (c.f_min + c.f_max)
         self.locked = bool(c.fixed_freq)
         self.peak_db = 0.0
+        self.line_db = 0.0
+        self.tone_present = False   # schmale Linie vorhanden (Squelch-Gate)
+        self._weak_frames = 0
         self.spectrum_db = None  # für Anzeige
 
     def set_fixed(self, f: float = None):
@@ -126,11 +139,26 @@ class ToneTracker:
         else:
             k = k_glob
         self.peak_db = float(hold_db[k] - med)
+        ring = (np.abs(bf - bf[k]) >= c.line_core_hz) & (np.abs(bf - bf[k]) <= c.line_win_hz)
+        self.line_db = float(hold_db[k] - np.median(hold_db[ring])) if ring.any() else self.peak_db
         if c.fixed_freq:
+            # feste Frequenz: Linie dort beurteilen
+            kf = int(np.argmin(np.abs(bf - c.fixed_freq)))
+            ringf = (np.abs(bf - bf[kf]) >= c.line_core_hz) & (np.abs(bf - bf[kf]) <= c.line_win_hz)
+            self.line_db = float(hold_db[kf] - np.median(hold_db[ringf])) if ringf.any() else 0.0
+            self.tone_present = self.line_db >= c.min_line_db
             return
-        if self.peak_db < c.min_peak_db:
-            # kein brauchbarer Ton -> Frequenz halten, aber nicht als "locked" melden
-            self.locked = False
+        weak = self.peak_db < c.min_peak_db or self.line_db < c.min_line_db
+        if weak:
+            # Gate mit Hysterese: Lock und Ton erst aufgeben, wenn die Linie
+            # line_off_s lang unter line_off_db bleibt (Drift/QSB überbrücken)
+            if self.line_db < c.line_off_db:
+                self._weak_frames += 1
+            else:
+                self._weak_frames = 0
+            if self._weak_frames * c.hop / self.fs >= c.line_off_s:
+                self.tone_present = False
+                self.locked = False
             return
         # Parabolische Interpolation für Sub-Bin-Genauigkeit
         if 0 < k < len(hold_db) - 1:
@@ -141,6 +169,8 @@ class ToneTracker:
         else:
             delta = 0.0
         f_peak = bf[k] + delta * (bf[1] - bf[0])
+        self.tone_present = True
+        self._weak_frames = 0
         if not self.locked:
             self.freq = f_peak
             self.locked = True
@@ -220,6 +250,12 @@ class ThresholdConfig:
     on_below_peak_db: float = 6.0     # ... aber höchstens so weit unter dem Signalpegel
     off_below_peak_db: float = 10.0
     min_snr_db: float = 10.0          # Squelch: darunter kein Ton
+    # Zweites Squelch-Kriterium: Dynamik der Hüllkurve (98.–10. Perzentil)
+    # über die letzten dyn_window_s. Getastetes CW hat > 22 dB, Rauschen
+    # durch ein schmales Empfängerfilter nur ~15 dB (Rayleigh), obwohl es
+    # nach einer "Linie" aussieht.
+    min_dyn_db: float = 19.0
+    dyn_window_s: float = 2.0
     debounce_ms: float = 4.0          # Grund-Entprellzeit (wird mit Punktlänge skaliert)
     smooth_ms: float = 2.0            # kurze Glättung der Hüllkurve
 
@@ -249,6 +285,12 @@ class Thresholder:
         self.debounce_ms = self.cfg.debounce_ms
         self._sm = None
         self.snr_db = 0.0
+        self.gate = True   # von außen: False = kein Ton vorhanden, Squelch zu
+        self._ring = np.full(max(10, int(self.cfg.dyn_window_s * env_rate)), -60.0)
+        self._ring_i = 0
+        self._ring_filled = 0
+        self._dyn_db = 0.0
+        self._dyn_count = 0
         self._init = False
         self._warm = 0
 
@@ -290,6 +332,20 @@ class Thresholder:
             self.floor_db = 20 * np.log10(self.floor_lin + 1e-9)
             self.peak_db = self.floor_db + 1.0
             self._init = True
+        # Dynamik-Fenster blockweise füllen, Perzentile alle 100 ms
+        n = len(env_db)
+        idx = (self._ring_i + np.arange(n)) % len(self._ring)
+        self._ring[idx] = env_db
+        self._ring_i = (self._ring_i + n) % len(self._ring)
+        self._ring_filled = min(len(self._ring), self._ring_filled + n)
+        self._dyn_count += n
+        if self._dyn_count >= 0.1 * self.rate:
+            self._dyn_count = 0
+            if self._ring_filled >= len(self._ring) // 2:
+                # erst bewerten, wenn das Fenster mindestens halb voll ist
+                r = self._ring if self._ring_filled == len(self._ring) else self._ring[:self._ring_filled]
+                p10, p98 = np.percentile(r, [10, 98])
+                self._dyn_db = float(p98 - p10)
         for e, el in zip(env_db, env_lin):
             if el < self.floor_lin:
                 self.floor_lin += a_dn * (el - self.floor_lin)
@@ -310,7 +366,7 @@ class Thresholder:
 
             span = self.peak_db - self.floor_db
             self.snr_db = span
-            squelch_open = span >= c.min_snr_db
+            squelch_open = self.gate and span >= c.min_snr_db and self._dyn_db >= c.min_dyn_db
             # Schwellen: nahe am Signalpegel (-6/-10 dB), bei schwachem
             # Signal aber mindestens als Bruchteil des Abstands zum Rauschen
             on_thr = max(self.peak_db - c.on_below_peak_db, self.floor_db + c.on_frac * span)

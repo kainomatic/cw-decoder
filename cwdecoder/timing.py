@@ -52,6 +52,20 @@ class TimingDecoder:
     def wpm(self) -> float:
         return 1200.0 / self.dit_ms
 
+    def reset_tempo(self):
+        """Tempo-Gedächtnis verwerfen (z. B. wenn der Ton weg war).
+
+        dit_ms bleibt als Startwert, aber die nächsten Elemente ziehen die
+        Schätzung wieder schnell nach (wie am Anfang).
+        """
+        self.marks.clear()
+        self.gaps.clear()
+        self.char_gaps.clear()
+        self._dash_thr_ms = None
+        self.n_marks = 0
+        self.confident = False
+        self.dit_ms = float(np.clip(self.dit_ms, 30.0, 150.0))  # 8..40 WPM als Start
+
     def reset_text(self):
         self.symbol = ""
         self.cur_marks = []
@@ -72,6 +86,25 @@ class TimingDecoder:
         weights = []
 
         marks = np.array(self.marks, dtype=float)
+        # Ausreißer abtrennen (Störimpulse, verschliffene Elemente, Träger):
+        # Teilt die sortierten Längen an der größten Lücke; ist das kleinere
+        # Teilcluster winzig (< 2 Werte bzw. < 20 %) oder das Verhältnis
+        # unplausibel (> 5), fliegt es raus. Höchstens dreimal.
+        for _ in range(3):
+            if len(marks) < 4:
+                break
+            s_ = np.sort(marks)
+            d_ = np.diff(np.log(s_))
+            k_ = int(np.argmax(d_))
+            if d_[k_] <= np.log(1.6):
+                break
+            lo_, hi_ = s_[:k_ + 1], s_[k_ + 1:]
+            small, big = (lo_, hi_) if len(lo_) <= len(hi_) else (hi_, lo_)
+            tiny = len(small) < max(2, 0.2 * len(marks))
+            if tiny or np.median(hi_) / np.median(lo_) > 5.0:
+                marks = big
+            else:
+                break
         if len(marks) >= 2:
             s = np.sort(marks)
             ls = np.log(s)
@@ -90,16 +123,6 @@ class TimingDecoder:
                     # Strich-Schwelle zwischen die Cluster legen (geometrisches
                     # Mittel), damit die Gewichtung des Gebers egal ist
                     self._dash_thr_ms = float(np.sqrt(np.median(lo) * np.median(hi)))
-                elif ratio > 5.0:
-                    # zu großer Abstand: eines der Cluster passt nicht zum CW.
-                    # Das kleinere Cluster ist meist die Störung (kurze
-                    # Rauschimpulse bzw. ein einzelner langer Träger)
-                    if len(lo) < len(hi):
-                        est.append(dit_from_hi)
-                        weights.append(1.0 + len(hi))
-                    else:
-                        est.append(dit_from_lo)
-                        weights.append(1.0 + len(lo))
                 else:
                     est.append(dit_from_lo)
                     weights.append(1.0)
@@ -147,10 +170,8 @@ class TimingDecoder:
     def mark(self, duration_ms: float):
         """Ein Ton (Tastung an) ist zu Ende."""
         c = self.cfg
-        if duration_ms < c.dit_min_ms * 0.5:
-            return  # Störimpuls
-        if self.confident and duration_ms < 0.35 * self.dit_ms:
-            return  # viel kürzer als ein Punkt beim aktuellen Tempo: Rauschen
+        if duration_ms < max(c.dit_min_ms * 0.5, 0.3 * self.dit_ms):
+            return  # Störimpuls: viel kürzer als ein Punkt beim aktuellen Tempo
         # Plausibilität: extrem lange Töne (Träger, Störung) nicht lernen
         if duration_ms > 12 * c.dit_max_ms:
             self.symbol = ""

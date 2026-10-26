@@ -79,6 +79,14 @@ class CWDecoder:
         if self.tracker.locked != was_locked:
             self._update_bandwidth()
         env = self.envelope.process(x, self.tracker.freq)
+        if self.thresh.gate and not self.tracker.tone_present:
+            # Ton ist weg: laufendes Zeichen abschließen und das Tempo-
+            # Gedächtnis verwerfen, damit die nächste Station frisch
+            # eingemessen wird statt mit einem verschleppten Tempo
+            self.timing.force_flush()
+            self.timing.reset_tempo()
+            self._update_bandwidth()
+        self.thresh.gate = self.tracker.tone_present
         events = self.thresh.process(env)
         for ev in events:
             if ev.on:
@@ -100,6 +108,7 @@ class CWDecoder:
         return {
             "freq_hz": self.tracker.freq,
             "locked": self.tracker.locked,
+            "line_db": self.tracker.line_db,
             "peak_db": self.tracker.peak_db,
             "snr_db": self.thresh.snr_db,
             "wpm": self.timing.wpm,

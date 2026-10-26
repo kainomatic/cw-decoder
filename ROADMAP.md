@@ -34,15 +34,16 @@ und sag mir, was als Nächstes zu tun ist."*
 Programm-Infrastruktur stehen; das Programm ist als Setup mit Self-Update
 installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 
-- Neueste Beta: [`v0.1.0-beta4`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta4)
-  (`CWDecoder-Beta-Setup-v0.1.0.exe`). Self-Update beta2 → beta4 auf dem
-  Entwicklungsrechner nachgewiesen. Noch keine Stable.
+- Neueste Beta: [`v0.1.0-beta5`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta5)
+  (`CWDecoder-Beta-Setup-v0.1.0.exe`, räumt alte Setup-Dateien auf, #6).
+  Self-Update beta2 → beta4 auf dem Entwicklungsrechner nachgewiesen.
+  Noch keine Stable.
 - Testmatrix (`python tests/run_matrix.py`): Mittelwert **95,4 %**
   (Stand Arbeitspaket 4, unverändert gegenüber vorher).
 - Laufender Auftrag: siehe Issues mit Label `auftrag`
   (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** DF1DS installiert die Beta auf dem Shack-PC und testet
+**Nächster Schritt:** DF1DS installiert `v0.1.0-beta5` auf dem Shack-PC und testet
 mit Funkgerät und N1MM (siehe „Testablauf Installer/Beta"). Danach
 Auswertung der Aufnahmen durch die Desktop-Session und Entscheidung über die
 Stable `v0.1.0`.
@@ -66,8 +67,8 @@ seinem Rechner den Self-Update von Beta N auf Beta N+1 nachgewiesen hat
 Bericht). Danach laufen Testrunden über Self-Update; Aufnahmen aus
 `Dokumente\CW Decoder\Aufnahmen` gehen an die Desktop-Session.
 
-Stand: Nachweis beta2 → beta4 erbracht (Arbeitspaket 4); die Beta darf auf
-den Shack-PC.
+Stand: Nachweis beta2 → beta4 erbracht (Arbeitspaket 4); `v0.1.0-beta5`
+darf auf den Shack-PC.
 
 ## Beschlossen, noch nicht umgesetzt
 
@@ -119,7 +120,7 @@ Fehlerbericht, Single-Instance, Menüleiste, ADRs 0001–0010, pytest + CI
 - ✅ Update-Nachweis auf dem Build-Rechner: installierte beta2 fand beta4,
   lud sie, installierte still und startete als beta4 neu.
 - Folge-Issues: #5 (siehe „Beschlossen, noch nicht umgesetzt"); #6
-  (Setup-Datei blieb in `%TEMP%`) erledigt, kommt mit der nächsten Beta.
+  (Setup-Datei blieb in `%TEMP%`) erledigt in `v0.1.0-beta5`.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

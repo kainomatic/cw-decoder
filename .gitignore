@@ -8,3 +8,6 @@ build/
 dist/
 assets/cwdecoder.ico
 installer/Output/
+
+# Mitschnitt-Stub (#3)
+tools/fldigi_stub.log

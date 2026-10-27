@@ -21,6 +21,7 @@ import numpy as np
 from . import utf8_console
 from .decoder import CWDecoder, DecoderConfig, UNSURE_CONF
 from .callsign import CallsignSpotter
+from .segment import SEP as SEGMENT_SEP, WordBuffer
 from .ringbuffer import AudioRing, TokenRing
 
 log = logging.getLogger(__name__)
@@ -99,7 +100,7 @@ def open_stream(device, callback, preferred=(8000, 48000, 44100, 16000)):
 class LiveDecoder:
     def __init__(self, fs, cfg=None, on_text=None, on_status=None, on_call=None,
                  on_audio_warning=None, on_call_span=None, on_char_conf=None,
-                 ring_seconds=None):
+                 ring_seconds=None, on_segment=None, segment=True, scp="default"):
         self.q = queue.Queue()
         # Meldungen der Soundkarte; Terminal gibt sie auf stderr aus
         self.on_audio_warning = on_audio_warning
@@ -113,7 +114,12 @@ class LiveDecoder:
         # samt Vertrauen 0..1 dorthin statt an on_text (ADR-0023);
         # Leerzeichen und Absätze bleiben bei on_text
         self.on_char_conf = on_char_conf
-        self.spotter = CallsignSpotter(on_call=on_call, on_span=on_call_span)
+        # Super Check Partial und Wörterbuch-Zerlegung (ADR-0026);
+        # on_segment(cuts) kommt am Wortende vor dessen Leerzeichen
+        if scp == "default":
+            from .scp import DEFAULT as scp
+        self.spotter = CallsignSpotter(on_call=on_call, on_span=on_call_span, scp=scp,
+                                       segment=segment, on_segment=on_segment)
         self.dec = CWDecoder(fs, cfg, on_char=self._char, on_space=self._space,
                              on_paragraph=self._paragraph)
         self.fs = fs
@@ -149,14 +155,16 @@ class LiveDecoder:
         self._log(ch, conf)
 
     def _space(self):
-        self.on_text(" ")
+        # Spotter zuerst: Zerlegung und Rufzeichen des Wortes kommen so vor
+        # dem Leerzeichen an (Terminal und N1MM geben das Wort erst dann aus)
         self.spotter.feed(" ")
+        self.on_text(" ")
         self._log(" ")
 
     def _paragraph(self):
         # Leerzeile im Textfenster; der Spotter sieht ein Wortende
-        self.on_text("\n\n")
         self.spotter.feed(" ")
+        self.on_text("\n\n")
         self._log(DecodeLog.PARAGRAPH)
 
     def audio_callback(self, indata, frames, t, status):
@@ -245,6 +253,8 @@ def main():
     p.add_argument("--fmax", type=float, default=1200)
     p.add_argument("--record", default=None, help="Audio in diese WAV-Datei mitschreiben")
     p.add_argument("--no-status", action="store_true")
+    p.add_argument("--no-segment", action="store_true",
+                   help="zusammengeklebte Wörter nicht zerlegen (sonst Trenner ·)")
     a = p.parse_args()
 
     if a.list:
@@ -276,15 +286,28 @@ def main():
         raise SystemExit(str(e)) from None
     print(f"Eingang geöffnet mit {fs} Hz. Strg+C beendet.\n", file=sys.stderr)
 
-    line = {"len": 0}
+    line = {"len": 0, "pos": 0}
 
-    def on_text(s):
+    def write(s):
         sys.stdout.write(s)
         sys.stdout.flush()
         line["len"] += len(s)
-        if line["len"] > 70 and s == " ":
+        if line["len"] > 70 and s.endswith(" "):
             sys.stdout.write("\n")
             line["len"] = 0
+
+    # Mit Zerlegung erscheint jedes Wort erst an seinem Ende, dann mit
+    # Trennern · an den Zerlegestellen (ADR-0026)
+    words = None if a.no_segment else WordBuffer(write, SEGMENT_SEP)
+
+    def on_text(s):
+        if words is None:
+            write(s)
+        elif s.strip():
+            words.add(s, line["pos"])
+            line["pos"] += 1
+        else:
+            words.end(s)
 
     def on_status(st):
         if a.no_status:
@@ -303,7 +326,8 @@ def main():
 
     live = LiveDecoder(fs, cfg, on_text=on_text, on_status=on_status, on_call=on_call,
                        on_audio_warning=lambda m: print(f"[audio] {m}", file=sys.stderr),
-                       on_char_conf=on_char_conf)
+                       on_char_conf=on_char_conf, segment=not a.no_segment,
+                       on_segment=words.cut if words is not None else None)
     if a.record:
         log.info("Aufnahme: %s", a.record)
         live.recorder = WavRecorder(a.record, fs)
@@ -323,6 +347,8 @@ def main():
             print(f"\nAufnahme gespeichert: {a.record}", file=sys.stderr)
         if live.decode_log:
             live.decode_log.close()
+        if words is not None:
+            words.end()
         print()
 
 

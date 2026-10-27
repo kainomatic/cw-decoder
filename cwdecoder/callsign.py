@@ -92,14 +92,33 @@ class CallsignSpotter:
     Geprüft wird jeweils am Wortende (Wortabstand). Wiederholungen innerhalb
     von `repeat_s` Sekunden werden nicht erneut gemeldet, aber mitgezählt
     (ein zweimal gehörtes Rufzeichen ist verlässlicher).
+
+    Mit `scp` (Objekt mit is_known(call), ADR-0026) kommt das
+    **Zusammensetzen** dazu: Endet ein Wort mit einem Rufzeichen, das nicht
+    in SCP steht, wartet der Spotter auf die nächsten Wörter. Folgen 1–2
+    Wörter aus je einem Buchstaben (oder ein Wort aus 2 Buchstaben) und ist
+    die Verkettung bekannt (in SCP oder schon einmal ganz gehört), wird sie
+    gemeldet (`IK2J E T` -> IK2JET), sonst das Rufzeichen wie gehört.
+    Rufzeichen, die nicht in SCP stehen, kommen dadurch ein bis zwei Wörter
+    später. Mit `segment=True` werden zusammengeklebte Wörter zerlegt
+    (segment.py): `on_segment(cuts)` meldet die Trennstellen (Positionen im
+    Strom wie bei on_span, jeweils vor dem Teil), Rufzeichen aus der
+    Zerlegung zählen mit. Ohne `scp` und `segment` wie vor ADR-0026.
     """
 
-    def __init__(self, on_call=None, repeat_s: float = 30.0, keep: int = 20, on_span=None):
+    def __init__(self, on_call=None, repeat_s: float = 30.0, keep: int = 20, on_span=None,
+                 scp=None, segment: bool = False, on_segment=None, segmenter=None):
         self.on_call = on_call or (lambda call: None)
         # on_span(call, start, end): jedes gezählte Vorkommen mit seiner Lage
         # im Zeichenstrom (n-tes Zeichen ohne Leerzeichen, ab 0; end exklusiv),
         # damit die GUI es im Text markieren kann
         self.on_span = on_span or (lambda call, start, end: None)
+        # kommt am Wortende vor den on_span dieses Wortes
+        self.on_segment = on_segment or (lambda cuts: None)
+        self.scp = scp
+        self.segment = segment
+        self._segmenter = segmenter
+        self._pending = None          # (Rufzeichen, Start, [Folgewörter]) wartet
         self.repeat_s = repeat_s
         self.word = ""
         self.recent = OrderedDict()   # call -> (last_time, count)
@@ -111,6 +130,13 @@ class CallsignSpotter:
         self._bounds = set()          # absolute Positionen mit Wortgrenze davor
         self._seen = set()            # (call, abs_start) bereits gezählt
 
+    @property
+    def segmenter(self):
+        if self._segmenter is None:
+            from .segment import Segmenter
+            self._segmenter = Segmenter(scp=self.scp)
+        return self._segmenter
+
     def feed(self, ch: str):
         if ch == " ":
             self._end_word()
@@ -118,6 +144,11 @@ class CallsignSpotter:
         c = ch.upper() if len(ch) == 1 and (ch.isalnum() or ch == "/") else SEP
         self.word += c
         self._s += c
+        if self._pending is not None:
+            # Folgewort kann kein Rest des Rufzeichens mehr sein: sofort melden
+            room = 1 if self._pending[2] else 2
+            if len(self.word) > room or not c.isalpha():
+                self._release()
         cut = len(self._s) - STREAM_CHARS
         if cut > 0:
             self._s = self._s[cut:]
@@ -131,20 +162,42 @@ class CallsignSpotter:
         start = self._word_start
         self._word_start = end
         if not w:
+            self._release()         # Pause oder Absatz: Wartendes melden
             return
         self._bounds.add(start)
         self._bounds.add(end)
+        if self._pending is not None and self._compose(w.upper()):
+            return
         hits = []
+        # 0) zusammengeklebte Wörter zerlegen (ADR-0026)
+        parts = []
+        if self.segment:
+            cuts = self.segmenter.word_cuts(w)
+            if cuts:
+                self.on_segment([start + c for c in cuts])
+                edges = [0] + cuts + [len(w)]
+                parts = [(w[x:y].upper(), start + x) for x, y in zip(edges, edges[1:])]
         # 1) neue Rufzeichen im Wort (auch zusammengeklebt)
         i = 0
         for cand in calls_in_word(w):
             i = w.upper().find(cand, i)
             # verlängert der Kandidat nur ein bekanntes Rufzeichen um
-            # Buchstaben (DJ7PR + KM), zählt das bekannte (Weg 2 unten)
+            # Buchstaben (DJ7PR + KM), zählt das bekannte (Weg 2 unten).
+            # Mit SCP gilt das nicht für ein allein stehendes Wort, wenn das
+            # kürzere nicht in SCP steht (IK2J gehört, dann ganz IK2JET)
+            alone = cand == w.upper()
             if not any(cand != k and cand.startswith(k) and cand[len(k):].isalpha()
+                       and not (alone and self.scp is not None and not self._in_scp(k))
                        for k in self.recent):
                 hits.append((cand, start + i))
             i += len(cand)
+        # Rufzeichen aus der Zerlegung zählen nur, wenn SCP sie kennt (SEP
+        # trennt Teile zusätzlich); unbekannte bleiben bloße Anzeige
+        for part, a in parts:
+            for sub in part.split(SEP):
+                if looks_like_call(sub) and self._in_scp(sub) and (sub, a) not in hits:
+                    hits.append((sub, a))
+                a += len(sub) + 1
         # 2) bekannte Rufzeichen im Strom ohne Leerzeichen, die im gerade
         #    beendeten Wort enden (zusammengeklebt oder zerrissen)
         for call in list(self.recent):
@@ -155,11 +208,58 @@ class CallsignSpotter:
                 if start < b <= end and self._starts_ok(pos):
                     hits.append((call, a))
                 pos = self._s.find(call, pos + 1)
+        if self.scp is not None:
+            # ein Treffer, der ganz in einem längeren steckt, zählt nicht
+            # (IK2J in IK2JET, sobald IK2JET selbst ein Treffer ist)
+            hits = [(c, a) for c, a in hits
+                    if not any(c2 != c and a2 <= a and a + len(c) <= a2 + len(c2)
+                               for c2, a2 in hits)]
+            # 3) Rufzeichen am Wortende, das nicht in SCP steht: auf die
+            #    nächsten Wörter warten (Zusammensetzen)
+            tail = [h for h in hits if h[1] + len(h[0]) == end and h not in self._seen
+                    and not self._in_scp(h[0])]
+            if tail:
+                hold = max(tail, key=lambda h: len(h[0]))
+                hits = [h for h in hits if h != hold]
+                self._pending = (hold[0], hold[1], [])
         for call, a in hits:
-            if (call, a) not in self._seen:
-                self._seen.add((call, a))
-                self._hit(call)
-                self.on_span(call, a, a + len(call))
+            self._count(call, a)
+
+    def _in_scp(self, call: str) -> bool:
+        if self.scp is None:
+            return False
+        try:
+            return bool(self.scp.is_known(call))
+        except (OSError, ValueError):
+            return False
+
+    def _count(self, call: str, a: int):
+        if (call, a) not in self._seen:
+            self._seen.add((call, a))
+            self._hit(call)
+            self.on_span(call, a, a + len(call))
+
+    def _compose(self, w: str) -> bool:
+        """Folgewort eines wartenden Rufzeichens; True = Wort verbraucht."""
+        call, a, extra = self._pending
+        if w.isalpha() and len(w) <= 2 and (not extra or (len(w) == 1 and len(extra[0]) == 1)):
+            joined = call + "".join(extra) + w
+            if looks_like_call(joined) and (joined in self.recent or self._in_scp(joined)):
+                self._pending = None
+                self._count(joined, a)
+                return True
+            if not extra and len(w) == 1:
+                self._pending = (call, a, [w])     # vielleicht folgt noch ein Buchstabe
+                return True
+        self._release()
+        return False
+
+    def _release(self):
+        """Wartendes Rufzeichen so melden, wie es gehört wurde."""
+        if self._pending is not None:
+            call, a, _extra = self._pending
+            self._pending = None
+            self._count(call, a)
 
     def _starts_ok(self, pos: int) -> bool:
         """Beginnt der Treffer im Strom an einer Grenze?"""
@@ -178,3 +278,4 @@ class CallsignSpotter:
 
     def flush(self):
         self._end_word()
+        self._release()

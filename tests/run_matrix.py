@@ -232,7 +232,7 @@ REAL_CASES = [
 REAL_SPOTS = {
     "cw_20261026_231339_217_8k.wav": ["DJ7PR", "OY1CT"],
     "cw_20261027_193609_542_8k.wav": ["IN3TWX", "OY1CT"],
-    "cw_20261027_194453_947_8k.wav": ["IK2J"],   # IK2JET erst mit SCP (#17)
+    "cw_20261027_194453_947_8k.wav": ["IK2JET"],  # IK2J E T, zusammengesetzt (#23)
 }
 # Fragmente, die der Decoder an den 8-kHz-Dateien noch nicht liefert
 # (Stand #8). In test_real.py als bekannte Lücke (xfail, nicht strikt):
@@ -258,8 +258,10 @@ def decode_real(fname: str, seconds: float = None) -> str:
 def spot_real(text: str):
     """Rufzeichen, die der Spotter im decodierten Text meldet."""
     from cwdecoder.callsign import CallsignSpotter
+    from cwdecoder.scp import DEFAULT as scp
     got = []
-    sp = CallsignSpotter(on_call=got.append)
+    # wie im Programm: mit Super Check Partial und Zerlegung (ADR-0026)
+    sp = CallsignSpotter(on_call=got.append, scp=scp, segment=True)
     for ch in text:
         sp.feed(ch)
     sp.flush()

@@ -54,6 +54,8 @@ def main(argv=None):
     p.add_argument("--block", type=int, default=512)
     p.add_argument("--freq", type=float, default=None, help="feste Tonfrequenz statt Suche")
     p.add_argument("--trace", action="store_true")
+    p.add_argument("--no-segment", action="store_true",
+                   help="zusammengeklebte Wörter nicht zerlegen (sonst Trenner ·)")
     a = p.parse_args(argv)
     fs, x = load_wav(a.wav)
     cfg = DecoderConfig()
@@ -64,7 +66,12 @@ def main(argv=None):
     text = dec.get_text_marked()
     s = dec.status
     print(f"Ton: {s['freq_hz']:.0f} Hz  SNR: {s['snr_db']:.0f} dB  Tempo: {s['wpm']:.0f} WPM")
-    print("Text:", text)
+    shown = text
+    if not a.no_segment:
+        # Anzeige mit Trennern · (ADR-0026); --expect vergleicht den Rohtext
+        from .segment import segment_text
+        shown = segment_text(text)
+    print("Text:", shown)
     if a.trace:
         for t, f, snr, wpm in log:
             print(f"  t={t:5.1f}s f={f:6.1f}Hz snr={snr:4.1f}dB wpm={wpm:4.1f}")

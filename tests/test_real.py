@@ -57,3 +57,35 @@ def test_real_rufzeichen(fname, calls):
     got = run_matrix.spot_real(_text(fname))
     missing = [c for c in calls if c not in got]
     assert not missing, f"Spotter fand {got}, es fehlt {missing}"
+
+
+# Wörterbuch-Zerlegung der Anzeige (ADR-0026, #23)
+REAL_SEGMENTED = {
+    "cw_20261027_202035_204_8k.wav": ["TNX FER FB CALL", "RST 599 5NN 5NN", "CQ DE LA8IG"],
+    "cw_20261027_193609_542_8k.wav": ["GE TU ES UR 569 569 BK", "DE IN3TWX"],
+}
+
+
+@pytest.mark.parametrize("fname,fragments", list(REAL_SEGMENTED.items()),
+                         ids=lambda v: str(v)[3:18] if isinstance(v, str) else "")
+def test_real_zerlegt(fname, fragments):
+    from cwdecoder.segment import segment_text
+    shown = segment_text(_text(fname), sep=" ")
+    missing = [f for f in fragments if f not in shown]
+    assert not missing, f"fehlt {missing} in: {shown}"
+
+
+def test_real_teil_des_rufzeichens_nicht_nach_dem_ganzen():
+    """IK2J E T: nachdem IK2JET einmal ganz gehört wurde, wird jedes
+    zerrissene Vorkommen als IK2JET gezählt, nicht mehr als IK2J."""
+    from cwdecoder.callsign import CallsignSpotter
+    from cwdecoder.scp import DEFAULT as scp
+    text = _text("cw_20261027_194453_947_8k.wav")
+    spans = []
+    sp = CallsignSpotter(scp=scp, segment=True, on_span=lambda c, a, b: spans.append(c))
+    for ch in text:
+        sp.feed(ch)
+    sp.flush()
+    first_whole = spans.index("IK2JET")
+    assert "IK2J" not in spans[first_whole:], spans
+    assert spans.count("IK2JET") >= 5, spans

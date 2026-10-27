@@ -5,7 +5,10 @@
     python tests/run_matrix.py --verbose  dazu jeden Fall mit erkanntem Text
     python tests/run_matrix.py --legacy   die alte Matrix mit zwei festen Sätzen
     python tests/run_matrix.py --n 20     Fälle pro Kategorie (Standard 10)
-    python tests/run_matrix.py --real     Texte der echten Aufnahmen (testdata/real/)
+    python tests/run_matrix.py --real     Texte der echten Aufnahmen (testdata/real/),
+                                          dazu Ähnlichkeit zum gespeicherten Stand
+    python tests/run_matrix.py --real-baseline   Stand der echten Aufnahmen
+                                          neu speichern (tests/real_baseline.json)
 
 Die Texte kommen aus cwdecoder.testtext (zufällige Rufzeichen, Exchanges,
 QSO-Floskeln, Fünfergruppen); Tempo, Tonhöhe und Störparameter werden je
@@ -218,11 +221,17 @@ REAL_CASES = [
     ("cw_20261026_190855_301_8k.wav", ["ES3YJ"], 65.0),
     ("cw_20261026_231339_217_8k.wav",
      ["OY1CT", "IK2ULV", "DJ7PR", "CALLED CQ", "QRM", "STRANGE"], None),
+    ("cw_20261027_193609_542_8k.wav", ["SV1QEK", "OY1CT", "IN3TWX", "WOLF", "BK"], None),
+    ("cw_20261027_194453_947_8k.wav", ["CQ DE IK2J"], None),
+    ("cw_20261027_194831_227_8k.wav", ["GI5RSS", "UR 5", "OY1CT"], None),
+    ("cw_20261027_202035_204_8k.wav", ["LA8IG", "DL4KCA", "DRANGEDAL", "KNUT"], None),
 ]
 # Rufzeichen, die der Spotter (callsign.py) im Zeichenstrom finden muss,
 # auch wenn sie an Nachbarwörtern kleben (#10)
 REAL_SPOTS = {
     "cw_20261026_231339_217_8k.wav": ["DJ7PR", "OY1CT"],
+    "cw_20261027_193609_542_8k.wav": ["IN3TWX", "OY1CT"],
+    "cw_20261027_194453_947_8k.wav": ["IK2J"],   # IK2JET erst mit SCP (#17)
 }
 # Fragmente, die der Decoder an den 8-kHz-Dateien noch nicht liefert
 # (Stand #8). In test_real.py als bekannte Lücke (xfail, nicht strikt):
@@ -256,13 +265,51 @@ def spot_real(text: str):
     return got
 
 
+# Volltext aller echten Aufnahmen zu einem festen Stand (#21): Damit ist
+# "nichts schlechter" auch über die Fragmente hinaus prüfbar. Ähnlichkeit
+# alt/neu unter REAL_BASELINE_MIN heißt: ansehen und begründen (eine
+# Verbesserung ändert den Text auch). Kein Test, nur Messwert.
+REAL_BASELINE = os.path.join(os.path.dirname(__file__), "real_baseline.json")
+REAL_BASELINE_MIN = 0.98
+
+
+def real_files():
+    return sorted(f for f in os.listdir(REAL_DIR) if f.endswith(".wav"))
+
+
+def write_real_baseline():
+    import json
+    data = {f: decode_real(f) for f in real_files()}
+    with open(REAL_BASELINE, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, ensure_ascii=False, indent=1)
+        fh.write("\n")
+    print(f"gespeichert: {REAL_BASELINE} ({len(data)} Aufnahmen)")
+
+
+def baseline_similarity(fname: str, text: str):
+    """Ähnlichkeit zum gespeicherten Stand (None, wenn nicht vorhanden)."""
+    import json
+    if not os.path.isfile(REAL_BASELINE):
+        return None
+    with open(REAL_BASELINE, encoding="utf-8") as fh:
+        old = json.load(fh).get(fname)
+    return None if old is None else similarity(text, old)
+
+
 def run_real():
-    """Druckt den Text aller echten Aufnahmen und welche Fragmente fehlen."""
-    for fname, fragments, quiet_s in REAL_CASES:
+    """Druckt den Text aller echten Aufnahmen, welche Fragmente fehlen und
+    die Ähnlichkeit zum gespeicherten Stand."""
+    cases = {f: (frags, q) for f, frags, q in REAL_CASES}
+    for fname in real_files():
+        fragments, quiet_s = cases.get(fname, ([], None))
         text = decode_real(fname)
         missing = [f for f in fragments if f not in text]
+        sim = baseline_similarity(fname, text)
         print(f"\n== {fname}")
         print(f"   {text}")
+        if sim is not None:
+            flag = "" if sim >= REAL_BASELINE_MIN else "   <-- ansehen"
+            print(f"   Ähnlichkeit zum Stand: {100 * sim:.1f} %{flag}")
         if quiet_s is not None:
             n = len(decode_real(fname, quiet_s).replace(" ", ""))
             print(f"   erste {quiet_s:.0f} s: {n} Zeichen (erlaubt {NOISE_MAX_CHARS})")
@@ -276,6 +323,9 @@ def main():
     n = 10
     if "--n" in sys.argv:
         n = int(sys.argv[sys.argv.index("--n") + 1])
+    if "--real-baseline" in sys.argv:
+        write_real_baseline()
+        return
     if "--real" in sys.argv:
         run_real()
         return

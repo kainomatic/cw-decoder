@@ -35,10 +35,10 @@ und sag mir, was als Nächstes zu tun ist."*
 Programm-Infrastruktur stehen; das Programm ist als Setup mit Self-Update
 installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 
-- Neueste Beta: [`v0.1.0-beta11`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta11)
-  (`CWDecoder-Beta-Setup-v0.1.0.exe`, CW Decoder als Engine für N1MMs
-  CW Reader, #3; davor beta10 mit Flagge und Landesname an den
-  Rufzeichen, #11). Self-Update beta2 → beta4 auf dem
+- Neueste Beta: [`v0.1.0-beta12`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta12)
+  (`CWDecoder-Beta-Setup-v0.1.0.exe`, unsichere Zeichen grau, Rufzeichen-
+  Spalte begrenzt, #18; davor beta11 mit dem CW Decoder als Engine für
+  N1MMs CW Reader, #3). Self-Update beta2 → beta4 auf dem
   Entwicklungsrechner nachgewiesen. Noch keine Stable.
 - Testmatrix (`python tests/run_matrix.py`, zufällige Texte, 11 Kategorien,
   ADR-0017/0018): Mittelwert **97,7 %**, Rauschen 100 % (auch durch
@@ -47,8 +47,8 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 - Laufender Auftrag: siehe Issues mit Label `auftrag`
   (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** Review von #3 durch die Desktop-Session. DF1DS
-aktualisiert auf dem Shack-PC auf `v0.1.0-beta11` (Self-Update), richtet
+**Nächster Schritt:** Review von #18 durch die Desktop-Session. DF1DS
+aktualisiert auf dem Shack-PC auf `v0.1.0-beta12` (Self-Update), richtet
 N1MM nach `docs/N1MM.md` ein und testet mit Funkgerät und N1MM (siehe
 „Testablauf Installer/Beta"). Danach
 Auswertung der Aufnahmen durch die Desktop-Session und Entscheidung über die
@@ -64,6 +64,10 @@ Rufzeichen und Rapport so weit, dass man sie mit einem zweiten Hören
 bestätigen kann; bei reinem Rauschen kein Müll im Textfenster (wichtiger als
 die letzten Prozent). Kein Wahrscheinlichkeits-Decoder für −5 dB, solange
 DF1DS es nicht vermisst.
+
+Vergleichsmessungen gegen andere Decoder (z. B. fldigi, `docs/VERGLEICH.md`)
+laufen einmalig und außerhalb der CI: Sie brauchen Echtzeit und ein
+fremdes Programm. Maßstab in der CI bleibt die eigene Testmatrix.
 
 ## Testablauf Installer/Beta
 
@@ -81,7 +85,10 @@ darf auf den Shack-PC.
 Offene Aufgaben-Issues (noch kein Auftrag, bis sie das Label `auftrag`
 bekommen):
 
-Zurzeit keine; #3 ist umgesetzt (siehe unten), Review ausstehend.
+Zurzeit keine; #14 und #15 sind mit #18 umgesetzt (siehe unten).
+
+Ideen, noch nicht beschlossen: #16 (mehrere Stationen gleichzeitig,
+„Skimmer light") und #17 (Ideensammlung Contest, Replay, Oberfläche).
 
 #1, #2 und #5 sind umgesetzt und geschlossen (siehe „Decoder-Tuning" unten).
 
@@ -186,7 +193,18 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
   mit Testsignal, Screenshots in #3).
 - ✅ Wege wählbar im Dialog „Übergabe…" (CW Reader, Spot, Tippen,
   Zwischenablage); Spots auch ohne Telnet-Login; Anleitung `docs/N1MM.md`.
-- Beta [`v0.1.0-beta11`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta11); Review ausstehend.
+- Beta [`v0.1.0-beta11`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta11);
+  Review bestanden, #3 geschlossen.
+
+## ✅ Unsichere Zeichen grau, Rufzeichen-Spalte, Vergleichsdoku (#18, #14, #15)
+
+- ✅ Vertrauen je Zeichen aus Abstand zur Strich-Schwelle, Tempo-Einmessung
+  und Pegel; unter 0,5 grau in der GUI, klein im Terminal, dritte Spalte
+  im Decodier-Log (ADR-0023). Reine Metadaten: Matrix-Text in allen Fällen
+  identisch (Seed 1000/5000/7777: 97,7/96,7/98,4 %, alte Matrix 98,3 %).
+- ✅ Rufzeichen-Spalte zeigt nur so viele Knöpfe, wie hineinpassen (#14).
+- ✅ `docs/VERGLEICH.md`: Messung gegen fldigi aus #12 (#15).
+- Beta [`v0.1.0-beta12`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta12); Review ausstehend.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

@@ -9,6 +9,19 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 ## [Unreleased]
 
 ### Added
+- Unsicher erkannte Zeichen stehen im Text grau (Tooltip „unsicher
+  erkannt"): ein Element lag knapp an der Grenze Punkt/Strich, das Tempo
+  war nach einem Senderwechsel noch nicht eingemessen oder das Signal
+  schwach. Rufzeichen mit solchen Zeichen sagen es im Tooltip von Knopf
+  und Markierung. Der decodierte Text selbst ändert sich dadurch nicht
+  (ADR-0023, #18).
+- Im Terminal (`live`, `decode_wav`, `CWDecoder.exe --decode`) sind
+  unsichere Zeichen klein geschrieben (`CQ TEST OZ1hGT`).
+- Schnittstelle: `CWDecoder.last_conf`, Callback `on_char_conf(ch, conf)`,
+  `get_text_marked()`; Gewichte in `TimingConfig`/`DecoderConfig`
+  (`conf_*`).
+- `docs/VERGLEICH.md`: Vergleichsmessung gegen fldigi 4.2.03 (Testmatrix
+  und echte Aufnahmen, #12, #15).
 - Der CW Decoder ist Engine für das Fenster **CW Reader** von N1MM Logger+:
   Er stellt die XML-RPC-Schnittstelle von fldigi nach (Port 7367), N1MM
   zeigt den decodierten Text, markiert die Rufzeichen, und ein Klick dort
@@ -99,6 +112,11 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   erweiterte `CLAUDE.md` (Onboarding, Rollen, Definition of Done).
 
 ### Changed
+- Decodier-Log `cw_….txt` mit dritter Spalte `sekunde;zeichen;vertrauen`
+  (#18); ältere Logs haben zwei Spalten.
+- Die Rufzeichen-Spalte zeigt nur so viele Knöpfe, wie in die Fensterhöhe
+  passen, und rechnet bei Größenänderung neu; kein Knopf wird mehr unten
+  abgeschnitten (#14).
 - N1MM-Übergabe: Standard sind jetzt CW Reader (Engine) und Skimmer-Spot.
   Tippen ins Entry Window und Zwischenablage sind abschaltbare Wege
   (Standard aus) statt fester Standard; der Haken „vorher Alt+W" sitzt im

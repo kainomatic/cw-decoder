@@ -92,7 +92,18 @@ Welche Wege ein Klick auf ein Rufzeichen auslöst, steht unter „Übergabe…".
 Erkannte Rufzeichen stehen rechts als Knöpfe, neueste oben, mit Flagge und
 Landesname (DXCC-Entität aus `cty.dat`, ADR-0021); der Tooltip nennt
 Hauptpräfix, Kontinent und CQ-/ITU-Zone. Im Text sind sie markiert. Ein
-Klick auf Knopf oder Markierung übergibt das Rufzeichen an N1MM.
+Klick auf Knopf oder Markierung übergibt das Rufzeichen an N1MM. Die
+Spalte zeigt so viele Knöpfe, wie hineinpassen; ältere Rufzeichen stehen
+im Text und sind dort anklickbar.
+
+Unsicher erkannte Zeichen stehen im Text **grau** (ein Element lag knapp
+zwischen Punkt und Strich, das Tempo war noch nicht eingemessen oder das
+Signal schwach; ADR-0023). Dort lohnt es sich, selbst hinzuhören. Enthält
+ein Rufzeichen solche Zeichen, sagt es der Tooltip von Knopf und
+Markierung („enthält unsichere Zeichen"). Im Terminal (`live`,
+`decode_wav`) sind unsichere Zeichen klein geschrieben: `CQ TEST OZ1hGT`.
+
+![Unsichere Zeichen grau (Geber mit 15 % Jitter)](docs/img/unsicher-jitter15.png)
 
 ![Rufzeichen mit Flagge und Land](docs/img/rufzeichen-flaggen.png)
 
@@ -178,9 +189,17 @@ jeweilige Aufnahme entfernt.
 
 Im Textfenster beginnt nach einer Pause von mehr als 3 s oder wenn der Ton
 weg ist ein neuer Absatz. Bei aktiver Aufnahme entsteht neben der WAV eine
-gleichnamige `.txt` mit einer Zeile je Zeichen: `sekunde;zeichen` (Sekunde
-ab Aufnahmebeginn; Wortabstand als Leerzeichen, Absatz als `¶`). Damit lässt
-sich eine Stelle im Text in der Aufnahme wiederfinden.
+gleichnamige `.txt` mit einer Zeile je Zeichen: `sekunde;zeichen;vertrauen`
+(Sekunde ab Aufnahmebeginn, Vertrauen 0…1, unter 0,50 = unsicher;
+Wortabstand als Leerzeichen, Absatz als `¶`, beide ohne Vertrauen). Damit
+lässt sich eine Stelle im Text in der Aufnahme wiederfinden. Logs aus
+Versionen vor beta12 haben nur die ersten zwei Spalten.
+
+Eine einmalige Vergleichsmessung gegen fldigi 4.2.03, die übliche Engine
+hinter N1MMs CW Reader, steht in [`docs/VERGLEICH.md`](docs/VERGLEICH.md):
+Testmatrix 81,5 % gegen 97,7 %, echte Aufnahmen 30 % gegen 90 %. Die
+Unterschiede liegen vor allem bei Tempo-Einmessung, Rauschsperre und
+Wortgrenzen.
 
 ## N1MM Logger+
 
@@ -238,6 +257,8 @@ tests/
   gui_smoke.py   GUI-Rauchtest mit Fake-Soundkarte
 docs/adr/        Architekturentscheidungen
 docs/BUILD.md    EXE und Installer bauen
+docs/N1MM.md     Anbindung an N1MM Logger+
+docs/VERGLEICH.md  Vergleichsmessung gegen fldigi
 ```
 
 ## Stand / offene Punkte

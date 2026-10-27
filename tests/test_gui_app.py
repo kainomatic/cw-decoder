@@ -235,3 +235,85 @@ def test_rufzeichen_knoepfe_mit_flagge_und_land(app, monkeypatch):
     assert sent == ["OY1CT"] * 3
     # Tooltip der Markierung im Text nennt das Land
     assert "Färöer" in app._call_tooltip("x", "OY1CT")
+
+
+@requires_display
+@pytest.mark.gui
+def test_unsichere_zeichen_grau_und_rufzeichen_tooltip(app):
+    """Unsichere Zeichen tragen den Tag unsure; Rufzeichen-Markierung liegt
+    darüber, Knopf-Tooltip nennt unsichere Zeichen (ADR-0023, #18)."""
+    from cwdecoder import gui
+    g = app.gen
+    stream = [("C", 1.0), ("Q", 0.9), " ", ("O", 1.0), ("Z", 1.0), ("1", 0.2),
+              ("H", 0.3), ("G", 1.0), ("T", 1.0), " "]
+    for item in stream:
+        if item == " ":
+            app.msgs.put(("text", g, " "))
+        else:
+            app.msgs.put(("char", g, item))
+    app.msgs.put(("call", g, "OZ1HGT"))
+    app.msgs.put(("span", g, ("OZ1HGT", 2, 8)))
+    app._poll()
+    rng = app.text.tag_ranges(gui.UNSURE_TAG)
+    grey = "".join(app.text.get(rng[i], rng[i + 1]) for i in range(0, len(rng), 2))
+    assert grey == "1H"
+    assert app.text.tag_cget(gui.UNSURE_TAG, "foreground") == gui.UNSURE_FG
+    names = list(app.text.tag_names())
+    assert names.index(gui.CALL_TAG) > names.index(gui.UNSURE_TAG)   # Priorität
+    assert "OZ1HGT" in app.unsure_calls
+    tip = app.call_rows["OZ1HGT"]["tooltip"]
+    assert gui._TT_CALL_UNSURE in tip
+    assert all(w._cw_tooltip.text == tip for w in app.call_rows["OZ1HGT"]["widgets"])
+    assert app.call_rows["OZ1HGT"]["call"]["text"] == "OZ1HGT"     # Knopf-Text gleich
+    # sicheres Vorkommen bestätigt das Rufzeichen
+    for ch in "OZ1HGT":
+        app.msgs.put(("char", g, (ch, 1.0)))
+    app.msgs.put(("text", g, " "))
+    app.msgs.put(("span", g, ("OZ1HGT", 8, 14)))
+    app._poll()
+    assert "OZ1HGT" not in app.unsure_calls
+    assert gui._TT_CALL_UNSURE not in app.call_rows["OZ1HGT"]["tooltip"]
+
+
+def _calls_visible(app, height):
+    app.geometry(f"900x{height}")
+    app.update()
+    app._refit_calls()
+    app.update()
+    rows = [p["row"] for p in app.call_rows.values()]
+    frame_bottom = app.call_frame.winfo_rooty() + app.call_frame.winfo_height()
+    for r in rows:
+        assert r.winfo_rooty() + r.winfo_height() <= frame_bottom, (height, r)
+    cb = app.cb_n1mm
+    assert cb.winfo_ismapped()
+    win_bottom = app.winfo_rooty() + app.winfo_height()
+    assert cb.winfo_rooty() + cb.winfo_height() <= win_bottom
+    assert cb.winfo_rooty() >= frame_bottom
+    return len(rows)
+
+
+@requires_display
+@pytest.mark.gui
+def test_rufzeichen_spalte_nur_sichtbare_knoepfe(app):
+    """#14: Bei 400 px Höhe und 12 Rufzeichen ragt kein Knopf aus der Spalte,
+    der N1MM-Haken bleibt sichtbar; bei 900 px passen mehr Knöpfe."""
+    app.minsize(760, 300)
+    app.geometry("900x400")
+    app.update()
+    for k in range(12):
+        app._add_call(f"DL{k}ABC")
+    app.update()
+    n_small = _calls_visible(app, 400)
+    n_big = _calls_visible(app, 900)
+    assert 0 < n_small < 12
+    assert n_big > n_small
+    assert app.calls[0] == "DL11ABC" and len(app.calls) == 12
+    # neueste oben
+    assert list(app.call_rows)[0] == "DL11ABC"
+    # Größenänderung über <Configure> (entprellt) zieht die Liste nach
+    import time
+    app.geometry("900x400")
+    t_end = time.monotonic() + 1.0
+    while time.monotonic() < t_end:
+        app.update()
+    assert len(app.call_rows) == n_small

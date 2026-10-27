@@ -33,7 +33,7 @@ from . import error_report
 from . import utf8_console
 from . import updater
 from .__version__ import APP_NAME, CHANNEL, REPO_URL, __version__
-from .decoder import DecoderConfig
+from .decoder import DecoderConfig, UNSURE_CONF
 from .gui_error_report import ErrorReportDialog, open_folder_or_report
 from .gui_errors import report_exception
 from .gui_tooltip import attach_tooltip
@@ -137,6 +137,8 @@ _TT_CALL_BUTTON = ("Rufzeichen an N1MM übergeben (gewählte Wege unter „Über
                    "Spot, Entry Window, Zwischenablage).")
 _TT_CALL_TAG = ("Erkanntes Rufzeichen. Klick übergibt es an N1MM "
                 "(wie der Knopf rechts).")
+_TT_UNSURE_TAG = "unsicher erkannt"
+_TT_CALL_UNSURE = "enthält unsichere Zeichen"
 _TT_N1MM = ("N1MM Logger+ anbinden: Engine für N1MMs CW Reader (Port 7367), "
             "Frequenz per UDP 12060, Spots auf Telnet 127.0.0.1:7373. Belegt die "
             "Ports erst beim Einschalten.")
@@ -153,7 +155,10 @@ TEXT_FONT = ("Consolas", 16)
 CALL_TAG = "call"                  # Markierung erkannter Rufzeichen im Text
 CALL_TAG_PREFIX = "call:"          # zweiter Tag je Vorkommen: call:DL1ABC
 CALL_TAG_BG = "#ffe08a"
-CALL_MAX = 12                      # so viele Rufzeichen-Knöpfe
+UNSURE_TAG = "unsure"              # unsicher erkannte Zeichen (ADR-0023)
+UNSURE_FG = "#8a8a8a"
+CALL_MAX = 12                      # so viele Rufzeichen merkt sich die Spalte
+CALL_FIT_DELAY_MS = 80             # Neuberechnung der sichtbaren Knöpfe (entprellt)
 CALL_CHARS = 9                     # Breite der Rufzeichen-Spalte im Knopf (Zeichen)
 CALL_NAME_CHARS = 14               # Landesname, länger wird mit „…" gekürzt
 FLAG_W, FLAG_H = 24, 16            # cwdecoder/data/flags/<iso>.png
@@ -199,6 +204,10 @@ class App(tk.Tk):
         # erkannter Rufzeichen im Text
         self._tokens = {}
         self._tok_n = 0
+        self._unsure_tok = set()   # Nr. unsicherer Zeichen im Zeichenstrom
+        # Rufzeichen, deren Vorkommen bisher alle unsichere Zeichen enthielten
+        self.unsure_calls = set()
+        self._sure_calls = set()
         self.live = None
         self.stream = None
         self.thread = None
@@ -206,6 +215,9 @@ class App(tk.Tk):
         self.n1mm_note = None   # (Meldung, sichtbar bis time.monotonic())
         self.calls = []
         self.call_rows = {}     # Rufzeichen -> Widgets des Knopfs (Tests)
+        self._call_row_h = None   # gemessene Höhe eines Knopfs (Pixel, mit Abstand)
+        self._call_fit_id = None
+        self._shown_calls = 0
         self._flag_cache = {}   # ISO-Code -> PhotoImage; hält die Bilder gegen den GC
         self.devs = []
         # Generation des laufenden Decoders; wird bei Start und Stop erhöht.
@@ -321,11 +333,14 @@ class App(tk.Tk):
         self._call_bg = ttk.Style(self).lookup("TButton", "background") or self.cget("bg")
         self._bold_font = None
         self.call_frame.pack(fill="both", expand=True)
+        # nur so viele Knöpfe, wie hineinpassen (#14); neu bei Größenänderung
+        self.call_frame.bind("<Configure>", self._schedule_call_fit, add="+")
         # standardmäßig aus: Ports werden erst gebunden, wenn der Haken gesetzt wird
         self.n1mm_var = tk.BooleanVar(value=self.n1mm_on_start)
         cb = ttk.Checkbutton(bottom, text=_LBL_N1MM, variable=self.n1mm_var,
                              command=self._n1mm_changed)
         cb.pack(anchor="w", pady=(6, 0))
+        self.cb_n1mm = cb
         attach_tooltip(cb, _TT_N1MM)
         # Übergabewege (Dialog „Übergabe…“, ADR-0022)
         self.engine_var = tk.BooleanVar(value=self.engine_on_start)
@@ -431,8 +446,10 @@ class App(tk.Tk):
         # neuer Decoder = neuer Zeichenstrom des Spotters (Positionen ab 0)
         self._tokens = {}
         self._tok_n = 0
+        self._unsure_tok = set()
         self.live = LiveDecoder(fs, cfg,
                                 on_text=lambda s: self.msgs.put(("text", g, s)),
+                                on_char_conf=lambda ch, c: self.msgs.put(("char", g, (ch, c))),
                                 on_status=lambda d: self.msgs.put(("status", g, d)),
                                 on_call=lambda c: self.msgs.put(("call", g, c)),
                                 on_call_span=lambda c, a, b: self.msgs.put(("span", g, (c, a, b))))
@@ -678,13 +695,17 @@ class App(tk.Tk):
         if self.n1mm:
             self.n1mm.stop()
             self.n1mm = None
-        # Poll-Timer abmelden, sonst feuert er nach destroy() ins Leere
+        # Timer abmelden, sonst feuern sie nach destroy() ins Leere
         self.after_cancel(self._poll_id)
+        if self._call_fit_id is not None:
+            self.after_cancel(self._call_fit_id)
+            self._call_fit_id = None
         self.destroy()
 
     def _clear(self):
         self.text.delete("1.0", "end")
         self._tokens = {}       # Textindizes gelten nicht mehr
+        self._unsure_tok = set()
 
     def _auto_changed(self):
         self._save_config(fixed_freq=None if self.auto_var.get() else self.fixed_freq)
@@ -787,6 +808,12 @@ class App(tk.Tk):
                     self._insert_decoded(val, gen)
                     if self.n1mm:
                         self.n1mm.feed_text(val)
+                elif kind == "char":
+                    # Zeichen mit Vertrauen (ADR-0023); N1MM bekommt es unverändert
+                    ch, conf = val
+                    self._insert_decoded(ch, gen, conf)
+                    if self.n1mm:
+                        self.n1mm.feed_text(ch)
                 elif kind == "note":
                     self.text.insert("end", val)
                     self.text.see("end")
@@ -869,17 +896,22 @@ class App(tk.Tk):
         self.report_error(exc)
 
     # -- Rufzeichen im Text (#9) ------------------------------------------
-    def _insert_decoded(self, val, gen):
+    def _insert_decoded(self, val, gen, conf=None):
         """Decodiertes Stück anhängen und Zeichen für die Markierung merken.
 
         Der Spotter zählt jedes Zeichen außer Leerzeichen/Absätzen; dieselbe
-        Zählung hier ordnet seinen Positionen Textindizes zu."""
+        Zählung hier ordnet seinen Positionen Textindizes zu. conf < UNSURE_CONF
+        = unsicher erkannt: grau (ADR-0023)."""
         start = self.text.index("end-1c")
-        self.text.insert("end", val)
+        unsure = conf is not None and conf < UNSURE_CONF
+        self.text.insert("end", val, (UNSURE_TAG,) if unsure else ())
         if gen == self.gen and val.strip():
             self._tokens[self._tok_n] = (start, self.text.index("end-1c"))
+            if unsure:
+                self._unsure_tok.add(self._tok_n)
             self._tok_n += 1
             self._tokens.pop(self._tok_n - TOKENS_KEEP, None)
+            self._unsure_tok.discard(self._tok_n - TOKENS_KEEP)
         self.text.see("end")
 
     def _mark_call(self, call, a, b):
@@ -889,14 +921,46 @@ class App(tk.Tk):
             return      # schon aus dem Speicher oder Text gelöscht
         self.text.tag_add(CALL_TAG, first[0], last[1])
         self.text.tag_add(CALL_TAG_PREFIX + call, first[0], last[1])
+        self._note_call_confidence(call, any(n in self._unsure_tok for n in range(a, b)))
+
+    def _note_call_confidence(self, call, unsure):
+        """Rufzeichen gilt als unsicher, solange jedes Vorkommen unsichere
+        Zeichen hatte; ein sicheres Vorkommen bestätigt es (ADR-0023)."""
+        if unsure and call not in self._sure_calls:
+            self.unsure_calls.add(call)
+        elif not unsure:
+            self._sure_calls.add(call)
+            self.unsure_calls.discard(call)
+        parts = self.call_rows.get(call)
+        if parts is not None:
+            # Knopf gibt es schon (on_call kommt vor dem Vorkommen): Tooltip nachziehen
+            parts["tooltip"] = tip = self._call_tooltip(_TT_CALL_BUTTON, call)
+            for w in parts["widgets"]:
+                t = getattr(w, "_cw_tooltip", None)
+                if t is not None:
+                    t.set_text(tip)
 
     def _setup_call_tag(self):
         family, size = TEXT_FONT
+        self.text.tag_configure(UNSURE_TAG, foreground=UNSURE_FG)
         self.text.tag_configure(CALL_TAG, background=CALL_TAG_BG,
                                 font=(family, size, "bold"))
+        # Rufzeichen-Markierung liegt über dem Grau (Tag-Priorität)
+        self.text.tag_raise(CALL_TAG, UNSURE_TAG)
         self.text.tag_bind(CALL_TAG, "<Button-1>", self._call_clicked)
         self.text.tag_bind(CALL_TAG, "<Enter>", self._call_tag_enter)
         self.text.tag_bind(CALL_TAG, "<Leave>", self._call_tag_leave)
+        self.text.tag_bind(UNSURE_TAG, "<Enter>", self._unsure_tag_enter)
+        self.text.tag_bind(UNSURE_TAG, "<Leave>", self._call_tag_leave)
+
+    def _unsure_tag_enter(self, ev=None):
+        """Tooltip „unsicher erkannt"; auf einem Rufzeichen gilt dessen Tooltip."""
+        if ev is not None and self._call_at(ev.x, ev.y):
+            return
+        tip = getattr(self.text, "_cw_tooltip", None)
+        if tip is not None:
+            tip.set_text(_TT_UNSURE_TAG)
+            tip.schedule()
 
     def _call_at(self, x, y):
         idx = self.text.index(f"@{x},{y}")
@@ -941,12 +1005,16 @@ class App(tk.Tk):
             return None
 
     def _call_tooltip(self, base, call):
-        """Tooltip-Text plus Zeile „Landesname (Präfix, Kontinent, CQ, ITU)"."""
+        """Tooltip-Text plus Zeile „Landesname (Präfix, Kontinent, CQ, ITU)",
+        bei unsicher erkannten Rufzeichen dazu „enthält unsichere Zeichen"."""
+        text = base
         e = self._country(call)
-        if e is None:
-            return base
-        return base + "\n" + _MSG_CALL_COUNTRY.format(
-            name=e.short, prefix=e.prefix, continent=e.continent, cq=e.cq, itu=e.itu)
+        if e is not None:
+            text += "\n" + _MSG_CALL_COUNTRY.format(
+                name=e.short, prefix=e.prefix, continent=e.continent, cq=e.cq, itu=e.itu)
+        if call in self.unsure_calls:
+            text += "\n" + _TT_CALL_UNSURE
+        return text
 
     def _flag_image(self, iso):
         """PhotoImage der Flagge (gecacht); ohne iso oder Datei ein leeres
@@ -978,11 +1046,55 @@ class App(tk.Tk):
             return
         self.calls.insert(0, call)
         self.calls = self.calls[:CALL_MAX]
+        self._render_calls()
+
+    def _calls_fit(self):
+        """Wie viele Knöpfe passen in die Spalte (#14)? None = noch unbekannt
+        (Spalte nicht gezeichnet oder Knopfhöhe noch nicht gemessen)."""
+        avail = self.call_frame.winfo_height()
+        if self._call_row_h is None or avail <= 1:
+            return None
+        return max(0, avail // self._call_row_h)
+
+    def _render_calls(self):
+        """Knöpfe neu aufbauen, neueste oben, nur so viele wie sichtbar sind;
+        die älteren stehen im Text und sind dort anklickbar (#14)."""
         for wdg in self.call_frame.winfo_children():
             wdg.destroy()
         self.call_rows = {}
-        for cs in self.calls:
-            self._make_call_button(cs)
+        fit = self._calls_fit()
+        n = len(self.calls) if fit is None else min(fit, len(self.calls))
+        for cs in self.calls[:n]:
+            parts = self._make_call_button(cs)
+            if self._call_row_h is None:
+                parts["row"].update_idletasks()
+                self._call_row_h = parts["row"].winfo_reqheight() + 2   # pady=1
+                fit = self._calls_fit()
+                if fit is not None:
+                    n = min(fit, len(self.calls))
+                    if n == 0:
+                        parts["row"].destroy()
+                        self.call_rows = {}
+                        break
+            if len(self.call_rows) >= n:
+                break
+        self._shown_calls = len(self.call_rows)
+        if fit is None and self.calls:
+            self._schedule_call_fit()
+
+    def _schedule_call_fit(self, _ev=None):
+        """Nach Größenänderung entprellt neu rechnen (<Configure>)."""
+        if self._call_fit_id is not None:
+            self.after_cancel(self._call_fit_id)
+        self._call_fit_id = self.after(CALL_FIT_DELAY_MS, self._refit_calls)
+
+    def _refit_calls(self):
+        self._call_fit_id = None
+        fit = self._calls_fit()
+        if fit is None:
+            return
+        if min(fit, len(self.calls)) != self._shown_calls:
+            self._render_calls()
 
     def _make_call_button(self, call):
         """Knopf aus Labels: Rufzeichen links, rechts Flagge und Landesname.
@@ -1005,6 +1117,7 @@ class App(tk.Tk):
                                      width=CALL_NAME_CHARS, bg=bg, pady=0)
             parts["name"].pack(side="left", padx=(0, 4))
         widgets = [w for w in (row, lbl, parts["flag"], parts["name"]) if w is not None]
+        parts["widgets"] = widgets
         parts["tooltip"] = tip = self._call_tooltip(_TT_CALL_BUTTON, call)
 
         def paint(color):

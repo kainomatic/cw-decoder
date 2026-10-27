@@ -269,7 +269,10 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
 - Aus #17 damit erledigt: Super Check Partial; davor Ringpuffer (Instant
   Replay, letzte 30 s speichern, #19) und Vertrauensanzeige je Zeichen
   (#18).
-- Beta `v0.1.0-beta15`; Review ausstehend.
+- ✅ Review: kurzer Knopf (`IK2J`, nicht in SCP) wird durch das ganze
+  Rufzeichen ersetzt; kommt mit der nächsten Beta.
+- Beta [`v0.1.0-beta15`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta15);
+  Review bestanden, #23 geschlossen.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

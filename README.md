@@ -103,7 +103,8 @@ SCP" und nennt ähnliche bekannte Rufzeichen („ähnlich: ES3YJ"). Gibt es
 genau einen, bietet ein **Rechtsklick** auf den Knopf „ES3YJ übernehmen"
 an; ersetzt wird nie automatisch. Rufzeichen mit Pausen innerhalb
 (`IK2J E T`) werden zusammengesetzt, wenn die Verkettung in SCP steht
-oder schon einmal ganz gehört wurde (ADR-0026).
+oder schon einmal ganz gehört wurde; ein vorher gemeldeter Teil (`IK2J`)
+wird dann durch das ganze Rufzeichen ersetzt (ADR-0026).
 
 Wörter, zwischen denen kein Wortabstand zu hören war (`TNXFERFBCALL`),
 trennt ein Wörterbuch aus QSO-Floskeln, Rapporten und Rufzeichen:

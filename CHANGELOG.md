@@ -37,7 +37,9 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 - Rufzeichen mit Pausen innerhalb (`IK2J E T`) werden zusammengesetzt,
   wenn die Verkettung in SCP steht oder schon einmal ganz gehört wurde.
   Rufzeichen, die nicht in SCP stehen, erscheinen dadurch ein bis drei
-  Zeichen später als Knopf.
+  Zeichen später als Knopf. Wurde vorher schon der Teil gemeldet (`IK2J`)
+  und steht er nicht in SCP, ersetzt das ganze Rufzeichen dessen Knopf
+  am selben Platz.
 - **Zusammengeklebte Wörter** werden per Wörterbuch getrennt
   (`TNXFERFBCALL` → `TNX·FER·FB·CALL`, `RST5995NN5NN` →
   `RST·599·5NN·5NN`). Der graue Mittelpunkt zeigt einen ergänzten, nicht

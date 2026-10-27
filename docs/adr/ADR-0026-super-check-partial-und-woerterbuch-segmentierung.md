@@ -47,6 +47,14 @@ den rohen Decodertext, das Decodier-Log ebenso.
   gehört**. Grund: IK2JET steht nicht in der SCP vom 23.10.2026; in
   `194453` gibt er sein Rufzeichen aber einmal ohne Pausen. Danach wird
   jedes `IK2J E T` als IK2JET gezählt, vorher als IK2J.
+- **Kurzen Knopf ersetzen** (Entscheidung DF1DS im Review): Wird ein
+  Rufzeichen gemeldet (`IK2JET`) und steht schon ein kürzerer Knopf, der
+  ein Präfix davon ist und nicht selbst in SCP steht (`IK2J`), ersetzt der
+  ganze den kurzen: gleicher Platz in der Spalte, Zähler übernommen, die
+  Markierungen des kurzen im Text bleiben. Steht der kurze in SCP, bleiben
+  beide (zwei Stationen, z. B. DJ7PR und DJ7PRK); eine längere Form, die
+  selbst in SCP steht, wird dann auch nicht mehr als „verlängertes
+  bekanntes Rufzeichen" verschluckt.
 - Das Warten verzögert nur Rufzeichen, die nicht in SCP stehen, und nur,
   bis das Folgewort mehr als zwei Zeichen oder eine Ziffer hat (bzw. bis
   zur nächsten Pause).

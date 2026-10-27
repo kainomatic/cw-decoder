@@ -7,6 +7,18 @@ from .dsp import (Decimator, ToneTracker, TrackerConfig, Envelope,
                   Thresholder, ThresholdConfig)
 from .timing import TimingDecoder, TimingConfig
 
+# Zeichen mit Vertrauen darunter gelten als unsicher (GUI grau, Terminal
+# klein geschrieben; ADR-0023)
+UNSURE_CONF = 0.5
+
+
+def mark_unsure(chars, confs, thr: float = UNSURE_CONF) -> str:
+    """Text aus Zeichen und Vertrauen; unsichere Zeichen klein geschrieben
+    (Ziffern und Satzzeichen haben keine Kleinform und bleiben gleich).
+    confs[i] None = kein Zeichen (Leerzeichen, Absatz)."""
+    return "".join(ch.lower() if conf is not None and conf < thr else ch
+                   for ch, conf in zip(chars, confs))
+
 
 @dataclass
 class DecoderConfig:
@@ -23,6 +35,12 @@ class DecoderConfig:
     bw_max_hz: float = 150.0
     # Absatz im Live-Text nach so langer Pause (oder bei Tonverlust)
     paragraph_gap_ms: float = 3000.0
+    # Vertrauen je Zeichen (ADR-0023): Abschlag bei geringem Pegelabstand.
+    # Unter conf_snr_full_db (Thresholder.snr_db) sinkt der Faktor linear
+    # bis conf_snr_min bei conf_snr_low_db (= Squelch-Schwelle)
+    conf_snr_low_db: float = 10.0
+    conf_snr_full_db: float = 16.0
+    conf_snr_min: float = 0.7
 
 
 class CWDecoder:
@@ -34,10 +52,13 @@ class CWDecoder:
         on_paragraph()  Absatz: Pause > paragraph_gap_ms oder Tonverlust, und
                         seit dem letzten Absatz kam Text (nur für die
                         Anzeige; get_text() enthält keine Absätze)
+        on_char_conf(ch, conf)  zusätzlich zu on_char: dasselbe Zeichen mit
+                        Vertrauen 0..1 (ADR-0023); last_conf ist schon vor
+                        on_char gesetzt
     """
 
     def __init__(self, fs_in: int, cfg: DecoderConfig = None, on_char=None, on_space=None,
-                 on_paragraph=None):
+                 on_paragraph=None, on_char_conf=None):
         self.cfg = cfg or DecoderConfig()
         c = self.cfg
         self.fs_in = fs_in
@@ -47,18 +68,42 @@ class CWDecoder:
         self.envelope = Envelope(self.fs, cutoff_hz=50.0, env_rate=c.env_rate)
         self.thresh = Thresholder(self.envelope.env_rate, c.threshold)
         self.text = []
+        self.confs = []          # Vertrauen je Eintrag in text (None = Leerzeichen)
+        self.last_conf = 1.0     # Vertrauen des zuletzt ausgegebenen Zeichens
         self.t_ms = 0.0
-        self._out_char = on_char or (lambda ch: self.text.append(ch))
-        self._out_space = on_space or (lambda: self.text.append(" "))
+        self._out_char = on_char or self._append_char
+        self._out_char_conf = on_char_conf or (lambda ch, conf: None)
+        self._out_space = on_space or self._append_space
         self._out_paragraph = on_paragraph or (lambda: None)
         self._since_paragraph = False   # Text seit dem letzten Absatz?
         self.timing = TimingDecoder(c.timing, on_char=self._on_char, on_space=self._out_space)
         self._update_bandwidth()
 
     # ------------------------------------------------------------------
+    def _append_char(self, ch):
+        self.text.append(ch)
+        self.confs.append(self.last_conf)
+
+    def _append_space(self):
+        self.text.append(" ")
+        self.confs.append(None)
+
+    def char_confidence(self) -> float:
+        """Vertrauen des gerade ausgegebenen Zeichens: Timing-Maß mal
+        Pegel-Abschlag (ADR-0023). Beeinflusst die Decodierung nicht."""
+        c = self.cfg
+        conf = self.timing.last_conf
+        span = c.conf_snr_full_db - c.conf_snr_low_db
+        if span > 0:
+            frac = float(np.clip((self.thresh.snr_db - c.conf_snr_low_db) / span, 0.0, 1.0))
+            conf *= c.conf_snr_min + (1.0 - c.conf_snr_min) * frac
+        return conf
+
     def _on_char(self, ch):
         self._since_paragraph = True
+        self.last_conf = self.char_confidence()
         self._out_char(ch)
+        self._out_char_conf(ch, self.last_conf)
 
     def _paragraph(self):
         if self._since_paragraph:
@@ -148,3 +193,7 @@ class CWDecoder:
 
     def get_text(self) -> str:
         return "".join(self.text)
+
+    def get_text_marked(self) -> str:
+        """Wie get_text(), unsichere Zeichen klein (Terminal, ADR-0023)."""
+        return mark_unsure(self.text, self.confs)

@@ -19,7 +19,7 @@ import time
 import numpy as np
 
 from . import utf8_console
-from .decoder import CWDecoder, DecoderConfig
+from .decoder import CWDecoder, DecoderConfig, UNSURE_CONF
 from .callsign import CallsignSpotter
 
 log = logging.getLogger(__name__)
@@ -97,7 +97,7 @@ def open_stream(device, callback, preferred=(8000, 48000, 44100, 16000)):
 
 class LiveDecoder:
     def __init__(self, fs, cfg=None, on_text=None, on_status=None, on_call=None,
-                 on_audio_warning=None, on_call_span=None):
+                 on_audio_warning=None, on_call_span=None, on_char_conf=None):
         self.q = queue.Queue()
         # Meldungen der Soundkarte; Terminal gibt sie auf stderr aus
         self.on_audio_warning = on_audio_warning
@@ -107,7 +107,10 @@ class LiveDecoder:
         # on_text bekommt jedes Zeichen einzeln (Prosigns als ein Stück),
         # dazu " " und eine Leerzeile als Absatz; on_call_span(call, start,
         # end) zählt nur die Zeichen ohne Leerzeichen/Absätze (Rufzeichen
-        # im Text markieren)
+        # im Text markieren). Mit on_char_conf(ch, conf) gehen die Zeichen
+        # samt Vertrauen 0..1 dorthin statt an on_text (ADR-0023);
+        # Leerzeichen und Absätze bleiben bei on_text
+        self.on_char_conf = on_char_conf
         self.spotter = CallsignSpotter(on_call=on_call, on_span=on_call_span)
         self.dec = CWDecoder(fs, cfg, on_char=self._char, on_space=self._space,
                              on_paragraph=self._paragraph)
@@ -116,14 +119,18 @@ class LiveDecoder:
         self.recorder = None
         self.decode_log = None   # DecodeLog neben der Aufnahme (optional)
 
-    def _log(self, token):
+    def _log(self, token, conf=None):
         if self.decode_log is not None:
-            self.decode_log.write(self.dec.t_ms / 1000.0, token)
+            self.decode_log.write(self.dec.t_ms / 1000.0, token, conf)
 
     def _char(self, ch):
-        self.on_text(ch)
+        conf = self.dec.last_conf      # vor on_char gesetzt
+        if self.on_char_conf is not None:
+            self.on_char_conf(ch, conf)
+        else:
+            self.on_text(ch)
         self.spotter.feed(ch)
-        self._log(ch)
+        self._log(ch, conf)
 
     def _space(self):
         self.on_text(" ")
@@ -169,18 +176,21 @@ class LiveDecoder:
 
 class DecodeLog:
     """Decodier-Log neben einer Aufnahme: je Zeichen eine Zeile
-    `sekunde;zeichen` (Sekunde relativ zum Aufnahmebeginn, 2 Nachkommastellen).
-    Wortabstand = Leerzeichen, Absatz = `¶`. Dient dazu, eine Stelle im Text
-    der passenden Stelle in der WAV zuzuordnen. Zeit = Ausgabezeitpunkt des
-    Zeichens (kurz nach dessen Ende).
+    `sekunde;zeichen;vertrauen` (Sekunde relativ zum Aufnahmebeginn,
+    Vertrauen 0..1, beides mit 2 Nachkommastellen; ADR-0023). Wortabstand =
+    Leerzeichen, Absatz = `¶`, beide ohne Vertrauen (dritte Spalte leer).
+    Dient dazu, eine Stelle im Text der passenden Stelle in der WAV
+    zuzuordnen. Zeit = Ausgabezeitpunkt des Zeichens (kurz nach dessen Ende).
+    Logs von vor beta12 haben nur zwei Spalten.
     """
     PARAGRAPH = "¶"
 
     def __init__(self, path):
         self.f = open(path, "w", encoding="utf-8", newline="\n")
 
-    def write(self, t_s: float, token: str):
-        self.f.write(f"{t_s:.2f};{token}\n")
+    def write(self, t_s: float, token: str, conf: float = None):
+        c = "" if conf is None else f"{conf:.2f}"
+        self.f.write(f"{t_s:.2f};{token};{c}\n")
 
     def close(self):
         self.f.close()
@@ -270,11 +280,16 @@ def main():
                          f"{st['wpm']:3.0f} WPM  BW {st['bw_hz']:3.0f} Hz]  ")
         sys.stderr.flush()
 
+    def on_char_conf(ch, conf):
+        # unsichere Zeichen klein (ADR-0023)
+        on_text(ch.lower() if conf < UNSURE_CONF else ch)
+
     def on_call(call):
         sys.stderr.write(f"\n[Rufzeichen: {call_with_country(call)}]\n")
 
     live = LiveDecoder(fs, cfg, on_text=on_text, on_status=on_status, on_call=on_call,
-                       on_audio_warning=lambda m: print(f"[audio] {m}", file=sys.stderr))
+                       on_audio_warning=lambda m: print(f"[audio] {m}", file=sys.stderr),
+                       on_char_conf=on_char_conf)
     if a.record:
         log.info("Aufnahme: %s", a.record)
         live.recorder = WavRecorder(a.record, fs)

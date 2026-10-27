@@ -54,10 +54,11 @@ def test_decodier_log(tmp_path):
     run(two_overs(5.0), live.dec)
     live.decode_log.close()
     lines = (tmp_path / "cw_20261026_231339_217.txt").read_text(encoding="utf-8").splitlines()
-    rows = [ln.split(";", 1) for ln in lines]
-    times = [float(t) for t, _ in rows]
-    tokens = [tok for _, tok in rows]
-    assert all(len(t.split(".")[1]) == 2 for t, _ in rows)      # 2 Nachkommastellen
+    rows = [ln.split(";") for ln in lines]      # sekunde;zeichen;vertrauen (#18)
+    assert all(len(r) == 3 for r in rows)
+    times = [float(r[0]) for r in rows]
+    tokens = [r[1] for r in rows]
+    assert all(len(r[0].split(".")[1]) == 2 for r in rows)      # 2 Nachkommastellen
     assert times == sorted(times) and times[0] > 0.5
     assert "".join(tokens).replace("¶", "|").startswith("CQ TEST DE DL1ABC K")
     assert tokens.count("¶") == 1 and " " in tokens

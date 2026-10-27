@@ -60,7 +60,8 @@ def main(argv=None):
     if a.freq:
         cfg.tracker.fixed_freq = a.freq
     dec, log = decode_signal(x, fs, a.block, cfg, trace=a.trace)
-    text = dec.get_text()
+    # unsichere Zeichen klein (ADR-0023); --expect vergleicht ohne Groß/klein
+    text = dec.get_text_marked()
     s = dec.status
     print(f"Ton: {s['freq_hz']:.0f} Hz  SNR: {s['snr_db']:.0f} dB  Tempo: {s['wpm']:.0f} WPM")
     print("Text:", text)

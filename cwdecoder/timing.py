@@ -34,6 +34,14 @@ class TimingConfig:
     history: int = 24             # Fenster für die Geschwindigkeitsschätzung
     adapt: float = 0.5            # Nachführung der Punktlänge (0..1)
     initial_dit_ms: float = 60.0  # Startwert (20 WPM), bis genug Daten da sind
+    # Vertrauen je Zeichen (ADR-0023), nur Metadaten, ändert keine Entscheidung:
+    # Ein Element ist voll sicher, wenn seine Länge mindestens um diesen
+    # Faktor von der Strich-Schwelle entfernt ist (log. Abstand)
+    conf_margin_ref: float = 1.6
+    # Tempo noch nicht eingemessen: so viele Töne seit reset_tempo vor dem
+    # Zeichen, bis kein Abschlag mehr gilt; Faktor beim ersten Zeichen
+    conf_warmup_marks: int = 8
+    conf_warmup_min: float = 0.6
 
 
 class TimingDecoder:
@@ -53,6 +61,7 @@ class TimingDecoder:
         self.char_emitted = True   # wurde das Zeichen für die aktuelle Pause schon ausgegeben?
         self.space_emitted = True
         self.n_marks = 0
+        self.last_conf = 1.0       # Vertrauen des zuletzt ausgegebenen Zeichens
 
     # ------------------------------------------------------------------
     @property
@@ -214,6 +223,26 @@ class TimingDecoder:
         thr = self._dash_threshold()
         return "".join("." if m < thr else "-" for m in marks)
 
+    def confidence(self, marks, ch: str) -> float:
+        """Vertrauen 0..1 in ein Zeichen aus seinen Tondauern (ADR-0023).
+
+        Hauptmaß ist der kleinste logarithmische Abstand eines Elements zur
+        Strich-Schwelle (knapp an der Schwelle = unsicher). Solange das Tempo
+        nach reset_tempo noch nicht eingemessen ist, gilt ein Abschlag.
+        Unbekannte Symbole ('*') haben 0. Liest nur, ändert keinen Zustand.
+        """
+        c = self.cfg
+        if not marks or ch == "*":
+            return 0.0
+        thr = self._dash_threshold()
+        dist = min(abs(np.log(m / thr)) for m in marks)
+        conf = float(np.clip(dist / np.log(c.conf_margin_ref), 0.0, 1.0))
+        prior = self.n_marks - len(marks)   # Töne vor diesem Zeichen
+        if c.conf_warmup_marks > 0 and prior < c.conf_warmup_marks:
+            frac = max(prior, 0) / c.conf_warmup_marks
+            conf *= c.conf_warmup_min + (1.0 - c.conf_warmup_min) * frac
+        return conf
+
     def gap(self, duration_ms: float):
         """Eine Pause (Tastung aus) ist zu Ende, weil ein neuer Ton beginnt."""
         c = self.cfg
@@ -266,6 +295,9 @@ class TimingDecoder:
         if not self.char_emitted and gap_ms >= c.char_thr * self.dit_ms:
             self.symbol = self._classify(self.cur_marks)
             ch = decode_symbol(self.symbol)
+            if ch:
+                # vor dem Aufruf setzen: on_char liest es (CWDecoder.last_conf)
+                self.last_conf = self.confidence(self.cur_marks, ch)
             self.symbol = ""
             self.cur_marks = []
             self.char_emitted = True

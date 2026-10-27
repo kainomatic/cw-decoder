@@ -69,7 +69,7 @@ def render(text: str, fs: int = 8000, wpm: float = 25, pitch: float = 700.0,
            farnsworth_wpm: float = None, weight: float = 1.0, jitter: float = 0.0,
            rise_ms: float = 5.0, lead_s: float = 1.0, tail_s: float = 1.0,
            ssb_filter: bool = True, rx_filter_hz: float = None, seed: int = None,
-           char_gap: float = 3.0):
+           char_gap: float = 3.0, dropouts: float = 0.0):
     """Erzeugt ein float32-Signal in [-1, 1].
 
     rx_filter_hz: simuliert ein schmales Empfänger-CW-Filter dieser
@@ -77,6 +77,10 @@ def render(text: str, fs: int = 8000, wpm: float = 25, pitch: float = 700.0,
     Signal, Rauschen und QRM gemeinsam (wie im Funkgerät). Das Rauschen
     bekommt dadurch selbst eine "Linie" im Spektrum, siehe ADR zur
     Rauschkategorie. snr_db bleibt auf 2,4 kHz bezogen.
+
+    dropouts: Anteil der Striche (0..1) mit einem Aussetzer von 10-25 ms
+    kurz vor dem Ende (Rest 8-20 ms), wie in echten Aufnahmen beobachtet
+    (Fading/AGC, ADR-0025).
     """
     rng = np.random.default_rng(seed)
     seq = keying_pattern(text, wpm, farnsworth_wpm, weight, jitter, rng, char_gap=char_gap)
@@ -88,10 +92,16 @@ def render(text: str, fs: int = 8000, wpm: float = 25, pitch: float = 700.0,
     # Tastsignal (0/1) mit raised-cosine Flanken
     key = np.zeros(n)
     pos = int(lead_s * fs)
+    dit_s = 1.2 / wpm
     for on, dur in seq:
         m = int(round(dur * fs))
         if on:
             key[pos:pos + m] = 1.0
+            if dropouts > 0 and dur > 2 * dit_s and rng.random() < dropouts:
+                rest = int(rng.uniform(0.008, 0.020) * fs)
+                gap = int(rng.uniform(0.010, 0.025) * fs)
+                end = pos + m - rest
+                key[max(pos, end - gap):end] = 0.0
         pos += m
     if rise_ms > 0:
         r = max(1, int(rise_ms * fs / 1000))
@@ -180,6 +190,8 @@ def main():
     p.add_argument("--weight", type=float, default=1.0)
     p.add_argument("--jitter", type=float, default=0.0)
     p.add_argument("--char-gap", type=float, default=3.0, help="Zeichenabstand in Punkten")
+    p.add_argument("--dropouts", type=float, default=0.0,
+                   help="Anteil der Striche mit Aussetzer kurz vor dem Ende (0..1)")
     p.add_argument("--rx-filter", type=float, default=None, help="Empfänger-CW-Filter in Hz (z. B. 100)")
     p.add_argument("--seed", type=int, default=None)
     a = p.parse_args()
@@ -187,7 +199,7 @@ def main():
                  snr_db=a.snr, qsb_hz=a.qsb, qsb_depth=a.qsb_depth, qrm_hz=a.qrm,
                  qrm_db=a.qrm_db, farnsworth_wpm=a.farnsworth, weight=a.weight,
                  jitter=a.jitter, rx_filter_hz=a.rx_filter, seed=a.seed,
-                 char_gap=a.char_gap)
+                 char_gap=a.char_gap, dropouts=a.dropouts)
     write_wav(a.out, sig, a.fs)
     print(f"geschrieben: {a.out} ({len(sig) / a.fs:.1f} s)")
 

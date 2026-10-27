@@ -49,6 +49,17 @@ class TimingConfig:
     # (Stationswechsel, bevor die Zeichenschwelle nachgelernt hat)
     char_split: bool = True
     char_split_ratio: float = 1.5
+    # Störmarks (ADR-0025), nur bei eingemessenem Tempo (n_marks >=
+    # conf_warmup_marks): Ein Ton kürzer als glitch_max_dit Punkte wird mit
+    # dem Nachbarton verschmolzen, wenn die Pause dazwischen kürzer als
+    # glitch_gap_dit Punkte ist (Aussetzer am Rand eines Elements)
+    glitch_filter: bool = True
+    glitch_max_dit: float = 0.4
+    glitch_gap_dit: float = 0.5
+    # Sonst verwerfen (Knackser), außer das Zeichen würde dadurch leer.
+    # Aus: Bei Fading sind echte Punkte so kurz und gingen verloren
+    # (Matrix und Aufnahmen schlechter, ADR-0025)
+    glitch_discard: bool = False
     word_thr: float = 5.0         # Pause länger als word_thr * dit => Wortende
     history: int = 24             # Fenster für die Geschwindigkeitsschätzung
     adapt: float = 0.5            # Nachführung der Punktlänge (0..1)
@@ -81,6 +92,11 @@ class TimingDecoder:
         self.cur_marks = []        # Tondauern des laufenden Zeichens
         self.cur_gaps = []         # Pausen zwischen diesen Tönen
         self._dropped_ms = 0.0     # zuletzt verworfener Störimpuls
+        # Störmark-Filter (ADR-0025)
+        self._last_gap = None      # zuletzt gelernte Pause (zum Zurücknehmen)
+        self._pend_glitch = None   # kurzer Ton, über den die nächste Pause entscheidet
+        self._prefix_ms = 0.0      # Störmark + Pause, die dem nächsten Ton zugeschlagen werden
+        self._carry_ms = 0.0       # Pause + verworfener Störmark, zählen zur nächsten Pause
         self.char_emitted = True   # wurde das Zeichen für die aktuelle Pause schon ausgegeben?
         self.space_emitted = True
         self.n_marks = 0
@@ -111,6 +127,7 @@ class TimingDecoder:
         self.symbol = ""
         self.cur_marks = []
         self.cur_gaps = []
+        self._clear_glitch_state()
         self.char_emitted = True
         self.space_emitted = True
 
@@ -214,9 +231,86 @@ class TimingDecoder:
         return float(np.clip(val, c.dit_min_ms, c.dit_max_ms))
 
     # ------------------------------------------------------------------
+    def _clear_glitch_state(self):
+        self._last_gap = None
+        self._pend_glitch = None
+        self._prefix_ms = 0.0
+        self._carry_ms = 0.0
+
+    def _filter_active(self) -> bool:
+        """Störmark-Filter nur bei eingemessenem Tempo (nie bei frischem
+        Tempo nach reset_tempo)."""
+        return self.n_marks >= self.cfg.conf_warmup_marks
+
     def mark(self, duration_ms: float):
         """Ein Ton (Tastung an) ist zu Ende."""
         c = self.cfg
+        if self._pend_glitch is not None:
+            # zwei Töne ohne gelernte Pause dazwischen: wie kurze Pause
+            self._resolve_glitch(0.0)
+        if self._prefix_ms:
+            duration_ms += self._prefix_ms
+            self._prefix_ms = 0.0
+        elif (c.glitch_filter and self._filter_active()
+              and duration_ms < c.glitch_max_dit * self.dit_ms):
+            lg = self._last_gap
+            if self.cur_marks and lg is not None and lg[0] < c.glitch_gap_dit * self.dit_ms:
+                # kurze Pause davor: Aussetzer am Ende des vorigen Elements
+                self._undo_gap(lg)
+                self._extend_last(lg[0] + duration_ms)
+                return
+            # über Verschmelzen oder Verwerfen entscheidet die nächste Pause
+            self._pend_glitch = (duration_ms, lg if self.cur_marks else None,
+                                 bool(self.cur_marks))
+            self._last_gap = None
+            return
+        self._mark_normal(duration_ms)
+
+    def _extend_last(self, extra_ms: float):
+        """Den letzten Ton des laufenden Zeichens verlängern (Verschmelzen)."""
+        self._last_gap = None
+        self.cur_marks[-1] += extra_ms
+        if self.marks:
+            self.marks[-1] += extra_ms
+        self.symbol = self._classify(self.cur_marks)
+
+    def _undo_gap(self, rec):
+        """Eine schon gelernte Pause innerhalb des Zeichens zurücknehmen."""
+        dur, in_all, in_gaps, in_cur = rec
+        if in_all and self.all_gaps and self.all_gaps[-1] == dur:
+            self.all_gaps.pop()
+            self._update_char_threshold()
+        if in_gaps and self.gaps and self.gaps[-1] == dur:
+            self.gaps.pop()
+        if in_cur and self.cur_gaps:
+            self.cur_gaps.pop()
+        self._last_gap = None
+
+    def _resolve_glitch(self, gap_ms: float) -> bool:
+        """Entscheidet über einen zurückgehaltenen kurzen Ton anhand der
+        folgenden Pause. True: Pause gehört zum nächsten Ton (verschmolzen)."""
+        c = self.cfg
+        d, lg, had_marks = self._pend_glitch
+        self._pend_glitch = None
+        if gap_ms < c.glitch_gap_dit * self.dit_ms:
+            self._prefix_ms = d + gap_ms        # Aussetzer am Anfang des nächsten Elements
+            return True
+        if had_marks and c.glitch_discard:
+            # Knackser in der Pause nach einem Element: verwerfen; die Pause
+            # davor, der Knackser und die Pause danach sind eine Pause
+            carry = d
+            if lg is not None:
+                self._undo_gap(lg)
+                carry += lg[0]
+            self._carry_ms += carry
+            return False
+        # das Zeichen bestünde nur aus dem Störmark: nicht filtern
+        self._mark_normal(d)
+        return False
+
+    def _mark_normal(self, duration_ms: float):
+        c = self.cfg
+        self._last_gap = None
         if duration_ms < max(c.dit_min_ms * 0.5, 0.3 * self.dit_ms):
             self._dropped_ms = duration_ms
             return  # Störimpuls: viel kürzer als ein Punkt beim aktuellen Tempo
@@ -276,14 +370,22 @@ class TimingDecoder:
         c = self.cfg
         if duration_ms < c.dit_min_ms * 0.5:
             return
+        if self._pend_glitch is not None and self._resolve_glitch(duration_ms):
+            return                       # Pause gehört zum nächsten Ton
+        if self._carry_ms:
+            duration_ms += self._carry_ms
+            self._carry_ms = 0.0
         # erst mit der bisherigen Schwelle entscheiden (dieselbe, mit der
         # poll() in dieser Pause schon ausgegeben haben kann), dann lernen
         char_thr = self._char_threshold()
+        in_all = in_gaps = in_cur = False
         if duration_ms < self._word_threshold():
             self.all_gaps.append(duration_ms)
             self._update_char_threshold()
+            in_all = True
         if duration_ms < char_thr:
             self.gaps.append(duration_ms)
+            in_gaps = True
             if self.cur_marks:
                 if len(self.cur_gaps) == len(self.cur_marks):
                     # Pause nach einem verworfenen Störimpuls: zählt mit ihm
@@ -291,7 +393,10 @@ class TimingDecoder:
                     self.cur_gaps[-1] += self._dropped_ms + duration_ms
                 else:
                     self.cur_gaps.append(duration_ms)
+                    in_cur = True
+            self._last_gap = (duration_ms, in_all, in_gaps, in_cur)
             return
+        self._last_gap = None
         # Zeichen-/Wortende; falls per Timeout noch nicht ausgegeben:
         self._flush(duration_ms, char_thr)
         if duration_ms < 12 * self.dit_ms:
@@ -387,7 +492,15 @@ class TimingDecoder:
     def poll(self, gap_so_far_ms: float):
         """Wird regelmäßig aufgerufen, solange kein Ton anliegt (Live-Ausgabe
         ohne auf den nächsten Ton zu warten)."""
-        self._flush(gap_so_far_ms)
+        if (self._pend_glitch is not None
+                and gap_so_far_ms >= max(1.0, self.cfg.glitch_gap_dit) * self.dit_ms):
+            # Die Pause ist sicher lang: Störmark jetzt entscheiden, damit das
+            # Zeichen nicht erst mit dem nächsten Ton erscheint. Erst ab einem
+            # Punkt, weil die laufende Pause die Entprellzeit (<= 0,15 Punkt)
+            # noch enthält; so fällt die Entscheidung wie in gap() aus, egal
+            # an welcher Blockgrenze poll() kommt
+            self._resolve_glitch(gap_so_far_ms)
+        self._flush(gap_so_far_ms + self._carry_ms)
 
     def _flush(self, gap_ms: float, char_thr: float = None):
         if char_thr is None:
@@ -425,5 +538,8 @@ class TimingDecoder:
         return [a, b]
 
     def force_flush(self):
-        """Am Ende einer Datei alles ausgeben."""
+        """Am Ende einer Datei (oder bei Tonverlust) alles ausgeben."""
+        if self._pend_glitch is not None:
+            self._resolve_glitch(1e9)
+        self._clear_glitch_state()
         self._flush(1e9)

@@ -8,7 +8,29 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 
 ## [Unreleased]
 
+### Changed
+- **Geber mit engen Zeichenabständen** werden gelesen: Die Pause, ab der
+  ein Zeichen endet, passt sich dem Geber an (vorher fest 2,2 Punkte).
+  Zeichen, die bisher zu `*` oder falschen Sonderzeichen verschmolzen
+  (`*X` statt `4HX`, `LO?` statt `LOUD`, `TACC<AR>E` statt `TAKE CARE`),
+  kommen jetzt getrennt. Ein ungültiges Symbol wird zusätzlich an seiner
+  längsten Pause geteilt, wenn beide Teile gültige Zeichen sind
+  (ADR-0025, #21).
+- **Kurze Aussetzer** am Ende oder Anfang eines Strichs (Fading, 10–25 ms)
+  erzeugen keinen zusätzlichen Punkt mehr, sobald das Tempo eingemessen
+  ist (ADR-0025, #21).
+- Schalter in `TimingConfig`: `char_thr_adaptive`, `char_split`,
+  `glitch_filter` (alle an), `glitch_discard` (aus); in
+  `ThresholdConfig`: `carrier_needs_key` (aus, Teppich-Regel wie bisher).
+- Testmatrix Seed 1000/5000/7777: 97,9/97,2/98,5 % (vorher
+  97,7/96,7/98,4 %), alte Matrix 98,3 %, Rauschen 100 %.
+
 ### Added
+- Testdaten vom Shack-Test 27.10. (IN3TWX, IK2JET, GI5RSS, LA8IG) in
+  `tests/test_real.py`; `tests/real_baseline.json` hält den Volltext aller
+  Aufnahmen, `run_matrix.py --real` zeigt die Ähnlichkeit dazu.
+- `cwdecoder.gen`: `--char-gap` (Zeichenabstand in Punkten) und
+  `--dropouts` (Aussetzer in Strichen).
 - **Letzte 30 s speichern** (Strg+S): Der Decoder hält die letzten 60 s
   Audio im Speicher. Ein Klick sichert die letzten 30 s als
   `cw_…_letzte30s.wav` im Aufnahmen-Ordner, daneben den decodierten Text

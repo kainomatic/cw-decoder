@@ -143,12 +143,13 @@ im Playbook (§2, §4). Projektspezifisch:
 - **Testmatrix bleibt Pflicht** vor und nach jeder Änderung an
   `cwdecoder/dsp.py`, `timing.py` oder `decoder.py`:
   `python tests/run_matrix.py`, Mittelwert vorher/nachher notieren. Er darf
-  nicht sinken (zuletzt 97,7 % bei 11 Kategorien inkl. „CW-Filter"; alte
+  nicht sinken (zuletzt 97,9 % bei 11 Kategorien inkl. „CW-Filter"; alte
   Matrix `--legacy` 98,3 %), sonst begründen oder zurücknehmen. Die
   Kategorie **Rauschen** (zur Hälfte durch ein schmales CW-Filter) muss
   100 % bleiben: Bei reinem Rauschen gibt der Decoder nichts aus
   (ADR-0017, ADR-0018).
-  Stichprobe gegen Übertuning: `run_matrix.run(base_seed=5000)` bzw. `7777`.
+  Stichprobe gegen Übertuning: `run_matrix.run(base_seed=5000)` bzw. `7777`
+  (zuletzt 97,2 / 98,5 %).
 - Unter Windows Tests über das Bash-Tool laufen lassen (längere Läufe).
 - GUI-Nachweise auf dem Entwicklungsrechner zuerst ohne echte Eingaben
   (Fensternachrichten, UI-Automation, Konfigurationsdateien,
@@ -218,6 +219,19 @@ Wichtige Zusammenhänge:
 - Elemente eines Zeichens werden erst am Zeichenende in Punkt/Strich
   eingeteilt (`TimingDecoder._flush`); die Strich-Schwelle liegt adaptiv
   zwischen den beiden Clustern (1,4–2,6 Punktlängen).
+- Auch die **Zeichenschwelle ist adaptiv** (ADR-0025): Pausen des
+  laufenden Verkehrs werden in Element-/Zeichenpausen geclustert, Schwelle
+  geometrisch dazwischen, 1,0–3,0 Punkte, nie unter 1,2 Punktlängen des
+  laufenden Zeichens; sonst fest `char_thr`. Neu berechnet nur bei einem
+  Pausen-Ereignis, nie in `poll()`. Ergibt ein Symbol `*`, wird es an der
+  längsten inneren Pause geteilt, wenn beide Teile gültig sind.
+- **Störmark-Filter** (ADR-0025): Bei eingemessenem Tempo wird ein Ton
+  < 0,4 Punkt mit dem Nachbarton verschmolzen, wenn die Pause dazwischen
+  < 0,5 Punkt ist. Verwerfen (`glitch_discard`) ist aus.
+- Echte Aufnahmen: `python tests/run_matrix.py --real` zeigt die
+  Ähnlichkeit zum Stand in `tests/real_baseline.json` (bei Kern-Änderungen
+  im Bericht, < 0,98 begründen; nach bestandenem Review mit
+  `--real-baseline` neu speichern).
 
 ## Offene Punkte
 Stehen als GitHub-Issues; die Übersicht steht in `ROADMAP.md` unter

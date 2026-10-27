@@ -67,6 +67,7 @@ Was folgt daraus, positiv wie negativ?
 | [ADR-0022](ADR-0022-n1mm-als-fldigi-kompatible-engine.md) | Anbindung an N1MM als fldigi-kompatible Engine für den CW Reader |
 | [ADR-0023](ADR-0023-vertrauen-je-zeichen-graue-darstellung.md) | Vertrauen je Zeichen und graue Darstellung |
 | [ADR-0024](ADR-0024-ringpuffer-letzte-sekunden-sichern-und-nachhoeren.md) | Ringpuffer – letzte Sekunden sichern und nachhören |
+| [ADR-0025](ADR-0025-adaptive-zeichenschwelle-und-stoermark-filter.md) | Adaptive Zeichenschwelle und Störmark-Filter |
 
 ## Abgrenzung
 

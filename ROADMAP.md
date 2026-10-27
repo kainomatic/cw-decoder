@@ -41,14 +41,15 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
   #18, und beta11 mit dem CW Decoder als Engine für N1MMs CW Reader, #3). Self-Update beta2 → beta4 auf dem
   Entwicklungsrechner nachgewiesen. Noch keine Stable.
 - Testmatrix (`python tests/run_matrix.py`, zufällige Texte, 11 Kategorien,
-  ADR-0017/0018): Mittelwert **97,7 %**, Rauschen 100 % (auch durch
-  CW-Filter); Stichproben Seed 5000/7777: 96,7/98,4 %. Alte Matrix
-  (`--legacy`): **98,3 %**. Erstes Zeichen nach langer Pause: `tests/test_erstes_zeichen.py`.
+  ADR-0017/0018): Mittelwert **97,9 %**, Rauschen 100 % (auch durch
+  CW-Filter); Stichproben Seed 5000/7777: 97,2/98,5 %. Alte Matrix
+  (`--legacy`): **98,3 %**. Echte Aufnahmen: Fragmente in
+  `tests/test_real.py`, Volltext-Stand `tests/real_baseline.json`. Erstes Zeichen nach langer Pause: `tests/test_erstes_zeichen.py`.
 - Laufender Auftrag: siehe Issues mit Label `auftrag`
   (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** Shack-Test mit `v0.1.0-beta13`. DF1DS
-aktualisiert auf dem Shack-PC auf `v0.1.0-beta13` (Self-Update), richtet
+**Nächster Schritt:** Review #21, dann Shack-Test mit `v0.1.0-beta14`.
+DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta14` (Self-Update), richtet
 N1MM nach `docs/N1MM.md` ein und testet mit Funkgerät und N1MM (siehe
 „Testablauf Installer/Beta"). Danach
 Auswertung der Aufnahmen durch die Desktop-Session und Entscheidung über die
@@ -227,7 +228,24 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
 - ✅ Einstellungen → „Puffer und Nochmal hören…" (Größen, langsamer).
 - Kein Eingriff in `dsp.py`/`timing.py`/`decoder.py`, Matrix unverändert.
 - Beta [`v0.1.0-beta13`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta13);
-  Review ausstehend.
+  Shack-Test 27.10. ausgewertet (#20).
+
+## ✅ Adaptive Zeichenschwelle, Störmark-Filter, Teppich-Regel (#21)
+
+- ✅ Aufnahmen vom 27.10. als Testdaten (`REAL_CASES`, `REAL_SPOTS`),
+  Volltext-Stand `tests/real_baseline.json`.
+- ✅ Zeichenschwelle adaptiv per Clusterung der Pausen, dazu Trennung
+  ungültiger Symbole (#20 Befund 3): 194831 liefert `4HX 4HX` statt
+  `*X *X` (die Tastung ist `4HX`, nicht `VHX`).
+- ✅ Störmark-Filter: kurze Reste nach Aussetzern werden verschmolzen
+  (#20 Befund 2); Verwerfen von Knacksern gemessen und aus.
+- ✅ Teppich-Regel (#20 Nebenbefund 3): Schalter `carrier_needs_key`,
+  Standard unverändert (Aufnahmen minimal anders, ADR-0025).
+- Matrix 97,9/97,2/98,5 % (vorher 97,7/96,7/98,4 %), alte Matrix 98,3 %
+  (ADR-0025).
+- #20 Befund 1 (IK2JET, Wortpausen im Rufzeichen) bleibt für den
+  Auftrag Super Check Partial (#17).
+- Beta `v0.1.0-beta14`; Review ausstehend.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

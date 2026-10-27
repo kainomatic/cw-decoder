@@ -159,11 +159,13 @@ reines Rauschen; `--legacy` für die alte Matrix):
 ```
 pytest
 python tests/run_matrix.py
-python tests/run_matrix.py --real     # Texte der echten Aufnahmen
+python tests/run_matrix.py --real     # Texte der echten Aufnahmen, Ähnlichkeit zum Stand
+python tests/run_matrix.py --real-baseline   # Stand neu speichern (tests/real_baseline.json)
 ```
 
 Testdaten: `testdata/real/` enthält echte Aufnahmen vom Funkgerät
-(`tests/test_real.py`). Es sind Mitschnitte öffentlichen
+(`tests/test_real.py`; der Volltext aller Aufnahmen zu einem festen Stand
+steht in `tests/real_baseline.json`). Es sind Mitschnitte öffentlichen
 Amateurfunkverkehrs; auf Wunsch einer betroffenen Station wird die
 jeweilige Aufnahme entfernt. Fehlfälle im Betrieb mit **Strg+S** sichern
 (`…_letzte30s.wav` samt `.txt`) und nach `testdata/` kopieren; auswerten

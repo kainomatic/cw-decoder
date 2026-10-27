@@ -87,9 +87,18 @@ python -m cwdecoder.gui --n1mm   # N1MM-Anbindung gleich beim Start an
 Die N1MM-Anbindung ist standardmäßig aus und belegt erst Ports (UDP 12060,
 TCP 7373), wenn der Haken "N1MM-Anbindung" gesetzt wird.
 
+Erkannte Rufzeichen stehen rechts als Knöpfe, neueste oben, mit Flagge und
+Landesname (DXCC-Entität aus `cty.dat`, ADR-0021); der Tooltip nennt
+Hauptpräfix, Kontinent und CQ-/ITU-Zone. Im Text sind sie markiert. Ein
+Klick auf Knopf oder Markierung übergibt das Rufzeichen an N1MM.
+
+![Rufzeichen mit Flagge und Land](docs/img/rufzeichen-flaggen.png)
+
 Installiert heißt das Programm `CWDecoder.exe`; dieselben Funktionen gibt
 es dort per Kommandozeile: `CWDecoder.exe --decode datei.wav`,
-`CWDecoder.exe --list-devices`, `CWDecoder.exe --version`.
+`CWDecoder.exe --list-devices`, `CWDecoder.exe --version`,
+`CWDecoder.exe --dxcc DJ7PR` (Land zum Rufzeichen; aus dem Quelltext:
+`python -m cwdecoder.dxcc DJ7PR`).
 
 Die GUI merkt sich Gerät, feste Tonfrequenz und die Haken. Ablageorte:
 
@@ -205,6 +214,8 @@ cwdecoder/
   live.py        Soundkarte -> Terminal
   gui.py         Tkinter-Oberfläche
   callsign.py    Rufzeichen-Erkennung
+  dxcc.py        Rufzeichen -> Land (cty.dat), Flaggen
+  data/          cty.dat, dxcc_table.json (deutsche Namen), flags/*.png
   n1mm.py        RadioInfo-UDP, Tastatur-Übergabe, Spot-Server
   __version__.py Version und Kanal (stable/beta)
   paths.py       Ablageorte (App-Ordner, Log, Aufnahmen)
@@ -215,11 +226,12 @@ cwdecoder/
   instance_lock.py  Schutz gegen Doppelstart
   app_mutex.py      benannter Mutex für den Installer
   updater.py, gui_update.py  Self-Update (Prüfung, Download, Dialog)
-  app_main.py       Einstieg der EXE (GUI, --decode, --list-devices, --version)
+  app_main.py       Einstieg der EXE (GUI, --decode, --list-devices, --version, --dxcc)
 run_cwdecoder.py   Einstieg für PyInstaller
 cwdecoder.spec     PyInstaller-Build
 installer/         Inno-Setup-Skripte (Stable, Beta)
-tools/             make_icon.py, release_tools.py (Release-Workflow)
+tools/             make_icon.py, release_tools.py (Release-Workflow),
+                   update_cty.py, make_flags.py (DXCC-Daten, Flaggen)
 tests/
   test_*.py      pytest
   run_matrix.py  Testmatrix
@@ -243,4 +255,5 @@ docs/BUILD.md    EXE und Installer bauen
 ## Lizenz
 
 Copyright (C) 2026 DF1DS (kainomatic). GNU General Public License v3.0 oder
-später (GPL-3.0-or-later), siehe `LICENSE`.
+später (GPL-3.0-or-later), siehe `LICENSE`. Mitgelieferte fremde Daten
+(`cty.dat`, Flaggen) und ihre Lizenzen: `THIRD_PARTY.md`.

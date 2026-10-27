@@ -167,6 +167,15 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
 - Beta `v0.1.0-beta9`; Review bestanden, #9 geschlossen. Self-Update
   beta8 → beta9 prüft DF1DS auf dem Shack-PC.
 
+## ✅ Flagge und Land an den Rufzeichen (#11)
+
+- ✅ `cty.dat` (AD1C) mitgeliefert, Zuordnung Rufzeichen → DXCC-Entität mit
+  `=`-Ausnahmen, längstem Präfix und `/`-Zusätzen (ADR-0021).
+- ✅ Deutsche Kurznamen für alle Entitäten, Flaggen als 24×16-PNG
+  (Public Domain), Knopf mit Flagge und Landesname, Tooltip mit Zonen.
+- ✅ `--dxcc` in der EXE, Bundle-Prüfung im Release-Workflow.
+- Beta `v0.1.0-beta10`.
+
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 
 - Beta auf dem Shack-PC installieren, mit Funkgerät und N1MM testen.

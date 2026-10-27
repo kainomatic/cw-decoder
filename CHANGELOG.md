@@ -9,6 +9,14 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 ## [Unreleased]
 
 ### Added
+- Rufzeichen-Knöpfe zeigen Flagge und Landesname (z. B. `OY1CT  Färöer`),
+  der Tooltip dazu Hauptpräfix, Kontinent und CQ-/ITU-Zone; auch der
+  Tooltip der Markierung im Text nennt das Land. Datenquelle `cty.dat`
+  (AD1C, CTY-3633), deutsche Kurznamen für alle 346 Entitäten, Flaggen als
+  kleine Bilder (ADR-0021, #11).
+- `CWDecoder.exe --dxcc RUFZEICHEN` bzw. `python -m cwdecoder.dxcc`: Land
+  zum Rufzeichen; Terminal-Modus zeigt `[Rufzeichen: DJ7PR – Deutschland]`.
+- `THIRD_PARTY.md` mit Herkunft und Lizenzen der mitgelieferten Daten.
 - Startfenster „CW Decoder startet …", solange numpy/scipy/sounddevice
   laden; Startphasen mit Zeit seit Prozessstart im Log (ADR-0020, #9).
 - Erkannte Rufzeichen sind im Text markiert (fett, farbig hinterlegt); ein
@@ -73,6 +81,8 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   erweiterte `CLAUDE.md` (Onboarding, Rollen, Definition of Done).
 
 ### Changed
+- Der N1MM-Block der rechten Spalte bleibt unten sichtbar, auch wenn viele
+  Rufzeichen-Knöpfe da sind (#11).
 - Zweiter Start holt das vorhandene Fenster nach vorn statt des Dialogs
   „läuft bereits"; lädt die erste Instanz noch, erscheint 5 s lang „CW
   Decoder startet gerade" (ADR-0020, #9).

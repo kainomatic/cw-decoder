@@ -530,6 +530,7 @@ class App(tk.Tk):
                                 on_char_conf=lambda ch, c: self.msgs.put(("char", g, (ch, c))),
                                 on_status=lambda d: self.msgs.put(("status", g, d)),
                                 on_call=lambda c: self.msgs.put(("call", g, c)),
+                                on_call_replace=lambda o, n: self.msgs.put(("replace", g, (o, n))),
                                 on_call_span=lambda c, a, b: self.msgs.put(("span", g, (c, a, b))),
                                 on_segment=lambda cuts: self.msgs.put(("seg", g, cuts)),
                                 segment=bool(self.segment_var.get()),
@@ -1022,6 +1023,8 @@ class App(tk.Tk):
                     self._show_status(val)
                 elif kind == "call":
                     self._add_call(val)
+                elif kind == "replace":
+                    self.replace_call(*val)
                 elif kind == "update":
                     self.handle_update_result(*val)
                 elif kind == "saved":
@@ -1458,6 +1461,17 @@ class App(tk.Tk):
         row.bind("<space>", lambda _e: self._send_call(call))
         self.call_rows[call] = parts
         return parts
+
+    def replace_call(self, old, new):
+        """Kürzeren Knopf durch das ganze Rufzeichen ersetzen (IK2J ->
+        IK2JET, #23): gleicher Platz; die Markierungen des kurzen im Text
+        bleiben. Gibt es keinen kurzen Knopf, kommt der neue nach oben."""
+        log.info("Rufzeichen ersetzt: %s -> %s", old, new)
+        if old not in self.calls:
+            return self._add_call(new)
+        calls = [c for c in self.calls if c != new]
+        self.calls = [new if c == old else c for c in calls]
+        self._render_calls()
 
     def call_suggestion(self, call):
         """Der eine bekannte Nachbar (SCP, ein Edit) oder None – bei keinem

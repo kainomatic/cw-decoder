@@ -142,3 +142,38 @@ def test_zerlegung_unbekanntes_rufzeichen_zaehlt_nicht():
     got, _, cuts = spot_scp("TUESQQ1QQQ ", set(), segment=True)
     assert cuts == [2, 4]                       # Anzeige getrennt
     assert got == []                            # aber kein Spot ohne SCP
+
+
+def _spot_replace(text, known):
+    events = []
+    sp = CallsignSpotter(on_call=lambda c: events.append(("call", c)), scp=ScpDb(known),
+                         on_replace=lambda o, n: events.append(("replace", o, n)))
+    for ch in text:
+        sp.feed(ch)
+    sp.flush()
+    return events, sp
+
+
+def test_kurzer_knopf_wird_ersetzt():
+    """Review #23: IK2J (nicht in SCP) gemeldet, dann IK2JET ganz gehört ->
+    IK2J wird ersetzt, Zähler übernommen."""
+    events, sp = _spot_replace("DE IK2J E T K DE IK2J E T K DE IK2JET K DE IK2J E T K ", set())
+    assert events == [("call", "IK2J"), ("replace", "IK2J", "IK2JET")]
+    assert "IK2J" not in sp.recent
+    assert sp.recent["IK2JET"][1] == 4          # 2 x IK2J + IK2JET + IK2J E T
+
+
+def test_kurzer_in_scp_bleibt():
+    """DJ7PR und DJ7PRK beide in SCP: zwei Stationen, beide bleiben."""
+    events, sp = _spot_replace("DE DJ7PR K DE DJ7PRK K ", {"DJ7PR", "DJ7PRK"})
+    assert events == [("call", "DJ7PR"), ("call", "DJ7PRK")]
+    assert "DJ7PR" in sp.recent and "DJ7PRK" in sp.recent
+
+
+def test_ohne_scp_kein_ersetzen():
+    events = []
+    sp = CallsignSpotter(on_call=events.append, on_replace=lambda o, n: events.append("R"))
+    for ch in "DE IK2J K DE IK2JET K ":
+        sp.feed(ch)
+    sp.flush()
+    assert "R" not in events

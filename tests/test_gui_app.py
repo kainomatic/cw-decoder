@@ -489,3 +489,23 @@ def test_menue_zerlegung(app):
               if app.settings_menu.type(k) == "checkbutton"]
     assert labels == [gui._LBL_MENU_SEGMENT, gui._LBL_MENU_ENGINE_SEG]
     assert app.segment_var.get() is True and app.engine_seg_var.get() is True
+
+
+@requires_display
+@pytest.mark.gui
+def test_kurzer_knopf_wird_ersetzt(app):
+    """Review #23: IK2J -> IK2JET am selben Platz, Markierung des kurzen bleibt."""
+    from cwdecoder import gui
+    g = app.gen
+    _feed_word(app, g, "IK2J", spans=[("IK2J", 0, 4)])
+    for c in ("IK2J", "OY1CT"):
+        app.msgs.put(("call", g, c))
+    app.msgs.put(("replace", g, ("IK2J", "IK2JET")))
+    app._poll()
+    app.update()
+    assert app.calls == ["OY1CT", "IK2JET"]          # Platz von IK2J behalten
+    assert "IK2J" not in app.call_rows and "IK2JET" in app.call_rows
+    assert app.text.tag_ranges(gui.CALL_TAG_PREFIX + "IK2J")
+    # ohne kurzen Knopf: neues Rufzeichen kommt wie gewohnt nach oben
+    app.replace_call("XX1XX", "DL1ABC")
+    assert app.calls[0] == "DL1ABC"

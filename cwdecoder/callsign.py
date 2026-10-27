@@ -107,7 +107,8 @@ class CallsignSpotter:
     """
 
     def __init__(self, on_call=None, repeat_s: float = 30.0, keep: int = 20, on_span=None,
-                 scp=None, segment: bool = False, on_segment=None, segmenter=None):
+                 scp=None, segment: bool = False, on_segment=None, segmenter=None,
+                 on_replace=None):
         self.on_call = on_call or (lambda call: None)
         # on_span(call, start, end): jedes gezählte Vorkommen mit seiner Lage
         # im Zeichenstrom (n-tes Zeichen ohne Leerzeichen, ab 0; end exklusiv),
@@ -115,6 +116,10 @@ class CallsignSpotter:
         self.on_span = on_span or (lambda call, start, end: None)
         # kommt am Wortende vor den on_span dieses Wortes
         self.on_segment = on_segment or (lambda cuts: None)
+        # on_replace(alt, neu): ein gemeldetes kürzeres Rufzeichen wird durch
+        # das ganze ersetzt (IK2J -> IK2JET, nur mit SCP); kommt statt
+        # on_call(neu). Ohne on_replace: on_call(neu) wie gewohnt
+        self.on_replace = on_replace
         self.scp = scp
         self.segment = segment
         self._segmenter = segmenter
@@ -185,10 +190,13 @@ class CallsignSpotter:
             # Buchstaben (DJ7PR + KM), zählt das bekannte (Weg 2 unten).
             # Mit SCP gilt das nicht für ein allein stehendes Wort, wenn das
             # kürzere nicht in SCP steht (IK2J gehört, dann ganz IK2JET)
+            # Steht die längere Form selbst in SCP, ist sie eine eigene
+            # Station (DJ7PR und DJ7PRK) und zählt ebenfalls
             alone = cand == w.upper()
-            if not any(cand != k and cand.startswith(k) and cand[len(k):].isalpha()
-                       and not (alone and self.scp is not None and not self._in_scp(k))
-                       for k in self.recent):
+            if self._in_scp(cand) or not any(
+                    cand != k and cand.startswith(k) and cand[len(k):].isalpha()
+                    and not (alone and self.scp is not None and not self._in_scp(k))
+                    for k in self.recent):
                 hits.append((cand, start + i))
             i += len(cand)
         # Rufzeichen aus der Zerlegung zählen nur, wenn SCP sie kennt (SEP
@@ -266,8 +274,28 @@ class CallsignSpotter:
         return (pos == 0 or self._s[pos - 1] == SEP or (self._off + pos) in self._bounds
                 or (pos >= 2 and self._s[pos - 2:pos] == "DE"))
 
+    def _shorter_to_replace(self, w: str):
+        """Gemeldetes kürzeres Rufzeichen, das w ersetzt (#23): ein Präfix
+        von w, das nicht selbst in SCP steht. Steht es in SCP, können es
+        zwei Stationen sein (DJ7PR, DJ7PRK) – dann bleiben beide."""
+        if self.scp is None or w in self.recent:
+            return None
+        cands = [k for k in self.recent
+                 if k != w and w.startswith(k) and not self._in_scp(k)]
+        return max(cands, key=len) if cands else None
+
     def _hit(self, w: str):
         now = time.time()
+        old = self._shorter_to_replace(w)
+        if old is not None:
+            # Zähler übernehmen; den Platz des Knopfs behält die GUI
+            _t, old_cnt = self.recent.pop(old)
+            self.recent[w] = (now, old_cnt + 1)
+            if self.on_replace is not None:
+                self.on_replace(old, w)
+            else:
+                self.on_call(w)
+            return
         last, cnt = self.recent.get(w, (0.0, 0))
         self.recent[w] = (now, cnt + 1)
         self.recent.move_to_end(w)

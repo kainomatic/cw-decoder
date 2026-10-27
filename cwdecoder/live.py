@@ -100,7 +100,8 @@ def open_stream(device, callback, preferred=(8000, 48000, 44100, 16000)):
 class LiveDecoder:
     def __init__(self, fs, cfg=None, on_text=None, on_status=None, on_call=None,
                  on_audio_warning=None, on_call_span=None, on_char_conf=None,
-                 ring_seconds=None, on_segment=None, segment=True, scp="default"):
+                 ring_seconds=None, on_segment=None, segment=True, scp="default",
+                 on_call_replace=None):
         self.q = queue.Queue()
         # Meldungen der Soundkarte; Terminal gibt sie auf stderr aus
         self.on_audio_warning = on_audio_warning
@@ -119,7 +120,8 @@ class LiveDecoder:
         if scp == "default":
             from .scp import DEFAULT as scp
         self.spotter = CallsignSpotter(on_call=on_call, on_span=on_call_span, scp=scp,
-                                       segment=segment, on_segment=on_segment)
+                                       segment=segment, on_segment=on_segment,
+                                       on_replace=on_call_replace)
         self.dec = CWDecoder(fs, cfg, on_char=self._char, on_space=self._space,
                              on_paragraph=self._paragraph)
         self.fs = fs
@@ -324,10 +326,14 @@ def main():
     def on_call(call):
         sys.stderr.write(f"\n[Rufzeichen: {call_with_country(call)}]\n")
 
+    def on_call_replace(old, new):
+        sys.stderr.write(f"\n[Rufzeichen: {old} -> {call_with_country(new)}]\n")
+
     live = LiveDecoder(fs, cfg, on_text=on_text, on_status=on_status, on_call=on_call,
                        on_audio_warning=lambda m: print(f"[audio] {m}", file=sys.stderr),
                        on_char_conf=on_char_conf, segment=not a.no_segment,
-                       on_segment=words.cut if words is not None else None)
+                       on_segment=words.cut if words is not None else None,
+                       on_call_replace=on_call_replace)
     if a.record:
         log.info("Aufnahme: %s", a.record)
         live.recorder = WavRecorder(a.record, fs)

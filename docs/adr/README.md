@@ -37,7 +37,7 @@ Was folgt daraus, positiv wie negativ?
   `Superseded by ADR-XXXX` und bleibt stehen. ADRs werden nie gelöscht.
 - Jeder neue ADR wird unten im Index eingetragen.
 
-**Nächste freie Nummer: ADR-0024**
+**Nächste freie Nummer: ADR-0025**
 
 ## Index
 
@@ -66,6 +66,7 @@ Was folgt daraus, positiv wie negativ?
 | [ADR-0021](ADR-0021-dxcc-land-und-flagge.md) | Land und Flagge zum Rufzeichen aus cty.dat, Flaggen als PNG |
 | [ADR-0022](ADR-0022-n1mm-als-fldigi-kompatible-engine.md) | Anbindung an N1MM als fldigi-kompatible Engine für den CW Reader |
 | [ADR-0023](ADR-0023-vertrauen-je-zeichen-graue-darstellung.md) | Vertrauen je Zeichen und graue Darstellung |
+| [ADR-0024](ADR-0024-ringpuffer-letzte-sekunden-sichern-und-nachhoeren.md) | Ringpuffer – letzte Sekunden sichern und nachhören |
 
 ## Abgrenzung
 

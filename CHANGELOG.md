@@ -9,6 +9,23 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 ## [Unreleased]
 
 ### Added
+- **Letzte 30 s speichern** (Strg+S): Der Decoder hält die letzten 60 s
+  Audio im Speicher. Ein Klick sichert die letzten 30 s als
+  `cw_…_letzte30s.wav` im Aufnahmen-Ordner, daneben den decodierten Text
+  dieses Ausschnitts als `.txt` (Zeit, Zeichen, Vertrauen) – ohne
+  Daueraufnahme. So wird eine Fehldecodierung mit einem Klick zur
+  Testdatei (ADR-0024, #19).
+- **Nochmal hören** (Strg+R): spielt die letzten 10 s über das
+  Standard-Ausgabegerät ab, der Decoder läuft weiter; zweiter Klick
+  („Stopp") bricht ab. Auf Wunsch langsamer (0,7×) ohne Änderung der
+  Tonhöhe.
+- Menü **Einstellungen → Puffer und Nochmal hören…**: Puffergröße
+  (10–300 s), Länge beim Speichern (5 s bis Puffergröße), Länge beim
+  Nachhören (3–30 s), langsamer abspielen. Neue Schlüssel in `config.json`:
+  `ring_seconds`, `save_last_s`, `replay_s`, `replay_slow`.
+- Klartextfehler „Ausschnitt nicht gespeichert" (Aufnahmen-Ordner nicht
+  beschreibbar) und „Wiedergabe nicht möglich" (kein bzw. belegtes
+  Ausgabegerät); der Decoder läuft jeweils weiter.
 - Unsicher erkannte Zeichen stehen im Text grau (Tooltip „unsicher
   erkannt"): ein Element lag knapp an der Grenze Punkt/Strich, das Tempo
   war nach einem Senderwechsel noch nicht eingemessen oder das Signal
@@ -112,6 +129,8 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   erweiterte `CLAUDE.md` (Onboarding, Rollen, Definition of Done).
 
 ### Changed
+- „Text löschen" steht mit den neuen Knöpfen „Letzte 30 s speichern" und
+  „Nochmal hören" in einer zweiten Zeile unter der Werkzeugleiste (#19).
 - Decodier-Log `cw_….txt` mit dritter Spalte `sekunde;zeichen;vertrauen`
   (#18); ältere Logs haben zwei Spalten.
 - Die Rufzeichen-Spalte zeigt nur so viele Knöpfe, wie in die Fensterhöhe

@@ -103,6 +103,17 @@ ein Rufzeichen solche Zeichen, sagt es der Tooltip von Knopf und
 Markierung („enthält unsichere Zeichen"). Im Terminal (`live`,
 `decode_wav`) sind unsichere Zeichen klein geschrieben: `CQ TEST OZ1hGT`.
 
+**Letzte 30 s speichern** (Strg+S) sichert die letzten Sekunden Audio als
+WAV in `Dokumente\CW Decoder\Aufnahmen` (`cw_…_letzte30s.wav`), daneben
+den decodierten Text dieses Ausschnitts als `.txt` – ohne Daueraufnahme.
+**Nochmal hören** (Strg+R) spielt die letzten 10 s über das
+Standard-Ausgabegerät ab, der Decoder läuft weiter; ein zweiter Klick
+(„Stopp") bricht ab. Längen, Puffergröße (Standard 60 s) und „langsamer
+(0,7×)" ohne Tonhöhenänderung stehen unter Einstellungen → „Puffer und
+Nochmal hören…" (ADR-0024).
+
+![Knöpfe „Letzte 30 s speichern“ und „Nochmal hören“, Statuszeile nach dem Speichern](docs/img/ringpuffer.png)
+
 ![Unsichere Zeichen grau (Geber mit 15 % Jitter)](docs/img/unsicher-jitter15.png)
 
 ![Rufzeichen mit Flagge und Land](docs/img/rufzeichen-flaggen.png)
@@ -118,7 +129,7 @@ Die GUI merkt sich Gerät, feste Tonfrequenz und die Haken. Ablageorte:
 | Was | Wo (Windows) |
 |-----|--------------|
 | Einstellungen, Log, Lockfile | `%APPDATA%\CWDecoder\` (`config.json`, `logs\cwdecoder.log`); Beta: `%APPDATA%\CWDecoder-Beta\` |
-| Aufnahmen (Haken "Aufnahme") | `Dokumente\CW Decoder\Aufnahmen\` (Datei → Aufnahmeordner öffnen) |
+| Aufnahmen (Haken "Aufnahme", Strg+S) | `Dokumente\CW Decoder\Aufnahmen\` (Datei → Aufnahmeordner öffnen) |
 
 Den Log-Ordner öffnet auch **Hilfe → Log-Ordner öffnen**.
 
@@ -154,7 +165,9 @@ python tests/run_matrix.py --real     # Texte der echten Aufnahmen
 Testdaten: `testdata/real/` enthält echte Aufnahmen vom Funkgerät
 (`tests/test_real.py`). Es sind Mitschnitte öffentlichen
 Amateurfunkverkehrs; auf Wunsch einer betroffenen Station wird die
-jeweilige Aufnahme entfernt.
+jeweilige Aufnahme entfernt. Fehlfälle im Betrieb mit **Strg+S** sichern
+(`…_letzte30s.wav` samt `.txt`) und nach `testdata/` kopieren; auswerten
+mit `python -m cwdecoder.decode_wav datei.wav --trace`.
 
 ## Wie es funktioniert
 
@@ -231,6 +244,8 @@ cwdecoder/
   decoder.py     Gesamtkette (CWDecoder)
   decode_wav.py  Offline-Decoder mit Bewertung
   live.py        Soundkarte -> Terminal
+  ringbuffer.py  Ringpuffer (Audio, Decoder-Ausgabe), letzte Sekunden speichern
+  replay.py      Nochmal hören (Wiedergabe, Zeitdehnung ohne Tonhöhenänderung)
   gui.py         Tkinter-Oberfläche
   callsign.py    Rufzeichen-Erkennung
   dxcc.py        Rufzeichen -> Land (cty.dat), Flaggen
@@ -240,7 +255,7 @@ cwdecoder/
   paths.py       Ablageorte (App-Ordner, Log, Aufnahmen)
   config.py      Einstellungen (config.json)
   logging_setup.py  Diagnose-Log
-  gui_tooltip.py, gui_errors.py, gui_error_report.py  GUI-Bausteine
+  gui_tooltip.py, gui_errors.py, gui_error_report.py, gui_ring.py  GUI-Bausteine
   error_report.py   Fehlerbericht
   instance_lock.py  Schutz gegen Doppelstart
   app_mutex.py      benannter Mutex für den Installer

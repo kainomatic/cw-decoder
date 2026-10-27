@@ -3,6 +3,11 @@
 
     CWDecoder.exe                         Oberfläche
     CWDecoder.exe --n1mm                  Oberfläche, N1MM-Anbindung an
+    CWDecoder.exe --n1mm-engine           dazu Engine für N1MMs CW Reader
+    CWDecoder.exe --xmlrpc-server-port N --wo --config-dir X -ti TITEL
+                                          so startet N1MMs CW Reader seine
+                                          „fldigi“-Engine; wirkt wie
+                                          --n1mm-engine (ADR-0022)
     CWDecoder.exe --decode datei.wav      WAV offline decodieren
                   [--expect TEXT] [--freq HZ] [--trace]
     CWDecoder.exe --list-devices          Audiogeräte auflisten
@@ -71,7 +76,24 @@ def build_parser():
                       help="Land (DXCC-Entität) zu Rufzeichen anzeigen")
     p.add_argument("--n1mm", action="store_true", default=None,
                    help="Oberfläche: N1MM-Anbindung für diesen Lauf einschalten")
+    p.add_argument("--n1mm-engine", action="store_true",
+                   help="Oberfläche mit Engine für N1MMs CW Reader (fldigi-Schnittstelle)")
+    # Argumente, mit denen N1MM seine fldigi-Engine startet (Mitschnitt #3)
+    p.add_argument("--xmlrpc-server-port", type=int, help=argparse.SUPPRESS)
+    p.add_argument("-ti", "-title", dest="engine_title", help=argparse.SUPPRESS)
     return p
+
+
+def engine_args(a):
+    """Argumente für gui_start, wenn N1MM uns als Engine startet; sonst None."""
+    if not (a.n1mm_engine or a.xmlrpc_server_port is not None or a.engine_title):
+        return None
+    args = ["--n1mm-engine"]
+    if a.xmlrpc_server_port is not None:
+        args += ["--xmlrpc-server-port", str(a.xmlrpc_server_port)]
+    if a.engine_title:
+        args += ["-ti", a.engine_title]
+    return args
 
 
 def _run_cli(a, rest) -> int:
@@ -108,9 +130,14 @@ def main(argv=None) -> int:
             traceback.print_exc()
             print(f"Fehler: {e}", file=sys.stderr)
             return 1
-    if rest:
+    engine = engine_args(a)
+    if rest and engine is None:
         p.error(f"unbekannte Argumente: {' '.join(rest)}")
     # leichter Start: Lock und Startfenster vor numpy/scipy (ADR-0020)
     from .gui_start import main as gui_main
-    gui_main(["--n1mm"] if a.n1mm else [])
+    if engine is not None:
+        # übrige fldigi-Argumente (--wo, --config-dir …) werden ignoriert
+        gui_main(engine)
+    else:
+        gui_main(["--n1mm"] if a.n1mm else [])
     return 0

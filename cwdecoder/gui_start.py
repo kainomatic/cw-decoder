@@ -6,6 +6,9 @@ Reihenfolge:
 2. Instanz-Lock. Läuft schon eine Instanz, holt diese zweite das Fenster
    der ersten nach vorn und beendet sich. Hat die erste noch kein Fenster
    (lädt noch), erscheint 5 s lang „CW Decoder startet gerade …".
+   Startet N1MMs CW Reader uns als Engine (--n1mm-engine) und bietet die
+   laufende Instanz die Engine nicht an, sagt ein Hinweis, was zu tun ist
+   (ADR-0022).
 3. Startfenster „CW Decoder startet …" (tkinter ist schnell).
 4. Erst jetzt die schweren Imports (numpy, scipy, sounddevice über
    `cwdecoder.gui`), dann das Hauptfenster. Es ersetzt das Startfenster.
@@ -16,6 +19,7 @@ Module des Pakets.
 """
 import logging
 import os
+import socket
 import sys
 import time
 
@@ -27,7 +31,14 @@ log = logging.getLogger("cwdecoder.start")
 _MSG_SPLASH = "CW Decoder startet …"
 _MSG_STARTING_TITLE = "CW Decoder"
 _MSG_STARTING = "CW Decoder startet gerade, bitte einen Moment warten."
+_MSG_ENGINE_OFF = ("N1MM möchte den CW Decoder als CW-Reader-Engine (Port {port}), "
+                   "aber der laufende CW Decoder bietet sie nicht an.\n\n"
+                   "Im CW Decoder den Haken „N1MM-Anbindung“ setzen und unter "
+                   "„Übergabe…“ „CW Reader von N1MM (Engine)“ wählen, dann den "
+                   "CW Reader in N1MM neu öffnen.")
 STARTING_NOTICE_MS = 5000
+ENGINE_NOTICE_MS = 12000
+ENGINE_DEFAULT_PORT = 7367      # wie fldigi_rpc.DEFAULT_PORT (ohne dessen Imports)
 
 _FILETIME_EPOCH = 116444736000000000   # 1601-01-01 -> 1970-01-01 in 100 ns
 
@@ -82,13 +93,35 @@ def handle_second_instance(other_pid, find=find_app_window, front=None, notice=N
     return "notice"
 
 
-def show_starting_notice(ms: int = STARTING_NOTICE_MS):
+def engine_listening(port: int, timeout: float = 0.5) -> bool:
+    """Nimmt auf 127.0.0.1:port jemand Verbindungen an (Engine der ersten Instanz)?"""
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def check_engine_of_first(port: int, listening=None, notice=None) -> bool:
+    """Zweite Instanz, von N1MM als Engine gestartet: bietet die erste die
+    Engine an? Sonst Hinweis zeigen. Liefert True, wenn alles passt."""
+    if (listening or engine_listening)(port):
+        log.info("Zweite Instanz: Engine der ersten auf Port %d erreichbar", port)
+        return True
+    log.warning("Zweite Instanz: N1MM will die Engine auf Port %d, die erste bietet "
+                "sie nicht an", port)
+    (notice or (lambda: show_starting_notice(ENGINE_NOTICE_MS,
+                                             _MSG_ENGINE_OFF.format(port=port))))()
+    return False
+
+
+def show_starting_notice(ms: int = STARTING_NOTICE_MS, text: str = _MSG_STARTING):
     """Kleines Fenster ohne Knopf, schließt sich nach `ms` selbst."""
     import tkinter as tk
     root = tk.Tk()
     root.title(_MSG_STARTING_TITLE)
     root.resizable(False, False)
-    tk.Label(root, text=_MSG_STARTING, padx=24, pady=18).pack()
+    tk.Label(root, text=text, padx=24, pady=18, wraplength=420, justify="left").pack()
     _center(root)
     try:
         root.attributes("-topmost", True)
@@ -146,12 +179,22 @@ def main(argv=None):
     p = argparse.ArgumentParser(description="CW Decoder – Oberfläche")
     p.add_argument("--n1mm", action="store_true", default=None,
                    help="N1MM-Anbindung für diesen Lauf einschalten (UDP 12060, Telnet 7373)")
+    p.add_argument("--n1mm-engine", action="store_true",
+                   help="zusätzlich Engine für N1MMs CW Reader (fldigi-Schnittstelle)")
+    p.add_argument("--xmlrpc-server-port", type=int, help="Port der Engine (von N1MM)")
+    p.add_argument("-ti", "-title", dest="engine_title", help="Fenstertitel (von N1MM)")
     a = p.parse_args(argv)
+    engine = a.n1mm_engine or a.xmlrpc_server_port is not None or bool(a.engine_title)
+    if engine:
+        log.info("Start als Engine für N1MMs CW Reader: Port %s, Titel %r",
+                 a.xmlrpc_server_port, a.engine_title)
 
     from .instance_lock import InstanceLock
     lock = InstanceLock()
     if not lock.acquire():
-        handle_second_instance(lock.other_pid)
+        res = handle_second_instance(lock.other_pid)
+        if engine and res == "front":
+            check_engine_of_first(a.xmlrpc_server_port or ENGINE_DEFAULT_PORT)
         log.info("Zweite Instanz beendet sich")
         return
     timer.phase("Lock erworben")
@@ -162,7 +205,12 @@ def main(argv=None):
         from . import gui    # numpy, scipy, sounddevice
         log.info("Startphase: schwere Imports %.2f s", time.time() - t0)
         timer.phase("Imports fertig")
-        gui.run_app(n1mm=a.n1mm, lock=lock, splash=splash, timer=timer)
+        if engine:
+            gui.run_app(n1mm=True, lock=lock, splash=splash, timer=timer,
+                        engine_port=a.xmlrpc_server_port or ENGINE_DEFAULT_PORT,
+                        engine_title=a.engine_title)
+        else:
+            gui.run_app(n1mm=a.n1mm, lock=lock, splash=splash, timer=timer)
     finally:
         close_splash(splash)
         lock.release()

@@ -71,3 +71,19 @@ def test_dxcc(capsys):
     assert app_main.main(["--dxcc", "DJ7PR", "w1aw/mm"]) == 0
     out = capsys.readouterr().out.splitlines()
     assert out == ["DJ7PR: Deutschland (DL, EU, CQ 14, ITU 28)", "W1AW/MM: unbekannt"]
+
+
+N1MM_ARGV = ["--xmlrpc-server-port", "7367", "--wo", "--config-dir", r"C:\Program Files\CW Decoder",
+             "-ti", "Fldigi CW Engine 1"]
+
+
+def test_start_durch_n1mm_cw_reader(monkeypatch):
+    """So startet N1MMs CW Reader seine „fldigi“-Engine (Mitschnitt #3):
+    wirkt wie --n1mm-engine, übrige fldigi-Argumente werden ignoriert."""
+    pytest.importorskip("tkinter")
+    calls = []
+    monkeypatch.setattr("cwdecoder.gui_start.main", lambda argv: calls.append(argv))
+    assert app_main.main(N1MM_ARGV) == 0
+    assert app_main.main(["--n1mm-engine"]) == 0
+    assert calls == [["--n1mm-engine", "--xmlrpc-server-port", "7367",
+                      "-ti", "Fldigi CW Engine 1"], ["--n1mm-engine"]]

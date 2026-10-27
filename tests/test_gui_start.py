@@ -50,3 +50,55 @@ def test_gui_start_importiert_keine_schweren_module():
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
                          timeout=60).stdout.strip()
     assert out == "[]"
+
+
+class _BusyLock:
+    other_pid = 4711
+
+    def acquire(self):
+        return False
+
+    def release(self):
+        pass
+
+
+def _second_instance(monkeypatch, app_env, listening):
+    """gui_start.main als Zweitinstanz mit den Argumenten von N1MM."""
+    seen = {"front": 0, "notice": [], "gui": False}
+    monkeypatch.setattr("cwdecoder.instance_lock.InstanceLock", lambda *a, **k: _BusyLock())
+    monkeypatch.setattr(gui_start, "handle_second_instance",
+                        lambda pid: seen.__setitem__("front", pid) or "front")
+    monkeypatch.setattr(gui_start, "engine_listening", lambda port, timeout=0.5: listening)
+    monkeypatch.setattr(gui_start, "show_starting_notice",
+                        lambda ms=0, text="": seen["notice"].append(text))
+    monkeypatch.setattr(gui_start, "show_splash",
+                        lambda: seen.__setitem__("gui", True))
+    gui_start.main(["--n1mm-engine", "--xmlrpc-server-port", "7367", "-ti",
+                    "Fldigi CW Engine 1"])
+    return seen
+
+
+def test_n1mm_engine_startet_keine_zweite_instanz(monkeypatch, app_env):
+    """N1MM startet CWDecoder.exe, während der CW Decoder schon läuft: die
+    zweite holt die erste nach vorn und endet (ADR-0020, ADR-0022)."""
+    seen = _second_instance(monkeypatch, app_env, listening=True)
+    assert seen["front"] == 4711 and not seen["gui"] and seen["notice"] == []
+
+
+def test_n1mm_engine_hinweis_wenn_erste_ohne_engine(monkeypatch, app_env):
+    seen = _second_instance(monkeypatch, app_env, listening=False)
+    assert not seen["gui"]
+    assert len(seen["notice"]) == 1 and "Port 7367" in seen["notice"][0]
+
+
+def test_engine_listening_erkennt_offenen_port():
+    import socket
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    assert not gui_start.engine_listening(port, timeout=0.2)
+    s.listen(1)
+    try:
+        assert gui_start.engine_listening(port, timeout=0.5)
+    finally:
+        s.close()

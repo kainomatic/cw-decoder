@@ -3,6 +3,8 @@
 
     python -m cwdecoder.gui            Einstellungen aus config.json
     python -m cwdecoder.gui --n1mm     N1MM-Anbindung für diesen Lauf an
+    python -m cwdecoder.gui --n1mm-engine [--xmlrpc-server-port N] [-ti TITEL]
+                                       zusätzlich Engine für N1MMs CW Reader
 
 Die Einstellungen (Gerät, feste Tonfrequenz, Haken) werden beim Start aus
 <App-Ordner>/config.json gelesen und bei jeder Änderung gespeichert.
@@ -37,7 +39,8 @@ from .gui_errors import report_exception
 from .gui_tooltip import attach_tooltip
 from .live import (AudioDeviceError, DecodeLog, LiveDecoder, WavRecorder,
                    decode_log_path, open_stream)
-from .n1mm import N1MMBridge, PortInUseError
+from .fldigi_rpc import DEFAULT_TITLE as ENGINE_TITLE
+from .n1mm import N1MMBridge
 from .paths import data_path, get_log_dir, get_recordings_dir
 
 log = logging.getLogger(__name__)
@@ -53,7 +56,7 @@ _LBL_RECORD = "Aufnahme (WAV)"
 _LBL_CLEAR = "Text löschen"
 _LBL_CALLS = "Rufzeichen (Klick → N1MM)"
 _LBL_N1MM = "N1MM-Anbindung"
-_LBL_WIPE = "vorher Alt+W (Wipe)"
+_LBL_N1MM_WAYS = "Übergabe…"
 _LBL_NO_DEVICE = "(kein Eingangsgerät gefunden)"
 _LBL_MENU_FILE = "Datei"
 _LBL_MENU_RECDIR = "Aufnahmeordner öffnen"
@@ -89,6 +92,8 @@ _MSG_N1MM_IDLE = "N1MM: –"
 _MSG_N1MM_RADIO = "N1MM: {freq:.1f} kHz {mode}  ({call})"
 _MSG_N1MM_NO_BROADCAST = "N1MM: keine Broadcasts (Port 12060)"
 _MSG_N1MM_DISABLED = "N1MM-Anbindung ist aus"
+_MSG_ENGINE_CONNECTED = "CW Reader: N1MM verbunden, letzter Abruf vor {s:.0f} s"
+_MSG_ENGINE_WAITING = "CW Reader: wartet auf N1MM (Port {port})"
 _MSG_CONFIG_RESET_DETAIL = "Beiseitegelegt als: {name}\nGrund: {reason}"
 _MSG_CTX_GUI = "Fehler in der Oberfläche"
 _MSG_CTX_DECODER = "Decoder abgebrochen"
@@ -128,12 +133,15 @@ _TT_SPECTRUM = ("Spektrum 300–1200 Hz. Orange Linie = verfolgter Ton.\n"
                 "Klick setzt eine feste Tonfrequenz.")
 _TT_TEXT = "Dekodierter Text, neueste Zeichen unten."
 _TT_CALLS = "Erkannte Rufzeichen, neueste oben."
-_TT_CALL_BUTTON = "Rufzeichen an N1MM übergeben (Entry Window, Zwischenablage, Spot)."
+_TT_CALL_BUTTON = ("Rufzeichen an N1MM übergeben (gewählte Wege unter „Übergabe…“: "
+                   "Spot, Entry Window, Zwischenablage).")
 _TT_CALL_TAG = ("Erkanntes Rufzeichen. Klick übergibt es an N1MM "
                 "(wie der Knopf rechts).")
-_TT_N1MM = ("N1MM Logger+ anbinden: empfängt Frequenz per UDP 12060 und bietet "
-            "Spots auf Telnet 127.0.0.1:7373. Belegt die Ports erst beim Einschalten.")
-_TT_WIPE = "Vor dem Eintippen Alt+W senden, damit das Entry Window leer ist."
+_TT_N1MM = ("N1MM Logger+ anbinden: Engine für N1MMs CW Reader (Port 7367), "
+            "Frequenz per UDP 12060, Spots auf Telnet 127.0.0.1:7373. Belegt die "
+            "Ports erst beim Einschalten.")
+_TT_N1MM_WAYS = ("Wege der Übergabe an N1MM wählen: CW Reader (Engine), Skimmer-Spot, "
+                 "Entry Window tippen, Zwischenablage; Port der Engine.")
 _TT_N1MM_STATUS = "Zustand der N1MM-Anbindung und Ergebnis der letzten Übergabe."
 _TT_REPO_LINK = "Projektseite im Browser öffnen."
 _TT_UPDATE_OK = "Dialog schließen."
@@ -160,15 +168,25 @@ def window_title(channel=CHANNEL, version=__version__):
 
 
 class App(tk.Tk):
-    def __init__(self, n1mm=None, cfg=None, config_path=None):
+    def __init__(self, n1mm=None, cfg=None, config_path=None, engine_port=None,
+                 engine_title=None):
         """n1mm: None = Einstellung aus der Config, True/False = nur für
         diesen Lauf überschreiben. config_path None = nichts speichern
-        (Tests)."""
+        (Tests). engine_port/engine_title: Start durch N1MMs CW Reader
+        (--n1mm-engine); schaltet für diesen Lauf Anbindung und Engine ein."""
         super().__init__()
         self.cfg = config_mod.defaults()
         self.cfg.update(cfg or {})
         self.config_path = config_path
+        engine_start = engine_port is not None or engine_title is not None
+        if engine_start:
+            n1mm = True
         self.n1mm_on_start = self.cfg["n1mm_enabled"] if n1mm is None else bool(n1mm)
+        self.engine_on_start = True if engine_start else self.cfg["n1mm_engine"]
+        self.rpc_port = int(engine_port or self.cfg["n1mm_rpc_port"])
+        self.engine_title = engine_title or ENGINE_TITLE
+        self.engine_win = None      # verstecktes Fenster, an dem N1MM die Engine erkennt
+        self.n1mm_dialog = None
         # feste Tonfrequenz (Spektrum-Klick); None = noch keine gewählt
         self.fixed_freq = self.cfg["fixed_freq"]
         self.title(window_title())
@@ -309,11 +327,16 @@ class App(tk.Tk):
                              command=self._n1mm_changed)
         cb.pack(anchor="w", pady=(6, 0))
         attach_tooltip(cb, _TT_N1MM)
+        # Übergabewege (Dialog „Übergabe…“, ADR-0022)
+        self.engine_var = tk.BooleanVar(value=self.engine_on_start)
+        self.spot_var = tk.BooleanVar(value=self.cfg["n1mm_spot"])
+        self.type_var = tk.BooleanVar(value=self.cfg["n1mm_type"])
         self.wipe_var = tk.BooleanVar(value=self.cfg["n1mm_wipe"])
-        cb = ttk.Checkbutton(bottom, text=_LBL_WIPE, variable=self.wipe_var,
-                             command=self._n1mm_changed)
-        cb.pack(anchor="w")
-        attach_tooltip(cb, _TT_WIPE)
+        self.clip_var = tk.BooleanVar(value=self.cfg["n1mm_clipboard"])
+        self.btn_n1mm_ways = ttk.Button(bottom, text=_LBL_N1MM_WAYS,
+                                        command=self.open_n1mm_settings)
+        self.btn_n1mm_ways.pack(anchor="w", pady=(2, 0))
+        attach_tooltip(self.btn_n1mm_ways, _TT_N1MM_WAYS)
         self.n1mm_status = tk.StringVar(value=_MSG_N1MM_IDLE)
         lbl = ttk.Label(bottom, textvariable=self.n1mm_status, wraplength=190)
         lbl.pack(anchor="w", pady=4)
@@ -561,6 +584,7 @@ class App(tk.Tk):
         if self.n1mm:
             self.n1mm.stop()
             self.n1mm = None
+        self._sync_engine_window()
         if self.instance_lock is not None:
             self.instance_lock.release()
         if self.app_mutex is not None:
@@ -653,6 +677,7 @@ class App(tk.Tk):
         self._stop()
         if self.n1mm:
             self.n1mm.stop()
+            self.n1mm = None
         # Poll-Timer abmelden, sonst feuert er nach destroy() ins Leere
         self.after_cancel(self._poll_id)
         self.destroy()
@@ -676,24 +701,70 @@ class App(tk.Tk):
         self._save_config(fixed_freq=self.fixed_freq)
         self.live.dec.set_fixed_frequency(self.fixed_freq)
 
+    def _n1mm_ways(self):
+        return dict(engine=bool(self.engine_var.get()), spot=bool(self.spot_var.get()),
+                    type_call=bool(self.type_var.get()),
+                    clipboard=bool(self.clip_var.get()), wipe=bool(self.wipe_var.get()))
+
     def _n1mm_changed(self, save=True):
+        ways = self._n1mm_ways()
         if save:
             self._save_config(n1mm_enabled=bool(self.n1mm_var.get()),
-                              n1mm_wipe=bool(self.wipe_var.get()))
+                              n1mm_engine=ways["engine"], n1mm_spot=ways["spot"],
+                              n1mm_type=ways["type_call"],
+                              n1mm_clipboard=ways["clipboard"], n1mm_wipe=ways["wipe"])
         if self.n1mm_var.get():
             if self.n1mm is None:
-                log.info("N1MM-Anbindung ein (Wipe %s)", "an" if self.wipe_var.get() else "aus")
-                self.n1mm = N1MMBridge(wipe=self.wipe_var.get())
-                for msg in self.n1mm.errors:
-                    self.report_error(PortInUseError(msg), _MSG_CTX_N1MM)
+                log.info("N1MM-Anbindung ein: %s, Engine-Port %d", ways, self.rpc_port)
+                self.n1mm = N1MMBridge(rpc_port=self.rpc_port,
+                                       engine_title=self.engine_title, **ways)
+                failed = self.n1mm.start_failures
             else:
-                self.n1mm.typer.wipe = self.wipe_var.get()
+                log.info("N1MM-Übergabe: %s", ways)
+                failed = self.n1mm.configure(**ways)
+            for exc in failed:
+                self.report_error(exc, _MSG_CTX_N1MM)
         else:
             if self.n1mm is not None:
                 log.info("N1MM-Anbindung aus")
                 self.n1mm.stop()
                 self.n1mm = None
             self.n1mm_status.set(_MSG_N1MM_OFF)
+        self._sync_engine_window()
+
+    def set_rpc_port(self, port):
+        """Neuer Port der Engine (Dialog); startet eine laufende Engine neu."""
+        self.rpc_port = int(port)
+        self._save_config(n1mm_rpc_port=self.rpc_port)
+        if self.n1mm is not None:
+            for exc in self.n1mm.configure(rpc_port=self.rpc_port):
+                self.report_error(exc, _MSG_CTX_N1MM)
+        self._sync_engine_window()
+
+    def open_n1mm_settings(self):
+        if self.n1mm_dialog is not None:
+            self.n1mm_dialog.lift()
+            return self.n1mm_dialog
+        from .gui_n1mm import N1MMSettingsDialog
+        self.n1mm_dialog = N1MMSettingsDialog(self)
+        return self.n1mm_dialog
+
+    def _sync_engine_window(self):
+        """N1MM erkennt die Engine an einem Fenster mit dem Titel aus `-ti`
+        (Standard „Fldigi CW Engine 1“). Ein verstecktes Fenster genügt."""
+        want = self.n1mm is not None and self.n1mm.engine is not None
+        if want and self.engine_win is None:
+            win = tk.Toplevel(self)
+            win.title(self.engine_title)
+            win.withdraw()
+            self.engine_win = win
+            log.info("Engine-Fenster %r angelegt", self.engine_title)
+        elif not want and self.engine_win is not None:
+            try:
+                self.engine_win.destroy()
+            except tk.TclError:
+                pass
+            self.engine_win = None
 
     # ------------------------------------------------------------------
     def _poll(self):
@@ -709,6 +780,8 @@ class App(tk.Tk):
                     self.report_error(val, _MSG_CTX_DECODER)
                 elif kind == "text":
                     self._insert_decoded(val, gen)
+                    if self.n1mm:
+                        self.n1mm.feed_text(val)
                 elif kind == "note":
                     self.text.insert("end", val)
                     self.text.see("end")
@@ -732,6 +805,12 @@ class App(tk.Tk):
                                               call=r.mycall or "")
             else:
                 line = _MSG_N1MM_NO_BROADCAST
+            eng = self.n1mm.engine
+            if eng is not None:
+                if eng.connected:
+                    line += "\n" + _MSG_ENGINE_CONNECTED.format(s=eng.seconds_since_call())
+                else:
+                    line += "\n" + _MSG_ENGINE_WAITING.format(port=eng.port)
             # Fehler (z. B. Port belegt) bleiben stehen, Meldungen eine Weile
             extra = list(self.n1mm.errors)
             if self.n1mm_note and time.monotonic() < self.n1mm_note[1]:
@@ -740,6 +819,9 @@ class App(tk.Tk):
         self._poll_id = self.after(60, self._poll)
 
     def _show_status(self, st):
+        if self.n1mm:
+            # Tonfrequenz für modem.get_carrier der Engine
+            self.n1mm.carrier_hz = st["freq_hz"] if st["locked"] else None
         text = _MSG_STATUS.format(
             lock=_MSG_STATUS_LOCK if st["locked"] else _MSG_STATUS_NOLOCK,
             freq=st["freq_hz"], snr=st["snr_db"], wpm=st["wpm"], bw=st["bw_hz"],
@@ -967,7 +1049,8 @@ def _preload_dxcc():
         log.warning("DXCC-Daten nicht geladen: %s", e)
 
 
-def run_app(n1mm=None, lock=None, splash=None, timer=None):
+def run_app(n1mm=None, lock=None, splash=None, timer=None, engine_port=None,
+            engine_title=None):
     """Hauptfenster bauen und laufen lassen (Aufruf aus gui_start.main,
     nachdem der Lock erworben ist und das Startfenster steht)."""
     from .app_mutex import create_app_mutex
@@ -985,7 +1068,8 @@ def run_app(n1mm=None, lock=None, splash=None, timer=None):
     # Das Startfenster ist ein eigenes Tk; vor dem Hauptfenster schließen,
     # damit tk-Variablen ohne master am Hauptfenster hängen
     close_splash(splash)
-    app = App(n1mm=n1mm, cfg=cfg, config_path=config_path)
+    app = App(n1mm=n1mm, cfg=cfg, config_path=config_path, engine_port=engine_port,
+              engine_title=engine_title)
     app.instance_lock = lock
     app.app_mutex = mutex
     notice = config_mod.pop_broken_notice(config_path)

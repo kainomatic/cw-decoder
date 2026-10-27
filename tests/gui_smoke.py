@@ -82,6 +82,15 @@ def make_fake_sounddevice(ok_rate, with_input=True):
     return fake
 
 
+def free_port():
+    import socket
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
+
 # --------------------------------------------------------------------------
 def run_scenario(ok_rate=48000, with_input=True, slow_recorder=False, n1mm=True):
     """Klickt die GUI durch. Liefert (Fehlerliste, Beobachtungen, Aufnahmen)."""
@@ -142,11 +151,49 @@ def run_scenario(ok_rate=48000, with_input=True, slow_recorder=False, n1mm=True)
     ] + [(5, app._toggle) for _ in range(6)] + [              # schnell toggeln
         (300, lambda: snap("nach schnell")),
     ]
+    def engine_state():
+        eng = app.n1mm.engine if app.n1mm else None
+        return {"port": eng.port if eng else None,
+                "win": app.engine_win.title() if app.engine_win is not None else None,
+                "win_hidden": (app.engine_win.state() == "withdrawn"
+                               if app.engine_win is not None else None)}
+
+    def rpc_fetch(key):
+        """Wie N1MMs CW Reader: Text per rx.get_data abholen (#3)."""
+        import xmlrpc.client
+        p = xmlrpc.client.ServerProxy(f"http://127.0.0.1:{app.n1mm.engine.port}")
+        seen[key] = {"version": p.fldigi.version(), "rx": p.rx.get_data().data.decode()}
+
+    def dialog(fn):
+        dlg = app.open_n1mm_settings()
+        fn(dlg)
+
+    def snap_engine(key):
+        seen[key] = engine_state()
+
     if n1mm:
         steps += [
+            (10, lambda: setattr(app, "rpc_port", free_port())),
             (10, lambda: (app.n1mm_var.set(True), app._n1mm_changed())),
+            (50, lambda: snap_engine("engine an")),
+            (10, lambda: app.msgs.put(("text", app.gen, "CQ DE DJ7PR "))),
+            (200, lambda: rpc_fetch("engine text")),
             (10, lambda: app._send_call(app.calls[0]) if app.calls else None),
+            # Dialog „Übergabe…“: Engine aus und wieder an, Port ungültig/neu
+            (10, lambda: dialog(lambda d: d.checks["engine"].invoke())),
+            (50, lambda: snap_engine("engine aus")),
+            (10, lambda: dialog(lambda d: d.checks["engine"].invoke())),
+            (10, lambda: dialog(lambda d: (d.set_port_text("abc"), d.apply_port(),
+                                           seen.__setitem__("port note", d.note.cget("text"))))),
+            (10, lambda: dialog(lambda d: (d.set_port_text(str(free_port())), d.close()))),
+            (50, lambda: snap_engine("engine neuer port")),
+            (10, lambda: dialog(lambda d: [d.checks[k].invoke()
+                                           for k in ("spot", "type", "clipboard")])),
+            (10, lambda: dialog(lambda d: [d.checks[k].invoke()
+                                           for k in ("spot", "type", "clipboard")])),
+            (10, lambda: app.n1mm_dialog.close()),
             (10, lambda: (app.n1mm_var.set(False), app._n1mm_changed())),
+            (50, lambda: snap_engine("n1mm aus")),
             (10, lambda: (app.n1mm_var.set(True), app._n1mm_changed())),
             (10, lambda: (app.n1mm_var.set(False), app._n1mm_changed())),
         ]
@@ -200,8 +247,11 @@ def main():
     ]
     for name, kw in cases:
         errors, seen, recs = run_scenario(**kw)
+        # Reste des Szenarios (Closures der Schritte) hier im Hauptthread
+        # abräumen, nicht später in einem Thread des nächsten Szenarios
+        gc.collect()
         problems = list(errors)
-        unexpected = [t for st in seen.values() for t, ok in st["dialogs"] if not ok]
+        unexpected = [t for st in seen.values() for t, ok in (st.get("dialogs", []) if isinstance(st, dict) else []) if not ok]
         check(not unexpected, f"Dialog 'Unerwarteter Fehler': {unexpected}", problems)
         if kw.get("ok_rate", 48000) == 12345:
             check("nicht geöffnet" in seen["läuft"]["status"],
@@ -236,6 +286,23 @@ def main():
             # zu jeder Aufnahme ein Decodier-Log mit gleichem Namen (#10)
             check(sorted(w[:-4] for w in wavs) == sorted(t[:-4] for t in logs),
                   f"Decodier-Log fehlt: {recs}", problems)
+        if kw.get("n1mm", True):
+            # Engine für N1MMs CW Reader (#3, ADR-0022)
+            on = seen.get("engine an", {})
+            check(on.get("win") == "Fldigi CW Engine 1" and on.get("win_hidden") is True,
+                  f"verstecktes Engine-Fenster fehlt: {on}", problems)
+            got = seen.get("engine text", {})
+            check(got.get("version") == "4.2.05" and "CQ DE DJ7PR" in got.get("rx", ""),
+                  f"Engine liefert den Text nicht: {got}", problems)
+            check(seen.get("engine aus", {}).get("win") is None,
+                  f"Engine-Fenster bleibt nach Abschalten: {seen.get('engine aus')}", problems)
+            new = seen.get("engine neuer port", {})
+            check(new.get("port") not in (None, on.get("port")) and new.get("win"),
+                  f"Portwechsel greift nicht: {on} -> {new}", problems)
+            check("ungültig" in seen.get("port note", ""),
+                  f"kein Hinweis bei ungültigem Port: {seen.get('port note')!r}", problems)
+            check(seen.get("n1mm aus", {}) == {"port": None, "win": None, "win_hidden": None},
+                  f"Engine läuft nach N1MM aus weiter: {seen.get('n1mm aus')}", problems)
         print(("ok  " if not problems else "FEHLER  ") + name)
         for p in problems:
             print("    " + p.replace("\n", "\n    "))

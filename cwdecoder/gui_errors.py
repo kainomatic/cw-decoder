@@ -3,7 +3,7 @@
 
 classify_error(exc) -> ErrorInfo
     Ordnet erwartete Fehler (Soundkarte, Port belegt, N1MM-Fenster, Config,
-    Update) einem Klartext mit Handlungshinweis zu. Alles andere ist ein
+    Update, Ausschnitt speichern, Wiedergabe) einem Klartext mit Handlungshinweis zu. Alles andere ist ein
     "Unerwarteter Fehler" mit Traceback im Detailbereich. Reine Logik,
     ohne Display testbar.
 
@@ -70,6 +70,22 @@ _MSG_UPDATE = ("Die Suche nach Updates bzw. der Download hat nicht geklappt.\n\n
                "https://github.com/kainomatic/cw-decoder/releases.")
 _STATUS_UPDATE = "Update-Prüfung fehlgeschlagen"
 
+_TITLE_SAVE_LAST = "Ausschnitt nicht gespeichert"
+_MSG_SAVE_LAST = ("Die letzten Sekunden ließen sich nicht als WAV speichern.\n\n"
+                  "Bitte prüfen: Ist der Ordner Dokumente\\CW Decoder\\Aufnahmen "
+                  "beschreibbar (Schreibschutz, Virenscanner, OneDrive-Sperre)? Ist "
+                  "die Platte voll? Der Decoder läuft weiter.")
+_STATUS_SAVE_LAST = "Ausschnitt nicht gespeichert – Aufnahmen-Ordner prüfen"
+
+_TITLE_REPLAY = "Wiedergabe nicht möglich"
+_MSG_REPLAY = ("„Nochmal hören“ konnte nichts abspielen: Das Standard-Ausgabegerät "
+               "fehlt oder ist belegt.\n\n"
+               "Bitte in Windows unter Einstellungen → System → Sound ein "
+               "Ausgabegerät (Lautsprecher, Kopfhörer) als Standard wählen und "
+               "prüfen, ob ein anderes Programm es exklusiv nutzt. Der Decoder "
+               "läuft weiter.")
+_STATUS_REPLAY = "Wiedergabe nicht möglich – Ausgabegerät prüfen"
+
 _TITLE_UNEXPECTED = "Unerwarteter Fehler"
 _MSG_UNEXPECTED = ("Es ist ein unerwarteter Fehler aufgetreten:\n{err}\n\n"
                    "Bitte über Hilfe → Fehler melden… einen Bericht schicken.")
@@ -118,8 +134,15 @@ def classify_error(exc: BaseException) -> ErrorInfo:
     from .config import ConfigError
     from .n1mm import EnginePortInUseError, EntryWindowNotFoundError, SpotNotSentError
     from .updater import UpdateError
+    from .replay import ReplayError
+    from .ringbuffer import SaveLastError
 
     detail = str(exc) or None
+    # vor Soundkarte und Port: beides sind eigene Fälle (ADR-0024)
+    if isinstance(exc, ReplayError):
+        return ErrorInfo(_TITLE_REPLAY, _MSG_REPLAY, _STATUS_REPLAY, True, detail)
+    if isinstance(exc, SaveLastError):
+        return ErrorInfo(_TITLE_SAVE_LAST, _MSG_SAVE_LAST, _STATUS_SAVE_LAST, True, detail)
     if _is_audio_error(exc):
         return ErrorInfo(_TITLE_AUDIO, _MSG_AUDIO, _STATUS_AUDIO, True, detail)
     if isinstance(exc, EnginePortInUseError):

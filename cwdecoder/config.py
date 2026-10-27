@@ -38,7 +38,17 @@ DEFAULTS = {
     "n1mm_clipboard": False,
     "n1mm_rpc_port": 7367,
     "record_default": False,
+    # Ringpuffer (ADR-0024): Kapazität, „Letzte … s speichern“, „Nochmal hören“
+    "ring_seconds": 60,
+    "save_last_s": 30,
+    "replay_s": 10,
+    "replay_slow": False,
 }
+
+# Grenzen der Ringpuffer-Werte (Sekunden); save_last_s höchstens ring_seconds
+RING_SECONDS_RANGE = (10, 300)
+SAVE_LAST_RANGE = (5, 300)
+REPLAY_RANGE = (3, 30)
 
 
 class ConfigError(ValueError):
@@ -58,6 +68,12 @@ def _is_opt_freq(v):
                          and 50.0 <= float(v) <= 4000.0)
 
 
+def _int_in(lo, hi):
+    def check(v):
+        return isinstance(v, int) and not isinstance(v, bool) and lo <= v <= hi
+    return check
+
+
 def _is_port(v):
     return isinstance(v, int) and not isinstance(v, bool) and 1024 <= v <= 65535
 
@@ -74,6 +90,10 @@ _VALIDATORS = {
     "n1mm_clipboard": _is_bool,
     "n1mm_rpc_port": _is_port,
     "record_default": _is_bool,
+    "ring_seconds": _int_in(*RING_SECONDS_RANGE),
+    "save_last_s": _int_in(*SAVE_LAST_RANGE),
+    "replay_s": _int_in(*REPLAY_RANGE),
+    "replay_slow": _is_bool,
 }
 
 
@@ -102,6 +122,10 @@ def parse(text: str) -> dict:
                         key, value, DEFAULTS[key])
             continue
         cfg[key] = value
+    if cfg["save_last_s"] > cfg["ring_seconds"]:
+        log.warning("Config: save_last_s %r größer als ring_seconds %r, gekürzt",
+                    cfg["save_last_s"], cfg["ring_seconds"])
+        cfg["save_last_s"] = cfg["ring_seconds"]
     return cfg
 
 

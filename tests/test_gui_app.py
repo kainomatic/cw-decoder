@@ -317,3 +317,87 @@ def test_rufzeichen_spalte_nur_sichtbare_knoepfe(app):
     while time.monotonic() < t_end:
         app.update()
     assert len(app.call_rows) == n_small
+
+
+def _pump(app, secs, until=None):
+    import time
+    t_end = time.monotonic() + secs
+    while time.monotonic() < t_end:
+        app.update()
+        if until is not None and until():
+            return True
+        time.sleep(0.01)
+    return until() if until is not None else True
+
+
+@requires_display
+@pytest.mark.gui
+def test_ringpuffer_speichern_und_nochmal_hoeren(app):
+    """#19: Knöpfe, Strg+S/Strg+R, Quittung über App.msgs, Stopp der Wiedergabe."""
+    import sounddevice
+    from cwdecoder import gui
+    from cwdecoder.paths import get_recordings_dir
+    assert str(app.btn_save["state"]) == "disabled"
+    assert str(app.btn_replay["state"]) == "disabled"
+    assert app.btn_save["text"] == "Letzte 30 s speichern"
+    assert app.btn_replay["text"] == "Nochmal hören"
+    assert app.btn_save._cw_tooltip.text == gui._TT_SAVE_LAST
+    assert app.btn_replay._cw_tooltip.text == gui._TT_REPLAY
+    for seq in ("<Control-s>", "<Control-r>"):
+        assert app.bind(seq)
+    app.rec_var.set(False)
+    app.auto_var.set(True)                          # Fixture: fest 650 Hz, Signal 700 Hz
+    app._toggle()                                   # Start (Fake-Soundkarte)
+    assert _pump(app, 5, lambda: "CQ" in app.text.get("1.0", "end"))
+    assert str(app.btn_save["state"]) == "normal"
+    # Strg+S im Textfeld: Speichern läuft im Hintergrund, Quittung über msgs
+    app.text.focus_force()
+    app.text.event_generate("<Control-s>")
+    assert _pump(app, 5, lambda: app.saved_paths)
+    wav = app.saved_paths[0]
+    assert os.path.dirname(wav) == str(get_recordings_dir())
+    assert wav.endswith("_letzte30s.wav") and os.path.exists(wav[:-4] + ".txt")
+    assert "Gespeichert: " + os.path.basename(wav) in app.status.get()
+    assert "Gespeichert" in app.status.get()        # bleibt trotz Status-Updates stehen
+    _pump(app, 0.6)
+    assert "Gespeichert" in app.status.get()
+    assert "s" not in app.text.get("end-2c", "end")  # Strg+S tippt nichts ins Textfeld
+    # Strg+R: Wiedergabe, Knopf wird „Stopp“, zweites Strg+R bricht ab
+    app.text.event_generate("<Control-r>")
+    assert app.btn_replay["text"] == "Stopp"
+    assert _pump(app, 1, lambda: "Wiedergabe" in app.status.get())
+    app.text.event_generate("<Control-r>")
+    assert _pump(app, 5, lambda: app.btn_replay["text"] == "Nochmal hören")
+    out = sounddevice.played[-1]
+    assert out.samplerate == 48000 and 0 < out.n < 10 * 48000
+    assert "abort" in out.events
+    assert "Wiedergabe abgebrochen" in app.status.get()
+    app._toggle()                                   # Stop
+    assert str(app.btn_save["state"]) == "disabled"
+    assert str(app.btn_replay["state"]) == "disabled"
+
+
+@requires_display
+@pytest.mark.gui
+def test_ringpuffer_einstellungen(app):
+    from cwdecoder import config
+    menus = [app.menubar.entrycget(i, "label") for i in range(app.menubar.index("end") + 1)
+             if app.menubar.type(i) == "cascade"]
+    assert "Einstellungen" in menus
+    dlg = app.open_ring_settings()
+    app.update()
+    assert all(e._cw_tooltip.text for e in dlg.entries.values())
+    assert dlg.check_slow._cw_tooltip.text
+    dlg.set_text("save_last_s", "20")
+    dlg.set_text("replay_s", "99")                  # ungültig: springt zurück
+    assert dlg.apply() is False
+    assert "ungültig" in dlg.note.cget("text")
+    assert dlg.entries["replay_s"].get() == "10"
+    assert app.btn_save["text"] == "Letzte 20 s speichern"
+    dlg.check_slow.invoke()
+    dlg.set_text("ring_seconds", "15")              # kleiner als Speichern: kürzt mit
+    dlg.close()
+    saved = json.loads(config.get_config_path().read_text(encoding="utf-8"))
+    assert saved["ring_seconds"] == 15 and saved["save_last_s"] == 15
+    assert saved["replay_slow"] is True and saved["replay_s"] == 10
+    assert app.ring_dialog is None

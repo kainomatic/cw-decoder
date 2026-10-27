@@ -21,6 +21,7 @@ import numpy as np
 from . import utf8_console
 from .decoder import CWDecoder, DecoderConfig, UNSURE_CONF
 from .callsign import CallsignSpotter
+from .ringbuffer import AudioRing, TokenRing
 
 log = logging.getLogger(__name__)
 
@@ -97,7 +98,8 @@ def open_stream(device, callback, preferred=(8000, 48000, 44100, 16000)):
 
 class LiveDecoder:
     def __init__(self, fs, cfg=None, on_text=None, on_status=None, on_call=None,
-                 on_audio_warning=None, on_call_span=None, on_char_conf=None):
+                 on_audio_warning=None, on_call_span=None, on_char_conf=None,
+                 ring_seconds=None):
         self.q = queue.Queue()
         # Meldungen der Soundkarte; Terminal gibt sie auf stderr aus
         self.on_audio_warning = on_audio_warning
@@ -118,10 +120,24 @@ class LiveDecoder:
         self.running = False
         self.recorder = None
         self.decode_log = None   # DecodeLog neben der Aufnahme (optional)
+        # Ringpuffer der letzten Sekunden (ADR-0024); None = keiner (Terminal)
+        self.ring = AudioRing(fs, ring_seconds) if ring_seconds else None
+        self.token_ring = TokenRing(ring_seconds) if ring_seconds else None
 
     def _log(self, token, conf=None):
+        t = self.dec.t_ms / 1000.0
         if self.decode_log is not None:
-            self.decode_log.write(self.dec.t_ms / 1000.0, token, conf)
+            self.decode_log.write(t, token, conf)
+        if self.token_ring is not None:
+            self.token_ring.add(t, token, conf)
+
+    def feed(self, block):
+        """Einen Block verarbeiten (Ring, Aufnahme, Decoder); Decoder-Thread."""
+        if self.ring is not None:
+            self.ring.write(block)
+        if self.recorder is not None:
+            self.recorder.write(block)
+        self.dec.process(block)
 
     def _char(self, ch):
         conf = self.dec.last_conf      # vor on_char gesetzt
@@ -162,9 +178,7 @@ class LiveDecoder:
             except queue.Empty:
                 # auch ohne neue Daten Pausen auswerten (sollte nicht passieren)
                 continue
-            if self.recorder is not None:
-                self.recorder.write(block)
-            self.dec.process(block)
+            self.feed(block)
             now = time.time()
             if now - last_status >= status_interval:
                 last_status = now

@@ -77,8 +77,34 @@ def make_fake_sounddevice(ok_rate, with_input=True):
         def close(self):
             pass
 
+    class OutputStream:
+        """Wiedergabe „Nochmal hören“ (ADR-0024): sammelt die Daten."""
+        def __init__(self, samplerate, channels, dtype):
+            self.samplerate = samplerate
+            fake.played.append(self)
+            self.n = 0
+            self.events = []
+
+        def start(self):
+            self.events.append("start")
+
+        def write(self, chunk):
+            self.n += len(chunk)
+            time.sleep(len(chunk) / self.samplerate / SPEEDUP)
+
+        def stop(self):
+            self.events.append("stop")
+
+        def abort(self):
+            self.events.append("abort")
+
+        def close(self):
+            self.events.append("close")
+
     fake.query_devices = query_devices
     fake.InputStream = InputStream
+    fake.OutputStream = OutputStream
+    fake.played = []
     return fake
 
 
@@ -126,6 +152,8 @@ def run_scenario(ok_rate=48000, with_input=True, slow_recorder=False, n1mm=True)
 
     def snap(key):
         seen[key] = {"status": app.status.get(), "btn": str(app.btn_start["text"]),
+                     "replay_btn": str(app.btn_replay["text"]),
+                     "saved": [os.path.basename(p) for p in app.saved_paths],
                      "calls": list(app.calls), "text": app.text.get("1.0", "end"),
                      "dialogs": [(i.title, i.expected) for i in app.shown_errors],
                      "rows": {c: (flag_of(p), p["name"]["text"] if p["name"] else None)
@@ -134,6 +162,13 @@ def run_scenario(ok_rate=48000, with_input=True, slow_recorder=False, n1mm=True)
     steps = [
         (300, app._toggle),                                   # Start
         (1500, lambda: snap("läuft")),
+        # Ringpuffer (#19): letzte Sekunden speichern, nochmal hören, abbrechen
+        (10, app.save_last),
+        (400, lambda: snap("gespeichert")),
+        (10, app.toggle_replay),
+        (150, lambda: snap("wiedergabe")),
+        (10, app.toggle_replay),
+        (300, lambda: snap("wiedergabe gestoppt")),
         # Knöpfe mit Flagge (DL1ABC), ohne Flagge (Antarktis), ohne Land (#11)
         (10, lambda: (app._add_call("DP0GVN"), app._add_call("QQ1A"))),
         (50, lambda: snap("knöpfe")),
@@ -281,6 +316,19 @@ def main():
             check("REC" in seen["aufnahme"]["status"], "Aufnahme nicht in der Statuszeile", problems)
             check(seen["aufnahme gestoppt"]["status"].startswith("gestoppt – Aufnahme gespeichert"),
                   f"Status nach Aufnahme-Stop: {seen['aufnahme gestoppt']['status']!r}", problems)
+            # Ringpuffer (#19): Ausschnitt mit Decodier-Log, Wiedergabe mit Stopp
+            saved = seen["gespeichert"]["saved"]
+            check(len(saved) == 1 and saved[0].endswith("_letzte30s.wav")
+                  and saved[0] in recs and saved[0][:-4] + ".txt" in recs,
+                  f"Ausschnitt nicht gespeichert: {saved} / {recs}", problems)
+            check("Gespeichert: " in seen["gespeichert"]["status"],
+                  f"keine Quittung: {seen['gespeichert']['status']!r}", problems)
+            check(seen["wiedergabe"]["replay_btn"] == "Stopp"
+                  and "Wiedergabe" in seen["wiedergabe"]["status"],
+                  f"Wiedergabe läuft nicht: {seen['wiedergabe']}", problems)
+            check(seen["wiedergabe gestoppt"]["replay_btn"] == "Nochmal hören",
+                  f"Wiedergabe nicht gestoppt: {seen['wiedergabe gestoppt']}", problems)
+            recs = [r for r in recs if "_letzte" not in r]
             # Starts mit Aufnahme: 1x normal, 1x sofort, 3x schnell, 1x vor Beenden
             wavs = [r for r in recs if r.endswith(".wav")]
             logs = [r for r in recs if r.endswith(".txt")]

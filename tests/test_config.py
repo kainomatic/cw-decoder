@@ -20,6 +20,7 @@ def test_defaults_match_spec():
         "n1mm_enabled": False, "n1mm_wipe": True, "record_default": False,
         "n1mm_engine": True, "n1mm_spot": True, "n1mm_type": False,
         "n1mm_clipboard": False, "n1mm_rpc_port": 7367,
+        "ring_seconds": 60, "save_last_s": 30, "replay_s": 10, "replay_slow": False,
     }
 
 
@@ -105,6 +106,24 @@ def test_n1mm_wege_und_port(cfg_path):
     for bad in (80, 70000, "7367", True, 7367.0):
         cfg_path.write_text(json.dumps({"n1mm_rpc_port": bad}), encoding="utf-8")
         assert config.load(cfg_path)["n1mm_rpc_port"] == 7367, bad
+
+
+def test_ringpuffer_werte(cfg_path):
+    """Puffergröße 10–300, Speichern 5…Puffergröße, Wiedergabe 3–30 (ADR-0024)."""
+    cfg_path.write_text(json.dumps({"ring_seconds": 120, "save_last_s": 90,
+                                    "replay_s": 5, "replay_slow": True}), encoding="utf-8")
+    cfg = config.load(cfg_path)
+    assert (cfg["ring_seconds"], cfg["save_last_s"], cfg["replay_s"]) == (120, 90, 5)
+    assert cfg["replay_slow"] is True
+    for key, bad in (("ring_seconds", 9), ("ring_seconds", 301), ("ring_seconds", 60.0),
+                     ("save_last_s", 4), ("save_last_s", True), ("replay_s", 2),
+                     ("replay_s", 31), ("replay_s", "10"), ("replay_slow", 1)):
+        cfg_path.write_text(json.dumps({key: bad}), encoding="utf-8")
+        assert config.load(cfg_path)[key] == config.DEFAULTS[key], (key, bad)
+    # Speichern länger als der Puffer: auf die Puffergröße gekürzt
+    cfg_path.write_text(json.dumps({"ring_seconds": 20, "save_last_s": 30}), encoding="utf-8")
+    cfg = config.load(cfg_path)
+    assert cfg["ring_seconds"] == 20 and cfg["save_last_s"] == 20
 
 
 def test_fixed_freq_out_of_range_and_bool(cfg_path):

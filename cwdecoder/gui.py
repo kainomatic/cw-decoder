@@ -42,6 +42,8 @@ from .live import (AudioDeviceError, DecodeLog, LiveDecoder, WavRecorder,
 from .fldigi_rpc import DEFAULT_TITLE as ENGINE_TITLE
 from .n1mm import N1MMBridge
 from .paths import data_path, get_log_dir, get_recordings_dir
+from .replay import Player
+from .ringbuffer import save_excerpt
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +56,11 @@ _LBL_STOP = "Stop"
 _LBL_AUTO = "Ton automatisch suchen"
 _LBL_RECORD = "Aufnahme (WAV)"
 _LBL_CLEAR = "Text löschen"
+_LBL_SAVE_LAST = "Letzte {s} s speichern"
+_LBL_REPLAY = "Nochmal hören"
+_LBL_REPLAY_STOP = "Stopp"
+_LBL_MENU_SETTINGS = "Einstellungen"
+_LBL_MENU_RING = "Puffer und Nochmal hören…"
 _LBL_CALLS = "Rufzeichen (Klick → N1MM)"
 _LBL_N1MM = "N1MM-Anbindung"
 _LBL_N1MM_WAYS = "Übergabe…"
@@ -86,6 +93,15 @@ _MSG_STATUS = ("{lock}: {freq:.0f} Hz   SNR {snr:.0f} dB   {wpm:.0f} WPM   "
 _MSG_STATUS_LOCK = "Ton"
 _MSG_STATUS_NOLOCK = "kein Ton"
 _MSG_STATUS_REC = "   ● REC {name}"
+_MSG_SAVED = "Gespeichert: {name} ({secs:.0f} s)"
+_MSG_SAVE_NOT_RUNNING = "Speichern geht nur, während der Decoder läuft"
+_MSG_REPLAY_RUNNING = "▶ Wiedergabe {secs:.0f} s …"
+_MSG_REPLAY_SLOW = " (0,7×)"
+_MSG_REPLAY_DONE = "Wiedergabe beendet"
+_MSG_REPLAY_STOPPED = "Wiedergabe abgebrochen"
+_MSG_REPLAY_EMPTY = "Noch nichts zum Abspielen im Puffer"
+_MSG_CTX_SAVE = "Letzte Sekunden speichern"
+_MSG_CTX_REPLAY = "Nochmal hören"
 _MSG_CALL_COUNTRY = "{name} ({prefix}, {continent}, CQ {cq}, ITU {itu})"
 _MSG_N1MM_OFF = "N1MM: aus"
 _MSG_N1MM_IDLE = "N1MM: –"
@@ -127,6 +143,12 @@ _TT_AUTO = ("An: Der Decoder sucht den CW-Ton selbst und folgt ihm.\n"
 _TT_RECORD = ("Beim nächsten Start das Audio als WAV mitschneiden "
               "(Ordner Dokumente\\CW Decoder\\Aufnahmen). Hilft bei der Fehlersuche.")
 _TT_CLEAR = "Dekodierten Text löschen."
+_TT_SAVE_LAST = ("Die letzten Sekunden Audio als WAV in Dokumente\\CW Decoder\\Aufnahmen "
+                 "sichern, dazu der decodierte Text als .txt (Strg+S). Ohne "
+                 "Daueraufnahme: z. B. eine Fehldecodierung als Testdatei festhalten.")
+_TT_REPLAY = ("Die letzten Sekunden über das Standard-Ausgabegerät nochmal abspielen "
+              "(Strg+R); der Decoder läuft weiter. Während der Wiedergabe: Stopp.")
+_TT_SETTINGS_RING = "Puffergröße, Längen für Speichern und Nochmal hören, langsamer abspielen."
 _TT_STATUS = ("Ton: erkannte Tonfrequenz · SNR: Signal-Rausch-Abstand · "
               "WPM: Tempo · Filter: aktuelle Bandbreite · ■ Taste gedrückt")
 _TT_SPECTRUM = ("Spektrum 300–1200 Hz. Orange Linie = verfolgter Ton.\n"
@@ -238,6 +260,13 @@ class App(tk.Tk):
         self.update_dialog = None
         self.check_for_update = updater.check_for_update    # Tests ersetzen das
         self.launch_installer = updater.launch_installer_and_exit
+        # Ringpuffer (ADR-0024): Speichern im Hintergrund, Wiedergabe
+        self.player = Player()
+        self.replay_secs = None     # laufende Wiedergabe (Sekunden) oder None
+        self.status_note = None     # (Meldung, sichtbar bis time.monotonic())
+        self.saved_paths = []       # gespeicherte Ausschnitte (Tests)
+        self.ring_dialog = None
+        self._last_st = None
         self._build_menu()
         self._build()
         self._fill_devices()
@@ -252,6 +281,9 @@ class App(tk.Tk):
         m_file.add_separator()
         m_file.add_command(label=_LBL_MENU_QUIT, command=self._quit)
         bar.add_cascade(label=_LBL_MENU_FILE, menu=m_file)
+        m_set = tk.Menu(bar, tearoff=False)
+        m_set.add_command(label=_LBL_MENU_RING, command=self.open_ring_settings)
+        bar.add_cascade(label=_LBL_MENU_SETTINGS, menu=m_set)
         m_help = tk.Menu(bar, tearoff=False)
         m_help.add_command(label=_LBL_MENU_UPDATE, command=self.check_updates_manual)
         m_help.add_separator()
@@ -289,9 +321,27 @@ class App(tk.Tk):
                              command=self._rec_changed)
         cb.pack(side="left", padx=8)
         attach_tooltip(cb, _TT_RECORD)
-        btn = ttk.Button(top, text=_LBL_CLEAR, command=self._clear)
+        # zweite Zeile: in der ersten ist bei 760-900 px kein Platz mehr
+        top2 = ttk.Frame(self, padding=(6, 0, 6, 4))
+        top2.pack(fill="x")
+        btn = ttk.Button(top2, text=_LBL_CLEAR, command=self._clear)
         btn.pack(side="right")
         attach_tooltip(btn, _TT_CLEAR)
+        # Ringpuffer (ADR-0024): aktiv, solange der Decoder läuft
+        self.btn_save = ttk.Button(top2, text=self._save_label(), command=self.save_last,
+                                   state="disabled")
+        self.btn_save.pack(side="left", padx=(0, 4))
+        attach_tooltip(self.btn_save, _TT_SAVE_LAST)
+        # feste Breite: der Knopf springt nicht, wenn er „Stopp“ zeigt
+        self.btn_replay = ttk.Button(top2, text=_LBL_REPLAY, command=self.toggle_replay,
+                                     width=14, state="disabled")
+        self.btn_replay.pack(side="left", padx=2)
+        attach_tooltip(self.btn_replay, _TT_REPLAY)
+        self.slow_var = tk.BooleanVar(value=self.cfg["replay_slow"])
+        for seq in ("<Control-s>", "<Control-S>"):
+            self.bind(seq, lambda _e: self.save_last() or "break")
+        for seq in ("<Control-r>", "<Control-R>"):
+            self.bind(seq, lambda _e: self.toggle_replay() or "break")
 
         self.status = tk.StringVar(value=_MSG_READY)
         self.status_label = ttk.Label(self, textvariable=self.status, anchor="w",
@@ -452,7 +502,8 @@ class App(tk.Tk):
                                 on_char_conf=lambda ch, c: self.msgs.put(("char", g, (ch, c))),
                                 on_status=lambda d: self.msgs.put(("status", g, d)),
                                 on_call=lambda c: self.msgs.put(("call", g, c)),
-                                on_call_span=lambda c, a, b: self.msgs.put(("span", g, (c, a, b))))
+                                on_call_span=lambda c, a, b: self.msgs.put(("span", g, (c, a, b))),
+                                ring_seconds=self.cfg["ring_seconds"])
         self.rec_path = None
         if self.rec_var.get():
             # Zeitstempel mit Millisekunden: schneller Neustart überschreibt nichts
@@ -478,6 +529,7 @@ class App(tk.Tk):
                                        daemon=True, name="decoder")
         self.thread.start()
         self.btn_start.configure(text=_LBL_STOP)
+        self._update_ring_buttons()
 
     def _run_decoder(self, live, gen):
         """Läuft im Decoder-Thread: kein tk-Aufruf, Fehler über die Queue."""
@@ -683,7 +735,9 @@ class App(tk.Tk):
             self.live.decode_log.close()
         self.live = None
         self.stream = None
+        self._last_st = None
         self.btn_start.configure(text=_LBL_START)
+        self._update_ring_buttons()
         if self.rec_path:
             self.status.set(_MSG_STOPPED_REC.format(path=self.rec_path))
             self.rec_path = None
@@ -692,6 +746,8 @@ class App(tk.Tk):
 
     def _quit(self):
         self._stop()
+        self.player.stop()
+        self.player.join(timeout=1.0)
         if self.n1mm:
             self.n1mm.stop()
             self.n1mm = None
@@ -701,6 +757,114 @@ class App(tk.Tk):
             self.after_cancel(self._call_fit_id)
             self._call_fit_id = None
         self.destroy()
+
+    # -- Ringpuffer: speichern und nochmal hören (ADR-0024) ---------------
+    def _save_label(self):
+        return _LBL_SAVE_LAST.format(s=self.cfg["save_last_s"])
+
+    def _update_ring_buttons(self):
+        """Speichern nur bei laufendem Decoder; der Wiedergabe-Knopf bleibt
+        als „Stopp“ aktiv, solange etwas spielt (auch nach dem Stoppen)."""
+        self.btn_save.configure(text=self._save_label(),
+                                state="normal" if self.live else "disabled")
+        playing = self.replay_secs is not None
+        self.btn_replay.configure(text=_LBL_REPLAY_STOP if playing else _LBL_REPLAY,
+                                  state="normal" if (self.live or playing) else "disabled")
+
+    def _note(self, text, seconds=8.0):
+        """Meldung in der Statuszeile; bei laufendem Decoder hinter dem Status."""
+        self.status_note = (text, time.monotonic() + seconds)
+        self._refresh_status()
+
+    def _refresh_status(self):
+        if self.live and self._last_st is not None:
+            self._show_status(self._last_st)
+        elif self.replay_secs is not None:
+            self.status.set(self._replay_text())
+        elif self.status_note and time.monotonic() < self.status_note[1]:
+            self.status.set(self.status_note[0])
+
+    def _replay_text(self):
+        text = _MSG_REPLAY_RUNNING.format(secs=self.replay_secs)
+        return text + (_MSG_REPLAY_SLOW if self.slow_var.get() else "")
+
+    def save_last(self):
+        """„Letzte … s speichern“ (Strg+S): Schreiben im Hintergrund-Thread,
+        Ergebnis über self.msgs."""
+        live = self.live
+        if live is None or live.ring is None:
+            self.status.set(_MSG_SAVE_NOT_RUNNING)
+            return
+        secs = min(self.cfg["save_last_s"], self.cfg["ring_seconds"])
+        rec_dir = self.rec_dir or str(get_recordings_dir())
+
+        def run():
+            """Hintergrund-Thread: kein tk."""
+            try:
+                result = save_excerpt(rec_dir, live.ring, live.token_ring, secs)
+            except Exception as e:  # noqa: BLE001 - SaveLastError u. a., Dialog in der GUI
+                self.msgs.put(("save_error", 0, e))
+            else:
+                self.msgs.put(("saved", 0, result))
+
+        threading.Thread(target=run, daemon=True, name="save-last").start()
+
+    def _saved(self, path, secs):
+        log.info("Ausschnitt gespeichert: %s (%.1f s)", path, secs)
+        self.saved_paths.append(path)
+        self._note(_MSG_SAVED.format(name=os.path.basename(path), secs=secs))
+
+    def toggle_replay(self):
+        """„Nochmal hören“ (Strg+R) bzw. „Stopp“ während der Wiedergabe."""
+        if self.replay_secs is not None:
+            log.info("Wiedergabe vom Nutzer abgebrochen")
+            self.player.stop()
+            return
+        live = self.live
+        if live is None or live.ring is None:
+            return
+        samples = live.ring.last(self.cfg["replay_s"])   # Kopie, Ring läuft weiter
+        if len(samples) == 0:
+            self._note(_MSG_REPLAY_EMPTY)
+            return
+        slow = bool(self.slow_var.get())
+        if not self.player.start(samples, live.fs, slow=slow,
+                                 on_done=lambda err: self.msgs.put(("replay_done", 0, err))):
+            return
+        self.replay_secs = len(samples) / live.fs
+        log.info("Wiedergabe %.1f s%s", self.replay_secs, " langsam" if slow else "")
+        self._update_ring_buttons()
+        self._refresh_status()
+
+    def _replay_done(self, err):
+        stopped = self.player.stop_requested
+        self.replay_secs = None
+        self._update_ring_buttons()
+        if err is not None:
+            info = self.report_error(err, _MSG_CTX_REPLAY)
+            self._note(info.status)
+        else:
+            self._note(_MSG_REPLAY_STOPPED if stopped else _MSG_REPLAY_DONE, 4.0)
+
+    def _slow_changed(self):
+        self._save_config(replay_slow=bool(self.slow_var.get()))
+
+    def set_ring_settings(self, **changes):
+        """Werte aus dem Dialog übernehmen; Puffergröße gilt ab dem nächsten Start."""
+        cfg = dict(self.cfg, **changes)
+        if cfg["save_last_s"] > cfg["ring_seconds"]:
+            changes["save_last_s"] = cfg["ring_seconds"]
+        log.info("Ringpuffer-Einstellungen: %s", changes)
+        self._save_config(**changes)
+        self._update_ring_buttons()
+
+    def open_ring_settings(self):
+        if self.ring_dialog is not None:
+            self.ring_dialog.lift()
+            return self.ring_dialog
+        from .gui_ring import RingSettingsDialog
+        self.ring_dialog = RingSettingsDialog(self)
+        return self.ring_dialog
 
     def _clear(self):
         self.text.delete("1.0", "end")
@@ -826,6 +990,13 @@ class App(tk.Tk):
                     self._add_call(val)
                 elif kind == "update":
                     self.handle_update_result(*val)
+                elif kind == "saved":
+                    self._saved(*val)
+                elif kind == "save_error":
+                    info = self.report_error(val, _MSG_CTX_SAVE)
+                    self._note(info.status)
+                elif kind == "replay_done":
+                    self._replay_done(val)
         except queue.Empty:
             pass
         if self.live:
@@ -863,6 +1034,11 @@ class App(tk.Tk):
             key="■" if st["key"] else "□")
         if self.rec_path:
             text += _MSG_STATUS_REC.format(name=os.path.basename(self.rec_path))
+        if self.replay_secs is not None:
+            text += "   " + self._replay_text()
+        if self.status_note and time.monotonic() < self.status_note[1]:
+            text += "   " + self.status_note[0]
+        self._last_st = st
         self.status.set(text)
 
     def _draw_spectrum(self):

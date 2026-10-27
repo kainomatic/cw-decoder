@@ -53,3 +53,14 @@ def test_recordings_dir_linux_home(app_env, monkeypatch):
 def test_recordings_not_in_repo_testdata(app_env):
     repo_testdata = Path(paths.__file__).resolve().parent.parent / "testdata"
     assert repo_testdata not in paths.get_recordings_dir().parents
+
+
+def test_data_path_entwicklung_und_bundle(monkeypatch, tmp_path):
+    """Mitgelieferte Daten: neben dem Paket bzw. unter sys._MEIPASS (ADR-0021)."""
+    import sys
+    from cwdecoder import paths
+    assert paths.data_path("cty.dat").is_file()
+    assert paths.data_path("flags", "de.png").is_file()
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+    assert paths.data_path("cty.dat") == tmp_path / "cwdecoder" / "data" / "cty.dat"

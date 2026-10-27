@@ -8,6 +8,8 @@ get_recordings_dir()  WAV-Aufnahmen; Windows: Dokumente\CW Decoder\Aufnahmen,
                       sonst ~/CW Decoder/Aufnahmen. Bewusst ein sichtbarer
                       Ordner: Nutzer schicken Aufnahmen zur Analyse weiter.
 open_folder(path)     Ordner im Explorer bzw. Dateimanager öffnen.
+data_path(*teile)     mitgelieferte Daten (cwdecoder/data/…), im Bundle
+                      unter sys._MEIPASS (ADR-0021).
 
 Alle get_*-Funktionen legen den Ordner an.
 """
@@ -87,6 +89,16 @@ def get_recordings_dir() -> Path:
         d = Path.home() / RECORDINGS_PARENT / RECORDINGS_FOLDER
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def data_path(*parts) -> Path:
+    """Pfad einer mitgelieferten Datei unter cwdecoder/data (legt nichts an).
+
+    Entwicklung: neben diesem Modul. PyInstaller-Bundle (onedir): die Spec
+    kopiert cwdecoder/data nach <_MEIPASS>/cwdecoder/data."""
+    meipass = getattr(sys, "_MEIPASS", None) if getattr(sys, "frozen", False) else None
+    base = Path(meipass) / "cwdecoder" if meipass else Path(__file__).resolve().parent
+    return base.joinpath("data", *parts)
 
 
 def open_folder(path) -> None:

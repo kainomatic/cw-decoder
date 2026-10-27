@@ -159,9 +159,37 @@ def run_scenario(ok_rate=48000, with_input=True, slow_recorder=False, n1mm=True)
                      "rows": {c: (flag_of(p), p["name"]["text"] if p["name"] else None)
                               for c, p in app.call_rows.items()}}
 
+    def inject_scp():
+        """Super Check Partial und Zerlegung (ADR-0026): DEDJ7PR mit Trenner,
+        DJ7PR grün (in SCP), ES3YJE gelb mit Vorschlag ES3YJ."""
+        g, n = app.gen, app._tok_n
+        for word, cuts, spans in (("DEDJ7PR", [2], [("DJ7PR", 2, 7)]),
+                                  ("ES3YJE", [], [("ES3YJE", 7, 13)])):
+            for ch in word:
+                app.msgs.put(("char", g, (ch, 1.0)))
+            if cuts:
+                app.msgs.put(("seg", g, [n + c for c in cuts]))
+            for call, a, b in spans:
+                app.msgs.put(("span", g, (call, n + a, n + b)))
+                app.msgs.put(("call", g, call))
+            app.msgs.put(("text", g, " "))
+
+    def snap_scp():
+        rows = app.call_rows
+        rng = app.text.tag_ranges("inferred")
+        seen["scp"] = {
+            "bg": {c: str(rows[c]["call"]["bg"]) for c in ("DJ7PR", "ES3YJE") if c in rows},
+            "tip": rows["ES3YJE"]["tooltip"] if "ES3YJE" in rows else "",
+            "suggest": app.call_suggestion("ES3YJE"),
+            "right_click": bool(rows["ES3YJE"]["call"].bind("<Button-3>")) if "ES3YJE" in rows
+            else False,
+            "sep": [app.text.get(rng[i], rng[i + 1]) for i in range(0, len(rng), 2)],
+            "text": app.text.get("1.0", "end")}
+
     steps = [
         (300, app._toggle),                                   # Start
-        (1500, lambda: snap("läuft")),
+        # Rufzeichen ohne SCP-Treffer kommt erst mit dem Folgewort (ADR-0026)
+        (2000, lambda: snap("läuft")),
         # Ringpuffer (#19): letzte Sekunden speichern, nochmal hören, abbrechen
         (10, app.save_last),
         (400, lambda: snap("gespeichert")),
@@ -177,6 +205,8 @@ def run_scenario(ok_rate=48000, with_input=True, slow_recorder=False, n1mm=True)
         (10, lambda: (app.auto_var.set(True), app._auto_changed())),
         (10, app._toggle),                                    # Stop
         (10, lambda: snap("gestoppt")),
+        (10, inject_scp),
+        (200, snap_scp),
         (10, lambda: app.rec_var.set(True)),
         (10, app._toggle),                                    # Start mit Aufnahme
         (600, lambda: snap("aufnahme")),
@@ -311,6 +341,14 @@ def main():
                   f"Knopf ohne Flagge falsch: {rows.get('DP0GVN')}", problems)
             check(rows.get("QQ1A") == (None, None),
                   f"Knopf ohne Land falsch: {rows.get('QQ1A')}", problems)
+            sc = seen.get("scp", {})
+            check(sc.get("bg") == {"DJ7PR": "#b9e8b0", "ES3YJE": "#ffe08a"},
+                  f"Knopffarben SCP falsch: {sc.get('bg')}", problems)
+            check(sc.get("suggest") == "ES3YJ" and "ähnlich: ES3YJ" in sc.get("tip", "")
+                  and "nicht in SCP" in sc.get("tip", "") and sc.get("right_click"),
+                  f"Vorschlag fehlt: {sc}", problems)
+            check(sc.get("sep") == ["·"] and "DE·DJ7PR ES3YJE" in sc.get("text", ""),
+                  f"Trenner · fehlt: {sc}", problems)
             check(seen["gestoppt"]["status"] == "gestoppt",
                   f"Status nach Stop: {seen['gestoppt']['status']!r}", problems)
             check("REC" in seen["aufnahme"]["status"], "Aufnahme nicht in der Statuszeile", problems)

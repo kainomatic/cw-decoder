@@ -44,6 +44,7 @@ from .n1mm import N1MMBridge
 from .paths import data_path, get_log_dir, get_recordings_dir
 from .replay import Player
 from .ringbuffer import save_excerpt
+from .segment import SEP as SEGMENT_SEP, WordBuffer
 
 log = logging.getLogger(__name__)
 
@@ -61,6 +62,9 @@ _LBL_REPLAY = "Nochmal hören"
 _LBL_REPLAY_STOP = "Stopp"
 _LBL_MENU_SETTINGS = "Einstellungen"
 _LBL_MENU_RING = "Puffer und Nochmal hören…"
+_LBL_MENU_SEGMENT = "Zusammengeklebte Wörter trennen (·)"
+_LBL_MENU_ENGINE_SEG = "An N1MMs CW Reader getrennt mit Leerzeichen"
+_LBL_CALL_ADOPT = "{call} übernehmen"
 _LBL_CALLS = "Rufzeichen (Klick → N1MM)"
 _LBL_N1MM = "N1MM-Anbindung"
 _LBL_N1MM_WAYS = "Übergabe…"
@@ -161,6 +165,12 @@ _TT_CALL_TAG = ("Erkanntes Rufzeichen. Klick übergibt es an N1MM "
                 "(wie der Knopf rechts).")
 _TT_UNSURE_TAG = "unsicher erkannt"
 _TT_CALL_UNSURE = "enthält unsichere Zeichen"
+_TT_CALL_SCP = "in Super Check Partial"
+_TT_CALL_NOT_SCP = "nicht in SCP"
+_TT_CALL_NEAR = "ähnlich: {calls}"
+_TT_CALL_ADOPT = "Rechtsklick: {call} übernehmen"
+_TT_INFERRED = ("· = vom Wörterbuch getrennt, kein Wortabstand gehört "
+                "(Einstellungen → Zusammengeklebte Wörter trennen)")
 _TT_N1MM = ("N1MM Logger+ anbinden: Engine für N1MMs CW Reader (Port 7367), "
             "Frequenz per UDP 12060, Spots auf Telnet 127.0.0.1:7373. Belegt die "
             "Ports erst beim Einschalten.")
@@ -176,7 +186,11 @@ MIN_WIDTH, MIN_HEIGHT = 760, 480   # Rufzeichen-Spalte bleibt sichtbar
 TEXT_FONT = ("Consolas", 16)
 CALL_TAG = "call"                  # Markierung erkannter Rufzeichen im Text
 CALL_TAG_PREFIX = "call:"          # zweiter Tag je Vorkommen: call:DL1ABC
-CALL_TAG_BG = "#ffe08a"
+CALL_TAG_BG = "#ffe08a"            # Rufzeichen, nicht in SCP (gelb)
+CALL_SCP_TAG = "call_scp"          # Rufzeichen in Super Check Partial (ADR-0026)
+CALL_SCP_BG = "#b9e8b0"            # grün
+INFERRED_TAG = "inferred"          # Trenner · der Wörterbuch-Zerlegung
+INFERRED_FG = "#9a9a9a"
 UNSURE_TAG = "unsure"              # unsicher erkannte Zeichen (ADR-0023)
 UNSURE_FG = "#8a8a8a"
 CALL_MAX = 12                      # so viele Rufzeichen merkt sich die Spalte
@@ -267,6 +281,11 @@ class App(tk.Tk):
         self.saved_paths = []       # gespeicherte Ausschnitte (Tests)
         self.ring_dialog = None
         self._last_st = None
+        # Super Check Partial (ADR-0026): Ähnliche je Rufzeichen (gecacht)
+        self._near_cache = {}
+        # N1MM-Engine: Wort erst am Ende, mit echten Leerzeichen an den
+        # Zerlegestellen (n1mm_engine_segmented)
+        self._engine_words = WordBuffer(self._engine_emit, " ")
         self._build_menu()
         self._build()
         self._fill_devices()
@@ -283,7 +302,15 @@ class App(tk.Tk):
         bar.add_cascade(label=_LBL_MENU_FILE, menu=m_file)
         m_set = tk.Menu(bar, tearoff=False)
         m_set.add_command(label=_LBL_MENU_RING, command=self.open_ring_settings)
+        m_set.add_separator()
+        self.segment_var = tk.BooleanVar(value=self.cfg["segment_words"])
+        self.engine_seg_var = tk.BooleanVar(value=self.cfg["n1mm_engine_segmented"])
+        m_set.add_checkbutton(label=_LBL_MENU_SEGMENT, variable=self.segment_var,
+                              command=self._segment_changed)
+        m_set.add_checkbutton(label=_LBL_MENU_ENGINE_SEG, variable=self.engine_seg_var,
+                              command=self._segment_changed)
         bar.add_cascade(label=_LBL_MENU_SETTINGS, menu=m_set)
+        self.settings_menu = m_set
         m_help = tk.Menu(bar, tearoff=False)
         m_help.add_command(label=_LBL_MENU_UPDATE, command=self.check_updates_manual)
         m_help.add_separator()
@@ -497,12 +524,15 @@ class App(tk.Tk):
         self._tokens = {}
         self._tok_n = 0
         self._unsure_tok = set()
+        self._engine_words.end()
         self.live = LiveDecoder(fs, cfg,
                                 on_text=lambda s: self.msgs.put(("text", g, s)),
                                 on_char_conf=lambda ch, c: self.msgs.put(("char", g, (ch, c))),
                                 on_status=lambda d: self.msgs.put(("status", g, d)),
                                 on_call=lambda c: self.msgs.put(("call", g, c)),
                                 on_call_span=lambda c, a, b: self.msgs.put(("span", g, (c, a, b))),
+                                on_segment=lambda cuts: self.msgs.put(("seg", g, cuts)),
+                                segment=bool(self.segment_var.get()),
                                 ring_seconds=self.cfg["ring_seconds"])
         self.rec_path = None
         if self.rec_var.get():
@@ -736,6 +766,7 @@ class App(tk.Tk):
         self.live = None
         self.stream = None
         self._last_st = None
+        self._engine_words.end()
         self.btn_start.configure(text=_LBL_START)
         self._update_ring_buttons()
         if self.rec_path:
@@ -969,15 +1000,18 @@ class App(tk.Tk):
                         self.status.set(_MSG_DECODER_CRASHED)
                     self.report_error(val, _MSG_CTX_DECODER)
                 elif kind == "text":
+                    # Leerzeichen bzw. Absatz (Zeichen kommen als "char")
                     self._insert_decoded(val, gen)
-                    if self.n1mm:
-                        self.n1mm.feed_text(val)
+                    self._engine_text(val)
                 elif kind == "char":
                     # Zeichen mit Vertrauen (ADR-0023); N1MM bekommt es unverändert
                     ch, conf = val
                     self._insert_decoded(ch, gen, conf)
-                    if self.n1mm:
-                        self.n1mm.feed_text(ch)
+                    self._engine_char(ch, gen)
+                elif kind == "seg":
+                    if gen == self.gen:
+                        self._insert_separators(val)
+                        self._engine_words.cut(val)
                 elif kind == "note":
                     self.text.insert("end", val)
                     self.text.see("end")
@@ -1090,6 +1124,71 @@ class App(tk.Tk):
             self._unsure_tok.discard(self._tok_n - TOKENS_KEEP)
         self.text.see("end")
 
+    # -- Wörterbuch-Zerlegung (ADR-0026) ----------------------------------
+    def _insert_separators(self, cuts):
+        """Grauen Trenner · vor die Zeichen cuts (Positionen im Strom) setzen.
+
+        Die gemerkten Textindizes der folgenden Zeichen derselben Zeile
+        rücken um eins nach rechts; der Trenner selbst zählt nicht als
+        Zeichen des Stroms (Rufzeichen-Markierung bleibt stimmig)."""
+        for p in sorted(cuts, reverse=True):
+            tok = self._tokens.get(p)
+            if tok is None:
+                continue
+            line, col = (int(v) for v in tok[0].split("."))
+            self.text.insert(tok[0], SEGMENT_SEP, (INFERRED_TAG,))
+            for q in range(p, self._tok_n):
+                t = self._tokens.get(q)
+                if t is not None:
+                    self._tokens[q] = (_shift_index(t[0], line, col),
+                                       _shift_index(t[1], line, col))
+
+    def _engine_segmented(self):
+        return bool(self.segment_var.get()) and bool(self.engine_seg_var.get())
+
+    def _engine_emit(self, text):
+        if self.n1mm:
+            self.n1mm.feed_text(text)
+
+    def _engine_char(self, ch, gen):
+        """Zeichen an N1MMs CW Reader: sofort oder (zerlegt) am Wortende."""
+        if self._engine_segmented() and gen == self.gen:
+            self._engine_words.add(ch, self._tok_n - 1)
+        else:
+            self._engine_emit(ch)
+
+    def _engine_text(self, text):
+        if text.strip():
+            self._engine_words.end()
+            self._engine_emit(text)
+        else:
+            self._engine_words.end(text)
+
+    def _segment_changed(self):
+        on = bool(self.segment_var.get())
+        self._save_config(segment_words=on,
+                          n1mm_engine_segmented=bool(self.engine_seg_var.get()))
+        if self.live is not None:
+            self.live.spotter.segment = on
+        self._engine_words.end()
+        log.info("Wörterbuch-Zerlegung %s, an N1MM getrennt %s", on,
+                 bool(self.engine_seg_var.get()))
+
+    # -- Super Check Partial (ADR-0026) ----------------------------------
+    def _call_in_scp(self, call):
+        from . import scp
+        return bool(call) and scp.DEFAULT.is_known(call)
+
+    def _call_near(self, call):
+        """Bekannte Nachbarn (ein Edit) eines Rufzeichens, das nicht in SCP
+        steht; leer für bekannte Rufzeichen."""
+        if not call or self._call_in_scp(call):
+            return []
+        if call not in self._near_cache:
+            from . import scp
+            self._near_cache[call] = scp.DEFAULT.near(call)
+        return self._near_cache[call]
+
     def _mark_call(self, call, a, b):
         """Zeichen a..b-1 des Stroms als Rufzeichen markieren."""
         first, last = self._tokens.get(a), self._tokens.get(b - 1)
@@ -1097,6 +1196,8 @@ class App(tk.Tk):
             return      # schon aus dem Speicher oder Text gelöscht
         self.text.tag_add(CALL_TAG, first[0], last[1])
         self.text.tag_add(CALL_TAG_PREFIX + call, first[0], last[1])
+        if self._call_in_scp(call):
+            self.text.tag_add(CALL_SCP_TAG, first[0], last[1])
         self._note_call_confidence(call, any(n in self._unsure_tok for n in range(a, b)))
 
     def _note_call_confidence(self, call, unsure):
@@ -1121,8 +1222,14 @@ class App(tk.Tk):
         self.text.tag_configure(UNSURE_TAG, foreground=UNSURE_FG)
         self.text.tag_configure(CALL_TAG, background=CALL_TAG_BG,
                                 font=(family, size, "bold"))
-        # Rufzeichen-Markierung liegt über dem Grau (Tag-Priorität)
+        self.text.tag_configure(CALL_SCP_TAG, background=CALL_SCP_BG)
+        self.text.tag_configure(INFERRED_TAG, foreground=INFERRED_FG)
+        # Rufzeichen-Markierung liegt über dem Grau (Tag-Priorität), Grün
+        # (in SCP) über Gelb
         self.text.tag_raise(CALL_TAG, UNSURE_TAG)
+        self.text.tag_raise(CALL_SCP_TAG, CALL_TAG)
+        self.text.tag_bind(INFERRED_TAG, "<Enter>", self._inferred_tag_enter)
+        self.text.tag_bind(INFERRED_TAG, "<Leave>", self._call_tag_leave)
         self.text.tag_bind(CALL_TAG, "<Button-1>", self._call_clicked)
         self.text.tag_bind(CALL_TAG, "<Enter>", self._call_tag_enter)
         self.text.tag_bind(CALL_TAG, "<Leave>", self._call_tag_leave)
@@ -1136,6 +1243,15 @@ class App(tk.Tk):
         tip = getattr(self.text, "_cw_tooltip", None)
         if tip is not None:
             tip.set_text(_TT_UNSURE_TAG)
+            tip.schedule()
+
+    def _inferred_tag_enter(self, ev=None):
+        """Tooltip zum Trenner ·; auf einem Rufzeichen gilt dessen Tooltip."""
+        if ev is not None and self._call_at(ev.x, ev.y):
+            return
+        tip = getattr(self.text, "_cw_tooltip", None)
+        if tip is not None:
+            tip.set_text(_TT_INFERRED)
             tip.schedule()
 
     def _call_at(self, x, y):
@@ -1190,6 +1306,16 @@ class App(tk.Tk):
                 name=e.short, prefix=e.prefix, continent=e.continent, cq=e.cq, itu=e.itu)
         if call in self.unsure_calls:
             text += "\n" + _TT_CALL_UNSURE
+        if call:
+            if self._call_in_scp(call):
+                text += "\n" + _TT_CALL_SCP
+            else:
+                text += "\n" + _TT_CALL_NOT_SCP
+                near = self._call_near(call)
+                if near:
+                    text += "\n" + _TT_CALL_NEAR.format(calls=", ".join(near))
+                if len(near) == 1 and base == _TT_CALL_BUTTON:
+                    text += "\n" + _TT_CALL_ADOPT.format(call=near[0])
         return text
 
     def _flag_image(self, iso):
@@ -1278,11 +1404,13 @@ class App(tk.Tk):
         jede Stelle übergibt das Rufzeichen (_send_call)."""
         e = self._country(call)
         bg = self._call_bg
+        # Rufzeichen grün unterlegt, wenn in SCP, sonst gelb wie im Text
+        call_bg = CALL_SCP_BG if self._call_in_scp(call) else CALL_TAG_BG
         row = tk.Frame(self.call_frame, relief="raised", bd=1, bg=bg, cursor="hand2",
                        takefocus=1)
         row.pack(fill="x", pady=1)
         lbl = tk.Label(row, text=call, font=self._call_font(), anchor="w",
-                       width=CALL_CHARS, bg=bg, pady=0)
+                       width=CALL_CHARS, bg=call_bg, pady=0)
         lbl.pack(side="left", padx=(4, 2), pady=1)
         parts = {"row": row, "call": lbl, "flag": None, "name": None, "entity": e}
         if e is not None:
@@ -1296,10 +1424,13 @@ class App(tk.Tk):
         parts["widgets"] = widgets
         parts["tooltip"] = tip = self._call_tooltip(_TT_CALL_BUTTON, call)
 
+        parts["call_bg"] = call_bg
+
         def paint(color):
             for w in widgets:
                 try:
-                    w.configure(bg=color)
+                    # ohne Hover: Rufzeichen behält sein Grün bzw. Gelb
+                    w.configure(bg=call_bg if (w is lbl and color == bg) else color)
                 except tk.TclError:     # Knopf schon abgebaut
                     pass
 
@@ -1321,11 +1452,45 @@ class App(tk.Tk):
                 lambda: None if inside() else paint(bg)), add="+")
             w.bind("<ButtonPress-1>", lambda _e: row.configure(relief="sunken"), add="+")
             w.bind("<ButtonRelease-1>", release, add="+")
+            w.bind("<Button-3>", lambda ev: self._call_context(ev, call), add="+")
             attach_tooltip(w, tip)
         row.bind("<Return>", lambda _e: self._send_call(call))
         row.bind("<space>", lambda _e: self._send_call(call))
         self.call_rows[call] = parts
         return parts
+
+    def call_suggestion(self, call):
+        """Der eine bekannte Nachbar (SCP, ein Edit) oder None – bei keinem
+        oder mehreren Nachbarn gibt es keinen Vorschlag zum Übernehmen."""
+        near = self._call_near(call)
+        return near[0] if len(near) == 1 else None
+
+    def _call_context(self, ev, call):
+        """Rechtsklick auf einen Knopf: „X übernehmen“, wenn es genau einen
+        Vorschlag gibt. Nie automatisch ersetzen (ADR-0026)."""
+        new = self.call_suggestion(call)
+        if new is None:
+            return "break"
+        menu = tk.Menu(self, tearoff=False)
+        menu.add_command(label=_LBL_CALL_ADOPT.format(call=new),
+                         command=lambda: self.adopt_call(call, new))
+        self.call_menu = menu       # Tests
+        try:
+            menu.tk_popup(ev.x_root, ev.y_root)
+        finally:
+            menu.grab_release()
+        return "break"
+
+    def adopt_call(self, old, new):
+        """Vorschlag übernehmen: Knopf ersetzen und wie per Klick übergeben."""
+        log.info("Vorschlag übernommen: %s -> %s", old, new)
+        calls = [c for c in self.calls if c != new]
+        self.calls = [new if c == old else c for c in calls]
+        if new not in self.calls:
+            self.calls.insert(0, new)
+        self.calls = self.calls[:CALL_MAX]
+        self._render_calls()
+        self._send_call(new)
 
     def _send_call(self, call):
         if not self.n1mm:
@@ -1338,12 +1503,24 @@ class App(tk.Tk):
             self.report_error(self.n1mm.last_failure, _MSG_CTX_N1MM)
 
 
+def _shift_index(index, line, col):
+    """Textindex "Zeile.Spalte" um ein Zeichen nach rechts, wenn er in Zeile
+    line ab Spalte col liegt (nach einem Einfügen an line.col)."""
+    ln, c = (int(v) for v in index.split("."))
+    return f"{ln}.{c + 1}" if ln == line and c >= col else index
+
+
 def _preload_dxcc():
     try:
         from . import dxcc
         dxcc.load()
     except Exception as e:  # noqa: BLE001 - Anzeige fällt dann nur weg
         log.warning("DXCC-Daten nicht geladen: %s", e)
+    try:
+        from . import scp
+        scp.load()
+    except Exception as e:  # noqa: BLE001 - dann ohne SCP (alles gelb)
+        log.warning("Super Check Partial nicht geladen: %s", e)
 
 
 def run_app(n1mm=None, lock=None, splash=None, timer=None, engine_port=None,

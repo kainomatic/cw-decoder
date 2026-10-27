@@ -43,6 +43,10 @@ DEFAULTS = {
     "save_last_s": 30,
     "replay_s": 10,
     "replay_slow": False,
+    # Wörterbuch-Zerlegung (ADR-0026): Trenner · im Text; N1MMs CW Reader
+    # bekommt die getrennten Wörter mit echten Leerzeichen
+    "segment_words": True,
+    "n1mm_engine_segmented": True,
 }
 
 # Grenzen der Ringpuffer-Werte (Sekunden); save_last_s höchstens ring_seconds
@@ -94,6 +98,8 @@ _VALIDATORS = {
     "save_last_s": _int_in(*SAVE_LAST_RANGE),
     "replay_s": _int_in(*REPLAY_RANGE),
     "replay_slow": _is_bool,
+    "segment_words": _is_bool,
+    "n1mm_engine_segmented": _is_bool,
 }
 
 

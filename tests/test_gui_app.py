@@ -215,7 +215,8 @@ def test_rufzeichen_knoepfe_mit_flagge_und_land(app, monkeypatch):
     ru = rows["UA9ABC"]
     assert ru["name"]["text"] == "Asiat. Russla…"
     assert "Asiat. Russland (UA9, AS, CQ 17, ITU 30)" in ru["tooltip"]
-    assert rows["DJ7PR"]["tooltip"].endswith("Deutschland (DL, EU, CQ 14, ITU 28)")
+    assert "\nDeutschland (DL, EU, CQ 14, ITU 28)\n" in rows["DJ7PR"]["tooltip"]
+    assert rows["DJ7PR"]["tooltip"].endswith("in Super Check Partial")
     # feste Breite: alle Knöpfe mit Land gleich breit, Spalte springt nicht
     widths = {rows[c]["row"].winfo_reqwidth() for c in ("OY1CT", "DP0GVN", "UA9ABC", "DJ7PR")}
     assert len(widths) == 1, widths
@@ -401,3 +402,90 @@ def test_ringpuffer_einstellungen(app):
     assert saved["ring_seconds"] == 15 and saved["save_last_s"] == 15
     assert saved["replay_slow"] is True and saved["replay_s"] == 10
     assert app.ring_dialog is None
+
+
+def _feed_word(app, g, word, cuts=(), spans=(), start=0):
+    """Ein Wort wie vom LiveDecoder: Zeichen, am Wortende erst Zerlegung und
+    Rufzeichen-Spannen (Spotter), dann das Leerzeichen."""
+    for ch in word:
+        app.msgs.put(("char", g, (ch, 1.0)))
+    if cuts:
+        app.msgs.put(("seg", g, [start + c for c in cuts]))
+    for call, a, b in spans:
+        app.msgs.put(("span", g, (call, a, b)))
+    app.msgs.put(("text", g, " "))
+
+
+@requires_display
+@pytest.mark.gui
+def test_scp_farben_vorschlag_und_trenner(app, monkeypatch):
+    """ADR-0026, #23: grün = in SCP, gelb = nicht; Vorschlag bei genau einem
+    Nachbarn; Trenner · grau im Text, echte Leerzeichen an die Engine."""
+    from cwdecoder import config, gui, scp
+    monkeypatch.setattr(scp, "DEFAULT", scp.ScpDb({"DJ7PR", "IZ4BPF", "OY1CT", "OY1CW"}))
+    fed, sent = [], []
+    monkeypatch.setattr(app, "_engine_emit", fed.append)
+    app._engine_words.emit = fed.append
+    monkeypatch.setattr(app, "_send_call", sent.append)
+    g = app.gen
+    # DEDJ7PR -> DE·DJ7PR (Strom: D0 E1 D2 J3 7 4 P5 R6)
+    _feed_word(app, g, "DEDJ7PR", cuts=[2], spans=[("DJ7PR", 2, 7)])
+    _feed_word(app, g, "Z4BPF", spans=[("Z4BPF", 7, 12)], start=7)
+    _feed_word(app, g, "OY1CQ", spans=[("OY1CQ", 12, 17)], start=12)
+    for c in ("DJ7PR", "Z4BPF", "OY1CQ"):
+        app.msgs.put(("call", g, c))
+    app._poll()
+    app.update()
+    assert app.text.get("1.0", "end-1c") == f"DE{gui.SEGMENT_SEP}DJ7PR Z4BPF OY1CQ "
+    rng = app.text.tag_ranges(gui.INFERRED_TAG)
+    assert [app.text.get(rng[0], rng[1])] == [gui.SEGMENT_SEP]
+    assert app.text.tag_cget(gui.INFERRED_TAG, "foreground") == gui.INFERRED_FG
+    # Markierung trotz eingefügtem Trenner an der richtigen Stelle
+    calls = app.text.tag_ranges(gui.CALL_TAG)
+    marked = [app.text.get(calls[i], calls[i + 1]) for i in range(0, len(calls), 2)]
+    assert marked == ["DJ7PR", "Z4BPF", "OY1CQ"]
+    green = app.text.tag_ranges(gui.CALL_SCP_TAG)
+    assert [app.text.get(green[0], green[1])] == ["DJ7PR"] and len(green) == 2
+    names = list(app.text.tag_names())
+    assert names.index(gui.CALL_SCP_TAG) > names.index(gui.CALL_TAG)
+    # N1MM-Engine bekommt echte Leerzeichen, je Wort am Wortende
+    assert "".join(fed) == "DE DJ7PR Z4BPF OY1CQ "
+    # Knöpfe: grün bzw. gelb, Tooltips mit SCP-Zeile und Vorschlag
+    rows = app.call_rows
+    assert rows["DJ7PR"]["call"]["bg"] == gui.CALL_SCP_BG
+    assert rows["Z4BPF"]["call"]["bg"] == gui.CALL_TAG_BG
+    assert rows["DJ7PR"]["tooltip"].endswith(gui._TT_CALL_SCP)
+    tip = rows["Z4BPF"]["tooltip"]
+    assert gui._TT_CALL_NOT_SCP in tip and "ähnlich: IZ4BPF" in tip
+    assert gui._TT_CALL_ADOPT.format(call="IZ4BPF") in tip
+    tip = rows["OY1CQ"]["tooltip"]
+    assert "ähnlich: OY1CT, OY1CW" in tip and "übernehmen" not in tip
+    assert app.call_suggestion("Z4BPF") == "IZ4BPF"
+    assert app.call_suggestion("OY1CQ") is None         # mehrere: kein Vorschlag
+    assert app.call_suggestion("DJ7PR") is None         # bekannt: nichts
+    assert rows["Z4BPF"]["call"].bind("<Button-3>")
+    # übernehmen: Knopf ersetzt, Übergabe wie Klick, nie automatisch
+    assert sent == []
+    app.adopt_call("Z4BPF", "IZ4BPF")
+    assert "IZ4BPF" in app.calls and "Z4BPF" not in app.calls
+    assert sent == ["IZ4BPF"]
+    assert app.call_rows["IZ4BPF"]["call"]["bg"] == gui.CALL_SCP_BG
+    # Menü: Zerlegung aus -> gespeichert, Engine bekommt wieder sofort jedes Zeichen
+    app.segment_var.set(False)
+    app._segment_changed()
+    assert config.load(app.config_path)["segment_words"] is False
+    fed.clear()
+    app.msgs.put(("char", g, ("K", 1.0)))
+    app._poll()
+    assert fed == ["K"]
+
+
+@requires_display
+@pytest.mark.gui
+def test_menue_zerlegung(app):
+    from cwdecoder import gui
+    labels = [app.settings_menu.entrycget(k, "label")
+              for k in range(app.settings_menu.index("end") + 1)
+              if app.settings_menu.type(k) == "checkbutton"]
+    assert labels == [gui._LBL_MENU_SEGMENT, gui._LBL_MENU_ENGINE_SEG]
+    assert app.segment_var.get() is True and app.engine_seg_var.get() is True

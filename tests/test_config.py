@@ -21,6 +21,7 @@ def test_defaults_match_spec():
         "n1mm_engine": True, "n1mm_spot": True, "n1mm_type": False,
         "n1mm_clipboard": False, "n1mm_rpc_port": 7367,
         "ring_seconds": 60, "save_last_s": 30, "replay_s": 10, "replay_slow": False,
+        "segment_words": True, "n1mm_engine_segmented": True,
     }
 
 

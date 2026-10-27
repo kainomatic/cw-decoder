@@ -1,7 +1,7 @@
 # CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
 """Anbindung an N1MM Logger+.
 
-Drei Bausteine:
+Vier Bausteine:
 
 1. RadioInfoListener
    Empfängt die UDP-Broadcasts von N1MM (Config > Configure Ports > Broadcast
@@ -21,6 +21,14 @@ Drei Bausteine:
    Skimmer-Spots auf der aktuellen Frequenz gesendet und erscheinen in der
    Bandmap; ein Klick darauf in N1MM übernimmt Rufzeichen und Frequenz.
    Das ist der "saubere" Weg, der ohne Fenster-Fokus auskommt.
+
+4. FldigiRpcServer (cwdecoder/fldigi_rpc.py, ADR-0022)
+   Engine hinter N1MMs Fenster "CW Reader": N1MM hält uns für fldigi, zeigt
+   unseren Text und übernimmt angeklickte Rufzeichen selbst ins Entry
+   Window. Standardweg; braucht bei uns keinen Klick.
+
+N1MMBridge bündelt alles. Welche Wege ein Klick auf ein Rufzeichen auslöst,
+ist einzeln schaltbar (engine, spot, type_call, clipboard).
 """
 import logging
 import re
@@ -37,8 +45,16 @@ class PortInUseError(OSError):
     """UDP- oder Telnet-Port ist schon belegt (Decoder doppelt gestartet?)."""
 
 
+class EnginePortInUseError(PortInUseError):
+    """XML-RPC-Port der CW-Reader-Engine belegt (läuft fldigi?)."""
+
+
 class EntryWindowNotFoundError(RuntimeError):
     """N1MM-Fenster bzw. Entry Window nicht gefunden."""
+
+
+class SpotNotSentError(RuntimeError):
+    """Skimmer-Spot nicht gesendet: kein Telnet-Client oder keine Frequenz."""
 
 
 # --------------------------------------------------------------------------
@@ -547,53 +563,173 @@ class SpotServer(threading.Thread):
 
 
 # --------------------------------------------------------------------------
+_MSG_TYPED_FALLBACK = "in der Zwischenablage – Strg+V in N1MM"
+_MSG_CLIPBOARD = "in der Zwischenablage"
+_MSG_SPOTTED = "als Spot auf {freq:.1f} kHz gesendet"
+_MSG_NO_SPOT_FREQ = "kein Spot: Frequenz von N1MM unbekannt (Broadcast Radio, UDP 12060)"
+_MSG_NO_SPOT_CLIENT = "kein Spot: kein Telnet-Client verbunden (127.0.0.1:{port})"
+_MSG_ENGINE_ONLY = "im CW Reader von N1MM anklicken"
+_MSG_NO_WAY = "kein Übergabeweg gewählt"
+
+
 class N1MMBridge:
-    """Bündelt alles: Frequenz von N1MM lesen, Rufzeichen per Tastatur oder
-    Spot übergeben; klappt das Tippen nicht, landet das Rufzeichen in der
-    Zwischenablage (Strg+V in N1MM)."""
+    """Bündelt die Anbindung an N1MM.
+
+    Immer: Frequenz von N1MM lesen (RadioInfo, UDP). Wählbar:
+      engine     Engine für N1MMs CW Reader (XML-RPC wie fldigi, Standard an)
+      spot       Skimmer-Spot über den Telnet-Cluster (Standard an)
+      type_call  Rufzeichen ins Entry Window tippen (Standard aus)
+      clipboard  Rufzeichen in die Zwischenablage (Standard aus; beim
+                 Tippen auch Rückfallweg, wenn das Tippen scheitert)
+    Ein Klick auf ein Rufzeichen (send_call) löst spot/type_call/clipboard
+    aus; den Engine-Weg bedient N1MM selbst (Klick im CW Reader)."""
 
     def __init__(self, udp_port: int = 12060, spot_port: int = 7373,
-                 use_typer: bool = True, use_spots: bool = True, wipe: bool = True,
-                 use_clipboard: bool = True):
-        self.use_clipboard = use_clipboard
-        self.errors = []    # Klartext-Meldungen für die GUI (z. B. Port belegt)
+                 rpc_port: int = None, engine: bool = True, spot: bool = True,
+                 type_call: bool = False, clipboard: bool = False, wipe: bool = True,
+                 engine_title: str = None):
+        from .fldigi_rpc import DEFAULT_PORT, DEFAULT_TITLE
+        self.spot_port = spot_port
+        self.rpc_port = int(rpc_port or DEFAULT_PORT)
+        self.engine_title = engine_title or DEFAULT_TITLE
+        self._errors = {}       # Baustein -> Klartext (z. B. Port belegt)
         # Ausnahme, wenn die letzte Übergabe N1MM auf keinem Weg erreicht hat
         self.last_failure = None
+        self.carrier_hz = None  # Tonfrequenz für modem.get_carrier (setzt die GUI)
         self.radio = RadioInfoListener(udp_port)
         if self.radio.bind():
             self.radio.start()
         else:
-            self.errors.append(self.radio.error)
-        self.typer = EntryWindowTyper(wipe=wipe) if use_typer else None
-        self.spots = SpotServer(spot_port) if use_spots else None
-        if self.spots:
-            if self.spots.bind():
-                self.spots.start()
-            else:
-                self.errors.append(self.spots.error)
-                self.spots = None
+            self._errors["radio"] = self.radio.error
+        self.typer = EntryWindowTyper(wipe=wipe)
+        self.spots = None
+        self.engine = None
+        self.use_type = self.use_clipboard = False
+        # Ausnahmen der Bausteine, die beim Start nicht liefen (Port belegt)
+        self.start_failures = [PortInUseError(self.radio.error)] if self.radio.error else []
+        self.start_failures += self.configure(engine=engine, spot=spot, type_call=type_call,
+                                              clipboard=clipboard, wipe=wipe)
+
+    @property
+    def errors(self):
+        """Klartext-Meldungen für die GUI (z. B. Port belegt)."""
+        return list(self._errors.values())
+
+    def configure(self, engine=None, spot=None, type_call=None, clipboard=None,
+                  wipe=None, rpc_port=None):
+        """Wege ein-/ausschalten (None = unverändert). Liefert die Ausnahmen
+        der Bausteine, die sich nicht starten ließen (Port belegt)."""
+        failed = []
+        if type_call is not None:
+            self.use_type = bool(type_call)
+        if clipboard is not None:
+            self.use_clipboard = bool(clipboard)
+        if wipe is not None:
+            self.typer.wipe = bool(wipe)
+        if spot is not None:
+            if spot and self.spots is None:
+                srv = SpotServer(self.spot_port)
+                if srv.bind():
+                    srv.start()
+                    self.spots = srv
+                    self._errors.pop("spot", None)
+                else:
+                    self._errors["spot"] = srv.error
+                    failed.append(PortInUseError(srv.error))
+            elif not spot:
+                self._errors.pop("spot", None)
+                if self.spots is not None:
+                    self.spots.stop()
+                    self.spots = None
+        if rpc_port is not None and int(rpc_port) != self.rpc_port:
+            was_on = self.engine is not None or "engine" in self._errors
+            self._stop_engine()
+            self.rpc_port = int(rpc_port)
+            if engine is None:
+                engine = was_on
+        if engine is not None:
+            if engine and self.engine is None:
+                exc = self._start_engine()
+                if exc is not None:
+                    failed.append(exc)
+            elif not engine:
+                self._stop_engine()
+        return failed
+
+    def _start_engine(self):
+        from .fldigi_rpc import FldigiRpcServer
+        srv = FldigiRpcServer(port=self.rpc_port, carrier=lambda: self.carrier_hz,
+                              frequency=self._freq_hz)
+        if not srv.bind():
+            self._errors["engine"] = srv.error
+            return EnginePortInUseError(srv.error)
+        srv.start()
+        self.engine = srv
+        self._errors.pop("engine", None)
+        return None
+
+    def _stop_engine(self):
+        self._errors.pop("engine", None)
+        if self.engine is not None:
+            self.engine.stop()
+            self.engine = None
+
+    def _freq_hz(self):
+        r = self.radio
+        return r.freq_khz * 1000.0 if (r.freq_khz and r.connected) else None
+
+    @property
+    def freq_khz(self):
+        """Frequenz für Spots: RadioInfo, sonst die von N1MM an die Engine gemeldete."""
+        if self.radio.freq_khz and self.radio.connected:
+            return self.radio.freq_khz
+        if self.engine is not None and self.engine.n1mm_freq_hz:
+            return self.engine.n1mm_freq_hz / 1000.0
+        return self.radio.freq_khz
+
+    def feed_text(self, text: str):
+        """Decodierten Text an die Engine geben (nur aus dem tk-Thread)."""
+        if self.engine is not None:
+            self.engine.feed(text)
 
     def send_call(self, call: str, snr_db: float = 20, wpm: float = 25) -> str:
-        """Rufzeichen an N1MM geben. Liefert eine Statusmeldung."""
+        """Rufzeichen auf den gewählten Klick-Wegen an N1MM geben.
+
+        Liefert eine Statusmeldung. Scheitern alle gewählten Wege, steht die
+        Ursache in self.last_failure."""
         msgs = []
-        typed = False
-        clipped = spotted = False
+        tried = ok = typed = False
+        failure = None
         self.last_failure = None
-        if self.typer and self.typer.available:
+        if self.use_type and self.typer.available:
+            tried = True
             typed, msg = self.typer.type_call(call)
             msgs.append(msg)
-        if not typed and self.use_clipboard and copy_to_clipboard(call):
-            # Rückfallweg: Tippen ging nicht, der Operator fügt selbst ein
-            clipped = True
-            msgs.append("in der Zwischenablage – Strg+V in N1MM")
-        if self.spots and self.spots.spot(call, self.radio.freq_khz, snr_db, wpm):
-            spotted = True
-            msgs.append(f"als Spot auf {self.radio.freq_khz:.1f} kHz gesendet")
-        if not msgs:
-            msgs.append("N1MM nicht erreicht (kein Entry Window, kein Telnet-Client)")
-        if not (typed or clipped or spotted):
-            self.last_failure = ((self.typer.last_error if self.typer else None)
-                                 or EntryWindowNotFoundError(msgs[-1]))
+            ok = typed
+            if not typed:
+                failure = self.typer.last_error or EntryWindowNotFoundError(msg)
+        if self.use_clipboard and not typed:
+            tried = True
+            if copy_to_clipboard(call):
+                ok = True
+                msgs.append(_MSG_TYPED_FALLBACK if self.use_type else _MSG_CLIPBOARD)
+        if self.spots is not None:
+            tried = True
+            freq = self.freq_khz
+            if not freq:
+                msg = _MSG_NO_SPOT_FREQ
+            elif self.spots.spot(call, freq, snr_db, wpm):
+                msg = _MSG_SPOTTED.format(freq=freq)
+                ok = True
+            else:
+                msg = _MSG_NO_SPOT_CLIENT.format(port=self.spot_port)
+            msgs.append(msg)
+            if failure is None:
+                failure = SpotNotSentError(msg)
+        if not tried:
+            msgs.append(_MSG_ENGINE_ONLY if self.engine is not None else _MSG_NO_WAY)
+        elif not ok:
+            self.last_failure = failure or EntryWindowNotFoundError(msgs[-1])
         result = f"{call}: " + ", ".join(msgs)
         log.info("Übergabe an N1MM: %s", result)
         return result
@@ -602,3 +738,5 @@ class N1MMBridge:
         self.radio.stop()
         if self.spots:
             self.spots.stop()
+            self.spots = None
+        self._stop_engine()

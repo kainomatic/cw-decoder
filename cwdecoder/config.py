@@ -30,6 +30,13 @@ DEFAULTS = {
     "fixed_freq": None,
     "n1mm_enabled": False,
     "n1mm_wipe": True,
+    # Übergabewege an N1MM (ADR-0022): Engine für den CW Reader, Skimmer-Spot,
+    # Entry Window tippen, Zwischenablage; Port der Engine wie N1MMs CW Reader 1
+    "n1mm_engine": True,
+    "n1mm_spot": True,
+    "n1mm_type": False,
+    "n1mm_clipboard": False,
+    "n1mm_rpc_port": 7367,
     "record_default": False,
 }
 
@@ -51,12 +58,21 @@ def _is_opt_freq(v):
                          and 50.0 <= float(v) <= 4000.0)
 
 
+def _is_port(v):
+    return isinstance(v, int) and not isinstance(v, bool) and 1024 <= v <= 65535
+
+
 _VALIDATORS = {
     "update_check": _is_bool,
     "device_name": _is_opt_str,
     "fixed_freq": _is_opt_freq,
     "n1mm_enabled": _is_bool,
     "n1mm_wipe": _is_bool,
+    "n1mm_engine": _is_bool,
+    "n1mm_spot": _is_bool,
+    "n1mm_type": _is_bool,
+    "n1mm_clipboard": _is_bool,
+    "n1mm_rpc_port": _is_port,
     "record_default": _is_bool,
 }
 

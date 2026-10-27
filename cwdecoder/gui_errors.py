@@ -34,6 +34,23 @@ _MSG_PORT = ("Ein Netzwerk-Port für die N1MM-Anbindung ist bereits belegt.\n\n"
              "aus- und wieder einschalten.")
 _STATUS_PORT = "N1MM: Port belegt"
 
+_TITLE_ENGINE_PORT = "Port für den N1MM CW Reader belegt"
+_MSG_ENGINE_PORT = ("Die Engine für das CW-Reader-Fenster von N1MM konnte ihren Port "
+                    "nicht öffnen.\n\n"
+                    "Meist läuft fldigi als CW-Reader-Engine oder der CW Decoder ein "
+                    "zweites Mal. Das andere Programm beenden oder unter "
+                    "„N1MM-Übergabe…“ einen anderen Port wählen. Der Decoder läuft "
+                    "ohne Engine weiter.")
+_STATUS_ENGINE_PORT = "N1MM CW Reader: Port belegt"
+
+_TITLE_SPOT = "Spot nicht gesendet"
+_MSG_SPOT = ("Das Rufzeichen ging nicht als Spot an N1MM.\n\n"
+             "In N1MM das Telnet-Fenster mit 127.0.0.1, Port 7373 verbinden. Für die "
+             "Frequenz in N1MM unter Config → Configure Ports → Broadcast Data "
+             "„Radio“ an 127.0.0.1:12060 senden lassen oder den CW Reader von N1MM "
+             "öffnen. Der Spot-Weg lässt sich unter „N1MM-Übergabe…“ abschalten.")
+_STATUS_SPOT = "Spot nicht gesendet"
+
 _TITLE_N1MM = "N1MM-Fenster nicht gefunden"
 _MSG_N1MM = ("Das Rufzeichen konnte nicht an N1MM Logger+ übergeben werden: "
              "das Entry Window wurde nicht gefunden.\n\n"
@@ -99,12 +116,17 @@ def _traceback_text(exc) -> str:
 def classify_error(exc: BaseException) -> ErrorInfo:
     """Ausnahme auf eine Meldung für Menschen abbilden."""
     from .config import ConfigError
-    from .n1mm import EntryWindowNotFoundError
+    from .n1mm import EnginePortInUseError, EntryWindowNotFoundError, SpotNotSentError
     from .updater import UpdateError
 
     detail = str(exc) or None
     if _is_audio_error(exc):
         return ErrorInfo(_TITLE_AUDIO, _MSG_AUDIO, _STATUS_AUDIO, True, detail)
+    if isinstance(exc, EnginePortInUseError):
+        return ErrorInfo(_TITLE_ENGINE_PORT, _MSG_ENGINE_PORT, _STATUS_ENGINE_PORT, True,
+                         detail)
+    if isinstance(exc, SpotNotSentError):
+        return ErrorInfo(_TITLE_SPOT, _MSG_SPOT, _STATUS_SPOT, True, detail)
     if _is_port_in_use(exc):
         return ErrorInfo(_TITLE_PORT, _MSG_PORT, _STATUS_PORT, True, detail)
     if isinstance(exc, EntryWindowNotFoundError):

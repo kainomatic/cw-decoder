@@ -86,6 +86,11 @@ class N1MMSettingsDialog(tk.Toplevel):
         attach_tooltip(btn, _TT_CLOSE)
         self.protocol("WM_DELETE_WINDOW", self.close)
         self.bind("<Escape>", lambda _e: self.close())
+        # über dem Hauptfenster statt in der Bildschirmecke
+        self.update_idletasks()
+        x = app.winfo_rootx() + max((app.winfo_width() - self.winfo_reqwidth()) // 2, 0)
+        y = app.winfo_rooty() + max((app.winfo_height() - self.winfo_reqheight()) // 3, 0)
+        self.geometry(f"+{x}+{y}")
 
     def set_port_text(self, text):
         self.port_entry.delete(0, "end")

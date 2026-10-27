@@ -177,3 +177,19 @@ def test_text_und_traeger_an_n1mm(make_bridge):
     b.carrier_hz = 655.2
     assert p.rx.get_data().data == b"CQ DE DJ7PR"
     assert p.modem.get_carrier() == 655
+
+
+def test_spot_auch_ohne_login(make_bridge):
+    """N1MM ohne „Automatically Logon“ schickt kein Rufzeichen und wartet
+    nach „login:“; der Spot muss trotzdem ankommen (Nachweis #3)."""
+    b = make_bridge(engine=False)
+    b.radio.freq_khz, b.radio.last_rx = 14025.0, time.time()
+    c = socket.create_connection(("127.0.0.1", b.spots.srv.getsockname()[1]), timeout=2)
+    try:
+        assert c.recv(64) == b"login: "
+        assert wait_for(lambda: b.spots.clients)
+        msg = b.send_call("OY1CT")
+        assert "als Spot auf 14025.0 kHz gesendet" in msg and b.last_failure is None
+        assert "OY1CT" in c.recv(256).decode()
+    finally:
+        c.close()

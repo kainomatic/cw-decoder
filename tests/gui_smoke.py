@@ -177,6 +177,9 @@ def run_scenario(ok_rate=48000, with_input=True, slow_recorder=False, n1mm=True)
             (10, lambda: (app.n1mm_var.set(True), app._n1mm_changed())),
             (50, lambda: snap_engine("engine an")),
             (10, lambda: app.msgs.put(("text", app.gen, "CQ DE DJ7PR "))),
+            # N1MM blendet das Engine-Fenster ein; _poll versteckt es wieder
+            (10, lambda: app.engine_win.deiconify()),
+            (300, lambda: snap_engine("engine eingeblendet")),
             (200, lambda: rpc_fetch("engine text")),
             (10, lambda: app._send_call(app.calls[0]) if app.calls else None),
             # Dialog „Übergabe…“: Engine aus und wieder an, Port ungültig/neu
@@ -291,6 +294,9 @@ def main():
             on = seen.get("engine an", {})
             check(on.get("win") == "Fldigi CW Engine 1" and on.get("win_hidden") is True,
                   f"verstecktes Engine-Fenster fehlt: {on}", problems)
+            shown = seen.get("engine eingeblendet", {})
+            check(shown.get("win_hidden") is True,
+                  f"Engine-Fenster bleibt nach dem Einblenden sichtbar: {shown}", problems)
             got = seen.get("engine text", {})
             check(got.get("version") == "4.2.05" and "CQ DE DJ7PR" in got.get("rx", ""),
                   f"Engine liefert den Text nicht: {got}", problems)

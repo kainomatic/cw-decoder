@@ -756,6 +756,11 @@ class App(tk.Tk):
         if want and self.engine_win is None:
             win = tk.Toplevel(self)
             win.title(self.engine_title)
+            # Kein transient(): ein Fenster mit Besitzer findet N1MM nicht
+            # (getestet). Schließen versteckt es nur; _poll versteckt es
+            # wieder, wenn N1MM es einblendet, sonst hielte Windows es für
+            # das Hauptfenster (taskkill, Taskleiste).
+            win.protocol("WM_DELETE_WINDOW", win.withdraw)
             win.withdraw()
             self.engine_win = win
             log.info("Engine-Fenster %r angelegt", self.engine_title)
@@ -798,6 +803,9 @@ class App(tk.Tk):
             pass
         if self.live:
             self._draw_spectrum()
+        if self.engine_win is not None and self.engine_win.state() != "withdrawn":
+            # N1MM blendet das Fenster seiner Engine ein; bei uns ist es leer
+            self.engine_win.withdraw()
         if self.n1mm:
             r = self.n1mm.radio
             if r.connected:

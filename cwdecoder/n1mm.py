@@ -499,24 +499,27 @@ class SpotServer(threading.Thread):
                 return
             self._conns.add(conn)
         try:
-            conn.sendall(b"login: ")
-            conn.settimeout(30)
-            data = b""
-            while b"\n" not in data:
-                chunk = conn.recv(256)
-                if not chunk:
-                    return
-                data += chunk
-            call = data.decode(errors="replace").strip().upper() or "N1MM"
-            conn.sendall(f"Hello {call}, this is the CW decoder spot feed.\r\n{call} de {self.spotter_call} >\r\n".encode())
-            conn.settimeout(None)
+            # Spots gehen ab dem Verbindungsaufbau raus: N1MM sendet ohne
+            # „Automatically Logon" kein Rufzeichen und wartet nur (#3)
             with self._lock:
+                conn.sendall(b"login: ")
                 self.clients.append(conn)
-            # Verbindung offen halten; eingehende Zeilen ignorieren
+            data, greeted = b"", False
+            # Verbindung offen halten; die erste Zeile gilt als Login, der Rest
+            # wird ignoriert
             while not self._stop_evt.is_set():
                 chunk = conn.recv(256)
                 if not chunk:
                     break
+                if greeted:
+                    continue
+                data += chunk
+                if b"\n" in data:
+                    greeted = True
+                    call = data.decode(errors="replace").strip().upper() or "N1MM"
+                    with self._lock:
+                        conn.sendall(f"Hello {call}, this is the CW decoder spot feed.\r\n"
+                                     f"{call} de {self.spotter_call} >\r\n".encode())
         except OSError:
             pass
         finally:

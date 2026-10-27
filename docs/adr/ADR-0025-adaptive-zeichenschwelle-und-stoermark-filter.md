@@ -74,6 +74,14 @@ einigen Zeichen. Die Regel kann nur ein `*` ersetzen, nie ein gültiges
 Zeichen ändern. Sie ist eine Ergänzung zum Auftrag (dort nur Clusterung)
 und allein schon in allen drei Seeds besser.
 
+Zeichen aus einer Teilung bekommen höchstens das Vertrauen
+`char_split_conf` (0,45, unter `UNSURE_CONF`) und erscheinen damit als
+unsicher (grau in der GUI, klein im Terminal). Grund (Review #21): In
+lesbarem Material ist die Teilung ein Gewinn (`CIAO`, `PERIL QSO`), in
+Störstellen wird aus einem ehrlichen `*` aber plausibel aussehender Text
+(`CHCH`, `5555NM`); der Operator soll das sehen. Nur Metadaten, Text und
+Matrix unverändert.
+
 ### Störmark-Filter (`TimingConfig.glitch_filter`, an)
 
 Nur bei eingemessenem Tempo (`n_marks ≥ conf_warmup_marks`, nie bei der

@@ -49,6 +49,10 @@ class TimingConfig:
     # (Stationswechsel, bevor die Zeichenschwelle nachgelernt hat)
     char_split: bool = True
     char_split_ratio: float = 1.5
+    # Zeichen aus einer Teilung bekommen höchstens dieses Vertrauen (unter
+    # UNSURE_CONF, also als unsicher markiert): in Störstellen wird aus einem
+    # ehrlichen '*' sonst plausibel aussehender Text (Review #21)
+    char_split_conf: float = 0.45
     # Störmarks (ADR-0025), nur bei eingemessenem Tempo (n_marks >=
     # conf_warmup_marks): Ein Ton kürzer als glitch_max_dit Punkte wird mit
     # dem Nachbarton verschmolzen, wenn die Pause dazwischen kürzer als
@@ -511,11 +515,15 @@ class TimingDecoder:
             self.cur_marks = []
             self.cur_gaps = []
             self.char_emitted = True
+            split = len(parts) > 1
             for marks in parts:
                 ch = decode_symbol(self._classify(marks))
                 if ch:
                     # vor dem Aufruf setzen: on_char liest es (CWDecoder.last_conf)
-                    self.last_conf = self.confidence(marks, ch)
+                    conf = self.confidence(marks, ch)
+                    if split:
+                        conf = min(conf, self.cfg.char_split_conf)
+                    self.last_conf = conf
                     self.on_char(ch)
         if not self.space_emitted and gap_ms >= self._word_threshold():
             self.space_emitted = True

@@ -224,7 +224,8 @@ Wichtige Zusammenhänge:
   geometrisch dazwischen, 1,0–3,0 Punkte, nie unter 1,2 Punktlängen des
   laufenden Zeichens; sonst fest `char_thr`. Neu berechnet nur bei einem
   Pausen-Ereignis, nie in `poll()`. Ergibt ein Symbol `*`, wird es an der
-  längsten inneren Pause geteilt, wenn beide Teile gültig sind.
+  längsten inneren Pause geteilt, wenn beide Teile gültig sind; solche
+  Zeichen gelten als unsicher (`char_split_conf` 0,45).
 - **Störmark-Filter** (ADR-0025): Bei eingemessenem Tempo wird ein Ton
   < 0,4 Punkt mit dem Nachbarton verschmolzen, wenn die Pause dazwischen
   < 0,5 Punkt ist. Verwerfen (`glitch_discard`) ist aus.

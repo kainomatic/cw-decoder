@@ -97,3 +97,29 @@ def test_zu_wenige_pausen_feste_schwelle():
         t.gap(float(d))
     assert t._char_thr_ms is None
     assert t._char_threshold() == pytest.approx(t.cfg.char_thr * t.dit_ms)
+
+
+def _confs(cfg, seq):
+    out = []
+    t = TimingDecoder(cfg)
+    t.on_char = lambda ch: out.append((ch, t.last_conf))
+    for _ in range(10):                  # Tempo einmessen (60 ms Punkt)
+        t.mark(60.0)
+        t.gap(180.0)
+    out.clear()
+    _feed(t, seq)
+    return out
+
+
+def test_geteilte_zeichen_haben_gedeckeltes_vertrauen():
+    # "....." + "...." mit längerer Pause dazwischen (ungültig -> 5 H),
+    # danach ein normales T
+    seq = [60, 60] * 4 + [60, 130] + [60, 60] * 3 + [60, 400, 180, 400]
+    cfg = TimingConfig(char_thr_adaptive=False)
+    out = _confs(cfg, seq)
+    assert [ch for ch, _ in out] == ["5", "H", "T"]
+    assert all(c <= cfg.char_split_conf for _, c in out[:2])
+    assert out[2][1] > cfg.char_split_conf
+    # das normale Zeichen ist vom Deckel unberührt
+    ref = _confs(TimingConfig(char_thr_adaptive=False, char_split=False), seq)
+    assert ref[-1] == out[-1]

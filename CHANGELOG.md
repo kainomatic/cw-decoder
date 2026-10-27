@@ -14,13 +14,14 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   Zeichen, die bisher zu `*` oder falschen Sonderzeichen verschmolzen
   (`*X` statt `4HX`, `LO?` statt `LOUD`, `TACC<AR>E` statt `TAKE CARE`),
   kommen jetzt getrennt. Ein ungültiges Symbol wird zusätzlich an seiner
-  längsten Pause geteilt, wenn beide Teile gültige Zeichen sind
-  (ADR-0025, #21).
+  längsten Pause geteilt, wenn beide Teile gültige Zeichen sind; solche
+  Zeichen erscheinen als unsicher (grau bzw. klein), weil in Störstellen
+  sonst aus einem `*` plausibel aussehender Text würde (ADR-0025, #21).
 - **Kurze Aussetzer** am Ende oder Anfang eines Strichs (Fading, 10–25 ms)
   erzeugen keinen zusätzlichen Punkt mehr, sobald das Tempo eingemessen
   ist (ADR-0025, #21).
 - Schalter in `TimingConfig`: `char_thr_adaptive`, `char_split`,
-  `glitch_filter` (alle an), `glitch_discard` (aus); in
+  `glitch_filter` (alle an), `char_split_conf` (0,45), `glitch_discard` (aus); in
   `ThresholdConfig`: `carrier_needs_key` (aus, Teppich-Regel wie bisher).
 - Testmatrix Seed 1000/5000/7777: 97,9/97,2/98,5 % (vorher
   97,7/96,7/98,4 %), alte Matrix 98,3 %, Rauschen 100 %.

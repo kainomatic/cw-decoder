@@ -19,6 +19,7 @@ Ziel, das auf 100 % getrieben werden soll (ROADMAP, Leitlinie).
 Die Kategorie "Rauschen" enthält kein Signal; dort zählt, dass der Decoder
 nichts ausgibt (Müll bei reinem Rauschen stört mehr als eine Lücke).
 """
+import difflib
 import sys
 import os
 import numpy as np
@@ -223,7 +224,7 @@ REAL_CASES = [
      ["OY1CT", "IK2ULV", "DJ7PR", "CALLED CQ", "QRM", "STRANGE"], None),
     ("cw_20261027_193609_542_8k.wav", ["SV1QEK", "OY1CT", "IN3TWX", "WOLF", "BK"], None),
     ("cw_20261027_194453_947_8k.wav", ["CQ DE IK2J"], None),
-    ("cw_20261027_194831_227_8k.wav", ["GI5RSS", "UR 5", "OY1CT"], None),
+    ("cw_20261027_194831_227_8k.wav", ["GI5RSS", "UR 5", "OY1CT", "4HX"], None),
     ("cw_20261027_202035_204_8k.wav", ["LA8IG", "DL4KCA", "DRANGEDAL", "KNUT"], None),
 ]
 # Rufzeichen, die der Spotter (callsign.py) im Zeichenstrom finden muss,
@@ -293,7 +294,12 @@ def baseline_similarity(fname: str, text: str):
         return None
     with open(REAL_BASELINE, encoding="utf-8") as fh:
         old = json.load(fh).get(fname)
-    return None if old is None else similarity(text, old)
+    if old is None:
+        return None
+    # ohne autojunk: difflib hält bei Texten über 200 Zeichen häufige
+    # Zeichen sonst für Füllmaterial, und die Zahl springt
+    a, b = " ".join(text.split()), " ".join(old.split())
+    return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio()
 
 
 def run_real():

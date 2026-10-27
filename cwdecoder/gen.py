@@ -13,7 +13,8 @@ from .morse import encode_text
 
 
 def keying_pattern(text: str, wpm: float, farnsworth_wpm: float = None,
-                   weight: float = 1.0, jitter: float = 0.0, rng=None):
+                   weight: float = 1.0, jitter: float = 0.0, rng=None,
+                   char_gap: float = 3.0):
     """Liefert Liste von (on: bool, dauer_sek) für den gegebenen Text.
 
     wpm:     Gebegeschwindigkeit (PARIS-Standard: Punkt = 1.2 / wpm Sekunden)
@@ -21,6 +22,8 @@ def keying_pattern(text: str, wpm: float, farnsworth_wpm: float = None,
              (langsamere) Geschwindigkeit gestreckt
     weight:  Verhältnis Strich/Punkt-Länge relativ zu 3 (1.0 = sauber)
     jitter:  zufällige relative Schwankung der Elementlängen (0.0 .. 0.3)
+    char_gap: Zeichenabstand in Punkten (Standard 3; Geber mit engen
+             Zeichenabständen z. B. 1.5)
     """
     rng = rng or np.random.default_rng()
     dit = 1.2 / wpm
@@ -47,7 +50,7 @@ def keying_pattern(text: str, wpm: float, farnsworth_wpm: float = None,
             # Zeichenabstand 3 Punkte (ersetzt die letzte Elementpause),
             # ein bereits gesetzter Wortabstand bleibt erhalten
             if seq and not seq[-1][0] and seq[-1][1] < 2 * gap_dit:
-                seq[-1] = (False, 3 * gap_dit)
+                seq[-1] = (False, char_gap * gap_dit)
         first = False
         for k, el in enumerate(code):
             if k > 0:
@@ -65,7 +68,8 @@ def render(text: str, fs: int = 8000, wpm: float = 25, pitch: float = 700.0,
            qsb_depth: float = 0.0, qrm_hz: float = None, qrm_db: float = -10.0,
            farnsworth_wpm: float = None, weight: float = 1.0, jitter: float = 0.0,
            rise_ms: float = 5.0, lead_s: float = 1.0, tail_s: float = 1.0,
-           ssb_filter: bool = True, rx_filter_hz: float = None, seed: int = None):
+           ssb_filter: bool = True, rx_filter_hz: float = None, seed: int = None,
+           char_gap: float = 3.0):
     """Erzeugt ein float32-Signal in [-1, 1].
 
     rx_filter_hz: simuliert ein schmales Empfänger-CW-Filter dieser
@@ -75,7 +79,7 @@ def render(text: str, fs: int = 8000, wpm: float = 25, pitch: float = 700.0,
     Rauschkategorie. snr_db bleibt auf 2,4 kHz bezogen.
     """
     rng = np.random.default_rng(seed)
-    seq = keying_pattern(text, wpm, farnsworth_wpm, weight, jitter, rng)
+    seq = keying_pattern(text, wpm, farnsworth_wpm, weight, jitter, rng, char_gap=char_gap)
 
     total = lead_s + sum(d for _, d in seq) + tail_s
     n = int(total * fs)
@@ -175,13 +179,15 @@ def main():
     p.add_argument("--qrm-db", type=float, default=-10)
     p.add_argument("--weight", type=float, default=1.0)
     p.add_argument("--jitter", type=float, default=0.0)
+    p.add_argument("--char-gap", type=float, default=3.0, help="Zeichenabstand in Punkten")
     p.add_argument("--rx-filter", type=float, default=None, help="Empfänger-CW-Filter in Hz (z. B. 100)")
     p.add_argument("--seed", type=int, default=None)
     a = p.parse_args()
     sig = render(a.text, fs=a.fs, wpm=a.wpm, pitch=a.pitch, drift_hz=a.drift,
                  snr_db=a.snr, qsb_hz=a.qsb, qsb_depth=a.qsb_depth, qrm_hz=a.qrm,
                  qrm_db=a.qrm_db, farnsworth_wpm=a.farnsworth, weight=a.weight,
-                 jitter=a.jitter, rx_filter_hz=a.rx_filter, seed=a.seed)
+                 jitter=a.jitter, rx_filter_hz=a.rx_filter, seed=a.seed,
+                 char_gap=a.char_gap)
     write_wav(a.out, sig, a.fs)
     print(f"geschrieben: {a.out} ({len(sig) / a.fs:.1f} s)")
 

@@ -30,6 +30,25 @@ class TimingConfig:
     dit_max_ms: float = DIT_MAX_MS
     dash_thr: float = 2.0         # Ton länger als dash_thr * dit => Strich
     char_thr: float = 2.2         # Pause länger als char_thr * dit => Zeichenende
+    # Adaptive Zeichenschwelle (ADR-0025): Die Pausen des laufenden Verkehrs
+    # werden in Element- und Zeichenpausen geclustert, die Schwelle liegt
+    # geometrisch dazwischen, geklemmt auf char_thr_min..max Punkte. Zu
+    # wenige Daten oder nur ein Cluster: feste Schwelle char_thr
+    char_thr_adaptive: bool = True
+    char_thr_min: float = 1.0
+    char_thr_max: float = 3.0
+    # ... und nie unter diesem Vielfachen der Punktlänge, die die Töne des
+    # laufenden Zeichens zeigen (Schutz bei Stationswechsel, solange das
+    # Fenster noch die Pausen der vorigen Station enthält)
+    char_thr_dot_floor: float = 1.2
+    # Mindestverhältnis der Cluster-Mediane Zeichen-/Elementpause
+    char_cluster_ratio: float = 1.4
+    # Ergibt ein Symbol kein gültiges Zeichen ('*'), an seiner längsten
+    # inneren Pause trennen, wenn diese mindestens char_split_ratio mal so
+    # lang ist wie der Median der übrigen und beide Teile gültig sind
+    # (Stationswechsel, bevor die Zeichenschwelle nachgelernt hat)
+    char_split: bool = True
+    char_split_ratio: float = 1.5
     word_thr: float = 5.0         # Pause länger als word_thr * dit => Wortende
     history: int = 24             # Fenster für die Geschwindigkeitsschätzung
     adapt: float = 0.5            # Nachführung der Punktlänge (0..1)
@@ -55,9 +74,13 @@ class TimingDecoder:
         self.word_thr_ms = self.cfg.word_thr * self.cfg.initial_dit_ms
         self.dit_ms = self.cfg.initial_dit_ms
         self._dash_thr_ms = None     # adaptive Strich-Schwelle (aus Clustern)
+        self.all_gaps = deque(maxlen=self.cfg.history)  # Element- und Zeichenpausen
+        self._char_thr_ms = None     # adaptive Zeichenschwelle (aus Clustern)
         self.confident = False
         self.symbol = ""           # aktuelle Punkt/Strich-Folge (Anzeige)
         self.cur_marks = []        # Tondauern des laufenden Zeichens
+        self.cur_gaps = []         # Pausen zwischen diesen Tönen
+        self._dropped_ms = 0.0     # zuletzt verworfener Störimpuls
         self.char_emitted = True   # wurde das Zeichen für die aktuelle Pause schon ausgegeben?
         self.space_emitted = True
         self.n_marks = 0
@@ -77,7 +100,9 @@ class TimingDecoder:
         self.marks.clear()
         self.gaps.clear()
         self.char_gaps.clear()
+        self.all_gaps.clear()
         self._dash_thr_ms = None
+        self._char_thr_ms = None
         self.n_marks = 0
         self.confident = False
         self.dit_ms = float(np.clip(self.dit_ms, 30.0, 150.0))  # 8..40 WPM als Start
@@ -85,6 +110,7 @@ class TimingDecoder:
     def reset_text(self):
         self.symbol = ""
         self.cur_marks = []
+        self.cur_gaps = []
         self.char_emitted = True
         self.space_emitted = True
 
@@ -192,11 +218,13 @@ class TimingDecoder:
         """Ein Ton (Tastung an) ist zu Ende."""
         c = self.cfg
         if duration_ms < max(c.dit_min_ms * 0.5, 0.3 * self.dit_ms):
+            self._dropped_ms = duration_ms
             return  # Störimpuls: viel kürzer als ein Punkt beim aktuellen Tempo
         # Plausibilität: extrem lange Töne (Träger, Störung) nicht lernen
         if duration_ms > 12 * c.dit_max_ms:
             self.symbol = ""
             self.cur_marks = []
+            self.cur_gaps = []
             return
         self.marks.append(duration_ms)
         self.n_marks += 1
@@ -248,14 +276,85 @@ class TimingDecoder:
         c = self.cfg
         if duration_ms < c.dit_min_ms * 0.5:
             return
-        if duration_ms < c.char_thr * self.dit_ms:
+        # erst mit der bisherigen Schwelle entscheiden (dieselbe, mit der
+        # poll() in dieser Pause schon ausgegeben haben kann), dann lernen
+        char_thr = self._char_threshold()
+        if duration_ms < self._word_threshold():
+            self.all_gaps.append(duration_ms)
+            self._update_char_threshold()
+        if duration_ms < char_thr:
             self.gaps.append(duration_ms)
+            if self.cur_marks:
+                if len(self.cur_gaps) == len(self.cur_marks):
+                    # Pause nach einem verworfenen Störimpuls: zählt mit ihm
+                    # und der Pause davor als eine Pause
+                    self.cur_gaps[-1] += self._dropped_ms + duration_ms
+                else:
+                    self.cur_gaps.append(duration_ms)
             return
         # Zeichen-/Wortende; falls per Timeout noch nicht ausgegeben:
-        self._flush(duration_ms)
+        self._flush(duration_ms, char_thr)
         if duration_ms < 12 * self.dit_ms:
             self.char_gaps.append(duration_ms)
             self._update_word_threshold()
+
+    def _char_threshold(self) -> float:
+        c = self.cfg
+        if c.char_thr_adaptive and self._char_thr_ms is not None:
+            thr = self._char_thr_ms
+            if self.cur_marks:
+                dash = self._dash_threshold()
+                dot = min(m if m < dash else m / 3.0 for m in self.cur_marks)
+                thr = max(thr, c.char_thr_dot_floor * dot)
+            return float(np.clip(thr, c.char_thr_min * self.dit_ms,
+                                 c.char_thr_max * self.dit_ms))
+        return c.char_thr * self.dit_ms
+
+    def _word_threshold(self) -> float:
+        # nie unter der Zeichenschwelle (bei den Grenzen oben ohnehin nicht)
+        return max(self.word_thr_ms, self.cfg.word_thr * self.dit_ms,
+                   self._char_threshold())
+
+    def _update_char_threshold(self):
+        """Zeichenschwelle aus den Pausen des laufenden Verkehrs (ADR-0025).
+
+        Die Pausen zwischen 0,5 Punkt und der Wortschwelle werden im
+        log-Bereich in zwei Cluster geteilt (kleinste Streuung innerhalb der
+        Cluster, Otsu), nur an Stellen mit einer echten Lücke (Faktor 1,3).
+        Gültig nur mit mindestens 8 Pausen, je 3 pro Cluster, Mediane im
+        Verhältnis >= char_cluster_ratio und einem unteren Cluster, das nach
+        Elementpausen aussieht (Median höchstens 1,6 Punkte). Die Schwelle
+        ist das geometrische Mittel der Mediane, aber nie außerhalb der
+        mittleren Hälfte der leeren Strecke zwischen den Clustern, damit sie
+        die Pausen genauso einteilt wie die Clusterung. Wird nur bei einem
+        Pausen-Ereignis neu berechnet, nie in poll() (Blockgröße egal).
+        """
+        self._char_thr_ms = None
+        g = np.array(self.all_gaps, dtype=float)
+        # Aussetzer und Prellen (< 0,5 Punkt) sind keine Elementpausen und
+        # bildeten sonst ein eigenes unteres Cluster
+        g = np.sort(g[g >= 0.5 * self.dit_ms])
+        n = len(g)
+        if n < 8:
+            return
+        lg = np.log(g)
+        best_k, best_sse = None, None
+        for k in range(3, n - 2):     # unten und oben je >= 3 Werte
+            if g[k] < 1.3 * g[k - 1]:
+                continue              # keine echte Lücke zwischen den Clustern
+            lo, hi = lg[:k], lg[k:]
+            sse = float(np.sum((lo - lo.mean()) ** 2) + np.sum((hi - hi.mean()) ** 2))
+            if best_sse is None or sse < best_sse:
+                best_k, best_sse = k, sse
+        if best_k is None:
+            return
+        lo, hi = g[:best_k], g[best_k:]
+        m_lo, m_hi = float(np.median(lo)), float(np.median(hi))
+        if m_hi / m_lo < self.cfg.char_cluster_ratio or m_lo > 1.6 * self.dit_ms:
+            return
+        thr = float(np.sqrt(m_lo * m_hi))
+        r = hi[0] / lo[-1]
+        self._char_thr_ms = float(np.clip(thr, lo[-1] * r ** 0.25, lo[-1] * r ** 0.75))
 
     def _update_word_threshold(self):
         """Wortschwelle aus den beobachteten Zeichen-/Wortpausen ableiten.
@@ -290,22 +389,40 @@ class TimingDecoder:
         ohne auf den nächsten Ton zu warten)."""
         self._flush(gap_so_far_ms)
 
-    def _flush(self, gap_ms: float):
-        c = self.cfg
-        if not self.char_emitted and gap_ms >= c.char_thr * self.dit_ms:
-            self.symbol = self._classify(self.cur_marks)
-            ch = decode_symbol(self.symbol)
-            if ch:
-                # vor dem Aufruf setzen: on_char liest es (CWDecoder.last_conf)
-                self.last_conf = self.confidence(self.cur_marks, ch)
+    def _flush(self, gap_ms: float, char_thr: float = None):
+        if char_thr is None:
+            char_thr = self._char_threshold()
+        if not self.char_emitted and gap_ms >= char_thr:
+            parts = self._split_invalid(self.cur_marks, self.cur_gaps)
             self.symbol = ""
             self.cur_marks = []
+            self.cur_gaps = []
             self.char_emitted = True
-            if ch:
-                self.on_char(ch)
-        if not self.space_emitted and gap_ms >= max(self.word_thr_ms, c.word_thr * self.dit_ms):
+            for marks in parts:
+                ch = decode_symbol(self._classify(marks))
+                if ch:
+                    # vor dem Aufruf setzen: on_char liest es (CWDecoder.last_conf)
+                    self.last_conf = self.confidence(marks, ch)
+                    self.on_char(ch)
+        if not self.space_emitted and gap_ms >= self._word_threshold():
             self.space_emitted = True
             self.on_space()
+
+    def _split_invalid(self, marks, gaps):
+        """Tondauern eines Zeichens, bei ungültigem Symbol ggf. in zwei
+        Zeichen geteilt (ADR-0025). Liefert eine Liste von Tondauer-Listen."""
+        c = self.cfg
+        if (not c.char_split or len(marks) < 2 or len(gaps) != len(marks) - 1
+                or decode_symbol(self._classify(marks)) != "*"):
+            return [marks]
+        j = int(np.argmax(gaps))
+        rest = [g for i, g in enumerate(gaps) if i != j]
+        if rest and gaps[j] < c.char_split_ratio * float(np.median(rest)):
+            return [marks]
+        a, b = marks[:j + 1], marks[j + 1:]
+        if "*" in (decode_symbol(self._classify(a)), decode_symbol(self._classify(b))):
+            return [marks]
+        return [a, b]
 
     def force_flush(self):
         """Am Ende einer Datei alles ausgeben."""

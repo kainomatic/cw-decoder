@@ -150,6 +150,11 @@ im Playbook (§2, §4). Projektspezifisch:
   (ADR-0017, ADR-0018).
   Stichprobe gegen Übertuning: `run_matrix.run(base_seed=5000)` bzw. `7777`.
 - Unter Windows Tests über das Bash-Tool laufen lassen (längere Läufe).
+- GUI-Nachweise auf dem Entwicklungsrechner zuerst ohne echte Eingaben
+  (Fensternachrichten, UI-Automation, Konfigurationsdateien,
+  `PrintWindow`). Reicht das nicht: Freigabe für Klicks in der RDP-Sitzung
+  im Issue anfragen (DF1DS schaltet sich auf). Nur der Rest bleibt
+  Handgriff für DF1DS (#3).
 
 ## Befehle
 ```

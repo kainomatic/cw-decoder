@@ -271,6 +271,13 @@ class ThresholdConfig:
     dyn_step_ms: float = 10.0         # Bewertungstakt, unabhängig von der Blockgröße
     lookahead_ms: float = 60.0        # Vorausschau der Dynamik (= Latenz der Tastung)
     floor_freeze_db: float = 12.0     # Werte so weit über dem Teppich gelten als Ton
+    # Dauerträger: nach carrier_ms am Stück darf der Teppich wieder steigen.
+    # Die Regel prüft nur die Dauer, gilt also auch nach carrier_ms Pause
+    # bei geschlossenem Squelch. carrier_needs_key=True verlangt Tastung
+    # "an" (so war sie gemeint); das hält den Teppich stabil, ändert die
+    # echten Aufnahmen aber minimal, daher vorerst aus (ADR-0025)
+    carrier_ms: float = 3000.0
+    carrier_needs_key: bool = False
     debounce_ms: float = 4.0          # Grund-Entprellzeit (wird mit Punktlänge skaliert)
     smooth_ms: float = 2.0            # kurze Glättung der Hüllkurve
 
@@ -427,7 +434,8 @@ class Thresholder:
                 # einer Pause hoch, bevor der Squelch offen ist. Dauerträger
                 # (> 3 s am Stück) ist kein CW: dann darf er wieder steigen.
                 tone_like = self.state or el > self._freeze_ratio * self.floor_lin
-                a_up = a_up_off if (not tone_like or self.run_ms > 3000.0) else a_up_on
+                carrier = self.run_ms > c.carrier_ms and (self.state or not c.carrier_needs_key)
+                a_up = a_up_off if (not tone_like or carrier) else a_up_on
                 self.floor_lin += a_up * (el - self.floor_lin)
             self.floor_db = 20 * np.log10(self.floor_lin + 1e-9)
             # Signalpegel: zügig rauf, langsam runter

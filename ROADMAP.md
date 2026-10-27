@@ -48,8 +48,8 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 - Laufender Auftrag: siehe Issues mit Label `auftrag`
   (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** Review #21, dann Shack-Test mit `v0.1.0-beta14`.
-DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta14` (Self-Update), richtet
+**Nächster Schritt:** Review #23, dann Shack-Test mit `v0.1.0-beta15`.
+DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta15` (Self-Update), richtet
 N1MM nach `docs/N1MM.md` ein und testet mit Funkgerät und N1MM (siehe
 „Testablauf Installer/Beta"). Danach
 Auswertung der Aufnahmen durch die Desktop-Session und Entscheidung über die
@@ -98,7 +98,9 @@ Zurzeit keine; #14 und #15 sind mit #18 umgesetzt (siehe unten).
 
 Ideen, noch nicht beschlossen: #16 (mehrere Stationen gleichzeitig,
 „Skimmer light") und #17 (Ideensammlung Contest, Oberfläche; daraus der
-Ringpuffer mit #19 umgesetzt).
+Ringpuffer mit #19, die Vertrauensanzeige mit #18 und Super Check Partial
+mit #23 umgesetzt). Offen aus #20: Ausgabegerät für „Nochmal hören"
+wählbar.
 
 #1, #2 und #5 sind umgesetzt und geschlossen (siehe „Decoder-Tuning" unten).
 
@@ -244,8 +246,30 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
 - Matrix 97,9/97,2/98,5 % (vorher 97,7/96,7/98,4 %), alte Matrix 98,3 %
   (ADR-0025).
 - #20 Befund 1 (IK2JET, Wortpausen im Rufzeichen) bleibt für den
-  Auftrag Super Check Partial (#17).
-- Beta `v0.1.0-beta14`; Review ausstehend.
+  Auftrag Super Check Partial (#23).
+- Beta [`v0.1.0-beta14`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta14);
+  Review bestanden, #21 geschlossen.
+
+## ✅ Super Check Partial und Wörterbuch-Segmentierung (#23)
+
+- ✅ `master.scp` (supercheckpartial.com, Release 2026.10.23) mitgeliefert,
+  `scp.py` mit `is_known`/`near`, `--scp` in der EXE, Bundle-Prüfung im
+  Release-Workflow, `tools/update_scp.py` (ADR-0026).
+- ✅ Rufzeichen in SCP grün, sonst gelb; Vorschlag bei genau einem
+  Nachbarn (Tooltip, Rechtsklick „übernehmen"), nie automatisch.
+- ✅ `IK2J E T` → IK2JET (#20 Befund 1 erledigt). IK2JET steht nicht in der
+  SCP; zusammengesetzt wird deshalb auch gegen Rufzeichen, die in der
+  Sitzung schon einmal ganz gehört wurden.
+- ✅ Wörterbuch-Zerlegung: `TNX·FER·FB·CALL`, `RST·599·5NN·5NN`,
+  `GE·TU·ES·UR·569·569·BK`; Trenner grau, N1MM-Engine mit echten
+  Leerzeichen; 110 Matrix-Texte unverändert.
+- ✅ `<BK>` als Prosign (#20).
+- Kein Eingriff in `dsp.py`/`timing.py`/`decoder.py`, Matrix nicht
+  betroffen.
+- Aus #17 damit erledigt: Super Check Partial; davor Ringpuffer (Instant
+  Replay, letzte 30 s speichern, #19) und Vertrauensanzeige je Zeichen
+  (#18).
+- Beta `v0.1.0-beta15`; Review ausstehend.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

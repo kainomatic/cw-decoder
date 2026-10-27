@@ -229,6 +229,13 @@ Wichtige Zusammenhänge:
 - **Störmark-Filter** (ADR-0025): Bei eingemessenem Tempo wird ein Ton
   < 0,4 Punkt mit dem Nachbarton verschmolzen, wenn die Pause dazwischen
   < 0,5 Punkt ist. Verwerfen (`glitch_discard`) ist aus.
+- **Nach dem Decoder** (ADR-0026): Der Spotter (`callsign.py`) gleicht mit
+  Super Check Partial ab (`scp.py`, grün/gelb, `IK2J E T` → IK2JET) und
+  zerlegt zusammengeklebte Wörter (`segment.py`, Trenner `·`). Das ist nur
+  Anzeige; `get_text()` und das Decodier-Log bleiben roh, die Matrix ist
+  nicht betroffen. `LiveDecoder` füttert den Spotter am Wortende vor
+  `on_text(" ")`, damit Trennstellen vor dem Leerzeichen ankommen. Neue
+  Wörter in `data/qso_words.txt` mit `tests/test_segment.py` prüfen.
 - Echte Aufnahmen: `python tests/run_matrix.py --real` zeigt die
   Ähnlichkeit zum Stand in `tests/real_baseline.json` (bei Kern-Änderungen
   im Bericht, < 0,98 begründen; nach bestandenem Review mit

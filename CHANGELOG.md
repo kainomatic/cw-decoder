@@ -27,6 +27,29 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   97,7/96,7/98,4 %), alte Matrix 98,3 %, Rauschen 100 %.
 
 ### Added
+- **Super Check Partial:** Die Rufzeichen-Datenbank aus Contest-Logs
+  (`master.scp`, supercheckpartial.com) liegt dem Programm bei. Bekannte
+  Rufzeichen sind in Knopf und Text grün unterlegt, andere gelb; der
+  Tooltip sagt „in Super Check Partial" bzw. „nicht in SCP" und nennt
+  ähnliche bekannte Rufzeichen. Bei genau einem Vorschlag übernimmt ihn
+  ein Rechtsklick auf den Knopf („ES3YJ übernehmen"); ersetzt wird nie
+  automatisch (ADR-0026, #23).
+- Rufzeichen mit Pausen innerhalb (`IK2J E T`) werden zusammengesetzt,
+  wenn die Verkettung in SCP steht oder schon einmal ganz gehört wurde.
+  Rufzeichen, die nicht in SCP stehen, erscheinen dadurch ein bis drei
+  Zeichen später als Knopf.
+- **Zusammengeklebte Wörter** werden per Wörterbuch getrennt
+  (`TNXFERFBCALL` → `TNX·FER·FB·CALL`, `RST5995NN5NN` →
+  `RST·599·5NN·5NN`). Der graue Mittelpunkt zeigt einen ergänzten, nicht
+  gehörten Abstand; N1MMs CW Reader bekommt echte Leerzeichen (jedes Wort
+  erst an seinem Ende). Abschaltbar unter Einstellungen; neue Schlüssel
+  `segment_words` und `n1mm_engine_segmented` in `config.json`. Im
+  Terminal (`live`, `decode_wav`) ebenfalls `·`, abschaltbar mit
+  `--no-segment`. Der rohe Decodertext und das Decodier-Log bleiben
+  unverändert.
+- `CWDecoder.exe --scp RUFZEICHEN` (bekannt / ähnlich / unbekannt),
+  `python -m cwdecoder.scp`; `tools/update_scp.py` lädt eine neue SCP.
+- Prosign `<BK>` (`-...-.-`).
 - Testdaten vom Shack-Test 27.10. (IN3TWX, IK2JET, GI5RSS, LA8IG) in
   `tests/test_real.py`; `tests/real_baseline.json` hält den Volltext aller
   Aufnahmen, `run_matrix.py --real` zeigt die Ähnlichkeit dazu.

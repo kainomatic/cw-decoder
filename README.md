@@ -96,6 +96,25 @@ Klick auf Knopf oder Markierung übergibt das Rufzeichen an N1MM. Die
 Spalte zeigt so viele Knöpfe, wie hineinpassen; ältere Rufzeichen stehen
 im Text und sind dort anklickbar.
 
+Rufzeichen, die in **Super Check Partial** stehen (Rufzeichen aus
+Contest-Logs, `master.scp`), sind in Knopf und Text **grün** unterlegt,
+andere **gelb**. Der Tooltip sagt „in Super Check Partial" bzw. „nicht in
+SCP" und nennt ähnliche bekannte Rufzeichen („ähnlich: ES3YJ"). Gibt es
+genau einen, bietet ein **Rechtsklick** auf den Knopf „ES3YJ übernehmen"
+an; ersetzt wird nie automatisch. Rufzeichen mit Pausen innerhalb
+(`IK2J E T`) werden zusammengesetzt, wenn die Verkettung in SCP steht
+oder schon einmal ganz gehört wurde (ADR-0026).
+
+Wörter, zwischen denen kein Wortabstand zu hören war (`TNXFERFBCALL`),
+trennt ein Wörterbuch aus QSO-Floskeln, Rapporten und Rufzeichen:
+`TNX·FER·FB·CALL`. Der graue Mittelpunkt `·` zeigt, dass der Abstand
+ergänzt und nicht gehört wurde; N1MMs CW Reader bekommt echte
+Leerzeichen. Beides lässt sich unter Einstellungen abschalten
+(„Zusammengeklebte Wörter trennen", „An N1MMs CW Reader getrennt mit
+Leerzeichen"); im Terminal schaltet `--no-segment` es ab.
+
+![Grüne und gelbe Rufzeichen, Vorschlag im Tooltip, Trenner ·](docs/img/scp-zerlegung.png)
+
 Unsicher erkannte Zeichen stehen im Text **grau** (ein Element lag knapp
 zwischen Punkt und Strich, das Tempo war noch nicht eingemessen oder das
 Signal schwach; ADR-0023). Dort lohnt es sich, selbst hinzuhören. Enthält
@@ -122,7 +141,8 @@ Installiert heißt das Programm `CWDecoder.exe`; dieselben Funktionen gibt
 es dort per Kommandozeile: `CWDecoder.exe --decode datei.wav`,
 `CWDecoder.exe --list-devices`, `CWDecoder.exe --version`,
 `CWDecoder.exe --dxcc DJ7PR` (Land zum Rufzeichen; aus dem Quelltext:
-`python -m cwdecoder.dxcc DJ7PR`).
+`python -m cwdecoder.dxcc DJ7PR`), `CWDecoder.exe --scp OY1CT` (in Super
+Check Partial? aus dem Quelltext: `python -m cwdecoder.scp OY1CT`).
 
 Die GUI merkt sich Gerät, feste Tonfrequenz und die Haken. Ablageorte:
 
@@ -167,7 +187,9 @@ Testdaten: `testdata/real/` enthält echte Aufnahmen vom Funkgerät
 (`tests/test_real.py`; der Volltext aller Aufnahmen zu einem festen Stand
 steht in `tests/real_baseline.json`). Es sind Mitschnitte öffentlichen
 Amateurfunkverkehrs; auf Wunsch einer betroffenen Station wird die
-jeweilige Aufnahme entfernt. Fehlfälle im Betrieb mit **Strg+S** sichern
+jeweilige Aufnahme entfernt. `test_real.py` prüft auch Rufzeichen
+(`IK2JET` aus `IK2J E T`) und die Zerlegung (`TNX FER FB CALL`).
+Fehlfälle im Betrieb mit **Strg+S** sichern
 (`…_letzte30s.wav` samt `.txt`) und nach `testdata/` kopieren; auswerten
 mit `python -m cwdecoder.decode_wav datei.wav --trace`.
 
@@ -201,6 +223,10 @@ mit `python -m cwdecoder.decode_wav datei.wav --trace`.
    erscheinen als Buttons in der GUI. Auch zusammengeklebte Rufzeichen
    (`DEDJ7PR`) werden gefunden; bekannte Rufzeichen auch, wenn sie zerrissen
    sind (`OY 1 CT`) (ADR-0019).
+6. **Super Check Partial und Zerlegung** (`scp.py`, `segment.py`):
+   Abgleich mit `master.scp` (grün/gelb, Vorschläge, `IK2J E T` →
+   IK2JET) und Trennung zusammengeklebter Wörter per Wörterbuch
+   (ADR-0026). Beides nur Anzeige; der rohe Decodertext bleibt.
 
 Im Textfenster beginnt nach einer Pause von mehr als 3 s oder wenn der Ton
 weg ist ein neuer Absatz. Bei aktiver Aufnahme entsteht neben der WAV eine
@@ -250,8 +276,11 @@ cwdecoder/
   replay.py      Nochmal hören (Wiedergabe, Zeitdehnung ohne Tonhöhenänderung)
   gui.py         Tkinter-Oberfläche
   callsign.py    Rufzeichen-Erkennung
+  scp.py         Super Check Partial (master.scp)
+  segment.py     Wörterbuch-Zerlegung zusammengeklebter Wörter
   dxcc.py        Rufzeichen -> Land (cty.dat), Flaggen
-  data/          cty.dat, dxcc_table.json (deutsche Namen), flags/*.png
+  data/          cty.dat, dxcc_table.json (deutsche Namen), flags/*.png,
+                 master.scp, qso_words.txt
   n1mm.py        RadioInfo-UDP, Tastatur-Übergabe, Spot-Server
   __version__.py Version und Kanal (stable/beta)
   paths.py       Ablageorte (App-Ordner, Log, Aufnahmen)
@@ -262,12 +291,13 @@ cwdecoder/
   instance_lock.py  Schutz gegen Doppelstart
   app_mutex.py      benannter Mutex für den Installer
   updater.py, gui_update.py  Self-Update (Prüfung, Download, Dialog)
-  app_main.py       Einstieg der EXE (GUI, --decode, --list-devices, --version, --dxcc)
+  app_main.py       Einstieg der EXE (GUI, --decode, --list-devices, --version, --dxcc, --scp)
 run_cwdecoder.py   Einstieg für PyInstaller
 cwdecoder.spec     PyInstaller-Build
 installer/         Inno-Setup-Skripte (Stable, Beta)
 tools/             make_icon.py, release_tools.py (Release-Workflow),
-                   update_cty.py, make_flags.py (DXCC-Daten, Flaggen)
+                   update_cty.py, make_flags.py (DXCC-Daten, Flaggen),
+                   update_scp.py (Super Check Partial)
 tests/
   test_*.py      pytest
   run_matrix.py  Testmatrix
@@ -288,7 +318,7 @@ docs/VERGLEICH.md  Vergleichsmessung gegen fldigi
   Display geschrieben und müssen unter Windows einmal durchgeklickt werden.
 - Mögliche Erweiterungen: mehrere Signale gleichzeitig (Multi-Decoder über
   das Band), Wahrscheinlichkeits-Decoder statt harter Schwellen bei sehr
-  schwachen Signalen, Rufzeichen-Plausibilität über Master-Callsign-Datei.
+  schwachen Signalen.
 
 ## Lizenz
 

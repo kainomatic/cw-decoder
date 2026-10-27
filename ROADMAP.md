@@ -35,10 +35,10 @@ und sag mir, was als Nächstes zu tun ist."*
 Programm-Infrastruktur stehen; das Programm ist als Setup mit Self-Update
 installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 
-- Neueste Beta: [`v0.1.0-beta10`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta10)
-  (`CWDecoder-Beta-Setup-v0.1.0.exe`, Flagge und Landesname an den
-  Rufzeichen, #11; davor beta9 mit Startfenster und Rufzeichen im Text,
-  #9). Self-Update beta2 → beta4 auf dem
+- Neueste Beta: [`v0.1.0-beta11`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta11)
+  (`CWDecoder-Beta-Setup-v0.1.0.exe`, CW Decoder als Engine für N1MMs
+  CW Reader, #3; davor beta10 mit Flagge und Landesname an den
+  Rufzeichen, #11). Self-Update beta2 → beta4 auf dem
   Entwicklungsrechner nachgewiesen. Noch keine Stable.
 - Testmatrix (`python tests/run_matrix.py`, zufällige Texte, 11 Kategorien,
   ADR-0017/0018): Mittelwert **97,7 %**, Rauschen 100 % (auch durch
@@ -47,9 +47,10 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 - Laufender Auftrag: siehe Issues mit Label `auftrag`
   (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta10`
-(Self-Update) und testet weiter
-mit Funkgerät und N1MM (siehe „Testablauf Installer/Beta"). Danach
+**Nächster Schritt:** Review von #3 durch die Desktop-Session. DF1DS
+aktualisiert auf dem Shack-PC auf `v0.1.0-beta11` (Self-Update), richtet
+N1MM nach `docs/N1MM.md` ein und testet mit Funkgerät und N1MM (siehe
+„Testablauf Installer/Beta"). Danach
 Auswertung der Aufnahmen durch die Desktop-Session und Entscheidung über die
 Stable `v0.1.0`.
 
@@ -72,7 +73,7 @@ seinem Rechner den Self-Update von Beta N auf Beta N+1 nachgewiesen hat
 Bericht). Danach laufen Testrunden über Self-Update; Aufnahmen aus
 `Dokumente\CW Decoder\Aufnahmen` gehen an die Desktop-Session.
 
-Stand: Nachweis beta2 → beta4 erbracht (Arbeitspaket 4); `v0.1.0-beta10`
+Stand: Nachweis beta2 → beta4 erbracht (Arbeitspaket 4); `v0.1.0-beta11`
 darf auf den Shack-PC.
 
 ## Beschlossen, noch nicht umgesetzt
@@ -80,9 +81,7 @@ darf auf den Shack-PC.
 Offene Aufgaben-Issues (noch kein Auftrag, bis sie das Label `auftrag`
 bekommen):
 
-| Issue | Thema | Bereich |
-|-------|-------|---------|
-| [#3](https://github.com/kainomatic/cw-decoder/issues/3) | N1MM: direkter Weg ins Rufzeichenfeld? | n1mm |
+Zurzeit keine; #3 ist umgesetzt (siehe unten), Review ausstehend.
 
 #1, #2 und #5 sind umgesetzt und geschlossen (siehe „Decoder-Tuning" unten).
 
@@ -176,6 +175,18 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
 - ✅ `--dxcc` in der EXE, Bundle-Prüfung im Release-Workflow.
 - Beta [`v0.1.0-beta10`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta10);
   Review bestanden, Issue geschlossen.
+
+## ✅ N1MM: CW Decoder als Engine für den CW Reader (#3)
+
+- ✅ Mitschnitt mit Stub (`tools/fldigi_stub.py`) an N1MM 1.0.7711: N1MM
+  startet die Engine selbst (Port 7367, Fenstertitel aus `-ti`) und pollt
+  `rx.get_data` alle ~200 ms (ADR-0022).
+- ✅ `cwdecoder/fldigi_rpc.py`: XML-RPC wie fldigi; Text im CW Reader von
+  N1MM, Klick auf ein Rufzeichen setzt es ins Entry Window (nachgewiesen
+  mit Testsignal, Screenshots in #3).
+- ✅ Wege wählbar im Dialog „Übergabe…" (CW Reader, Spot, Tippen,
+  Zwischenablage); Spots auch ohne Telnet-Login; Anleitung `docs/N1MM.md`.
+- Beta [`v0.1.0-beta11`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta11); Review ausstehend.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

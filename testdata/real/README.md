@@ -15,3 +15,10 @@ Auf Wunsch einer betroffenen Station wird die jeweilige Aufnahme entfernt.
 | `cw_20261026_190445_962_8k.wav` | LY2PX ruft CQ; Gegenstation IZ4BPF (op Willy) schwach, ~10 dB über dem Filterrauschen | enthält `LY2PX LY2PX CQ CQ CQ`, `WILLY`, `Z4BPF` |
 | `cw_20261026_190855_301_8k.wav` | 0–65 s leere Frequenz (nur Filterrauschen); ab 70 s ES3YJ schwach | erste 65 s höchstens 5 Zeichen; Gesamttext enthält `ES3YJ` |
 | `cw_20261026_231339_217_8k.wav` | 26.10., Filter 500 Hz, 6 min: QSO OY1CT / IK2ULV / DJ7PR mit Fading und zeitweise zwei Stationen; Geber DJ7PR mit weiten Zeichenabständen (Wort-/Zeichenpause ≈ 1,4) | enthält `OY1CT`, `IK2ULV`, `DJ7PR`, `CALLED CQ`, `QRM`, `STRANGE`; Rufzeichen-Spotter findet `DJ7PR` und `OY1CT` auch in zusammengeklebten Wörtern (#10) |
+| `cw_20261027_193609_542_8k.wav` | 27.10., 4,6 min: SV1QEK, dann QSO OY1CT / IN3TWX (Ton 840 Hz). IN3TWX tastet mit Zeichenabständen 2–4 Punkte und Wortabständen 4–6 Punkte (Kontinuum, Wörter kleben: `DEIN3TWX`, `GETUESUR569569BK`); vereinzelt Aussetzer innerhalb von Elementen (13–26 ms) | enthält `SV1QEK`, `OY1CT`, `IN3TWX`, `WOLF`, `BK` (#20) |
+| `cw_20261027_194453_947_8k.wav` | 27.10., 2 min: IK2JET ruft CQ mit Keyer (Punkt 56 ms), gibt aber innerhalb des Rufzeichens 5,5-Punkt-Pausen (`IK2J E T`), zwischen `CQ` und `DE` nur 3 Punkte | enthält `CQ DE IK2J`; Rufzeichen `IK2JET` erst mit Super Check Partial (#17, #20) |
+| `cw_20261027_194831_227_8k.wav` | 27.10., 90 s: drei Stationen auf 240 Hz – GI5RSS 840 Hz, starke Station 864 Hz (24 Hz daneben, Punkt 90 ms, Zeichenabstände nur 1,2–2,4 Punkte: sendet `VHX`/`4HX`), schwache dritte bei 630 Hz; zeitweise zwei gleichzeitig | enthält `GI5RSS`, `UR 5`, `OY1CT`; ab Zeichenschwellen-Auftrag (#20) auch `VHX` (32–38 s) |
+
+Zu den Aufnahmen vom 27.10. liegt das Decodier-Log der Beta 13 daneben
+(`…_NNN.txt`, `sekunde;zeichen;vertrauen`), um die Vertrauensanzeige
+gegen das Gehörte zu prüfen (#18).

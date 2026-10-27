@@ -13,6 +13,8 @@
     CWDecoder.exe --list-devices          Audiogeräte auflisten
     CWDecoder.exe --version               Version und Kanal
     CWDecoder.exe --dxcc RUFZEICHEN ...   Land zum Rufzeichen (cty.dat)
+    CWDecoder.exe --scp RUFZEICHEN ...    in Super Check Partial? (bekannt /
+                                          ähnlich: … / unbekannt)
 
 Die EXE ist ein Fensterprogramm ohne eigene Konsole. Für die
 Kommandozeilen-Modi hängt sie sich an die Konsole des Aufrufers; gibt es
@@ -25,7 +27,7 @@ import sys
 from .__version__ import APP_NAME, CHANNEL, __version__
 
 CLI_OUTPUT_FILE = "cli-ausgabe.txt"
-_CLI_FLAGS = ("--decode", "--list-devices", "--version", "--dxcc", "-h", "--help")
+_CLI_FLAGS = ("--decode", "--list-devices", "--version", "--dxcc", "--scp", "-h", "--help")
 
 
 def _attach_parent_console() -> bool:
@@ -74,6 +76,8 @@ def build_parser():
     mode.add_argument("--version", action="store_true", help="Version anzeigen")
     mode.add_argument("--dxcc", metavar="RUFZEICHEN", nargs="+",
                       help="Land (DXCC-Entität) zu Rufzeichen anzeigen")
+    mode.add_argument("--scp", metavar="RUFZEICHEN", nargs="+",
+                      help="Rufzeichen in Super Check Partial nachschlagen")
     p.add_argument("--n1mm", action="store_true", default=None,
                    help="Oberfläche: N1MM-Anbindung für diesen Lauf einschalten")
     p.add_argument("--n1mm-engine", action="store_true",
@@ -105,6 +109,12 @@ def _run_cli(a, rest) -> int:
         utf8_console()
         for call in a.dxcc + rest:
             print(format_lookup(call))
+    elif a.scp:
+        from . import utf8_console
+        from .scp import format_check
+        utf8_console()
+        for call in a.scp + rest:
+            print(format_check(call))
     elif a.list_devices:
         from . import utf8_console
         from .live import list_devices
@@ -122,7 +132,7 @@ def main(argv=None) -> int:
         ensure_output()
     p = build_parser()
     a, rest = p.parse_known_args(argv)
-    if a.version or a.list_devices or a.decode or a.dxcc:
+    if a.version or a.list_devices or a.decode or a.dxcc or a.scp:
         try:
             return _run_cli(a, rest)
         except Exception as e:  # noqa: BLE001 - sonst blockiert ein Fehlerfenster der EXE

@@ -27,6 +27,23 @@ liefert folgende Daten anderer Herkunft mit (ADR-0021):
   Hoheitszeichen kann anderen Regeln unterliegen; hier dienen sie nur zur
   Kennzeichnung des Landes.
 
+## MASTER.SCP (Super Check Partial)
+
+- Datei: `cwdecoder/data/master.scp` (ein Rufzeichen je Zeile; Kopfzeilen
+  mit Release-Datum, z. B. `# Release 2026.10.23`)
+- Herkunft: <https://www.supercheckpartial.com/> (Datenbank der
+  Rufzeichen aus Contest-Logs, erzeugt mit „bb-scp")
+- Lizenz: Die Seite nennt keine Lizenz; die Datei wird dort frei zum
+  Download für Logprogramme angeboten und von N1MM Logger+ und anderen
+  Programmen mitgeliefert. Sie wird unverändert weitergegeben (nur
+  Zeilenenden LF).
+- Aktualisieren: `python tools/update_scp.py` (ADR-0026)
+
+## Wortschatz der Segmentierung
+
+`cwdecoder/data/qso_words.txt` (QSO-Floskeln) ist eigene Arbeit des
+Projekts und steht unter der Lizenz des CW Decoders.
+
 ## Deutsche Ländernamen
 
 `cwdecoder/data/dxcc_table.json` (Kurznamen und Zuordnung Entität → Flagge)

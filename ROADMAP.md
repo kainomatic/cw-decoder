@@ -47,7 +47,7 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 - Laufender Auftrag: siehe Issues mit Label `auftrag`
   (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** Review von #18 durch die Desktop-Session. DF1DS
+**Nächster Schritt:** Shack-Test mit `v0.1.0-beta12`. DF1DS
 aktualisiert auf dem Shack-PC auf `v0.1.0-beta12` (Self-Update), richtet
 N1MM nach `docs/N1MM.md` ein und testet mit Funkgerät und N1MM (siehe
 „Testablauf Installer/Beta"). Danach
@@ -204,7 +204,8 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
   identisch (Seed 1000/5000/7777: 97,7/96,7/98,4 %, alte Matrix 98,3 %).
 - ✅ Rufzeichen-Spalte zeigt nur so viele Knöpfe, wie hineinpassen (#14).
 - ✅ `docs/VERGLEICH.md`: Messung gegen fldigi aus #12 (#15).
-- Beta [`v0.1.0-beta12`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta12); Review ausstehend.
+- Beta [`v0.1.0-beta12`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta12);
+  Review bestanden, #18, #14 und #15 geschlossen.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

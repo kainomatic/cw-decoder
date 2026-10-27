@@ -22,6 +22,7 @@ import threading
 import time
 from datetime import datetime
 import tkinter as tk
+from tkinter import font as tkfont
 from tkinter import ttk
 import numpy as np
 
@@ -37,7 +38,7 @@ from .gui_tooltip import attach_tooltip
 from .live import (AudioDeviceError, DecodeLog, LiveDecoder, WavRecorder,
                    decode_log_path, open_stream)
 from .n1mm import N1MMBridge, PortInUseError
-from .paths import get_log_dir, get_recordings_dir
+from .paths import data_path, get_log_dir, get_recordings_dir
 
 log = logging.getLogger(__name__)
 
@@ -82,6 +83,7 @@ _MSG_STATUS = ("{lock}: {freq:.0f} Hz   SNR {snr:.0f} dB   {wpm:.0f} WPM   "
 _MSG_STATUS_LOCK = "Ton"
 _MSG_STATUS_NOLOCK = "kein Ton"
 _MSG_STATUS_REC = "   ● REC {name}"
+_MSG_CALL_COUNTRY = "{name} ({prefix}, {continent}, CQ {cq}, ITU {itu})"
 _MSG_N1MM_OFF = "N1MM: aus"
 _MSG_N1MM_IDLE = "N1MM: –"
 _MSG_N1MM_RADIO = "N1MM: {freq:.1f} kHz {mode}  ({call})"
@@ -143,6 +145,11 @@ TEXT_FONT = ("Consolas", 16)
 CALL_TAG = "call"                  # Markierung erkannter Rufzeichen im Text
 CALL_TAG_PREFIX = "call:"          # zweiter Tag je Vorkommen: call:DL1ABC
 CALL_TAG_BG = "#ffe08a"
+CALL_MAX = 12                      # so viele Rufzeichen-Knöpfe
+CALL_CHARS = 9                     # Breite der Rufzeichen-Spalte im Knopf (Zeichen)
+CALL_NAME_CHARS = 14               # Landesname, länger wird mit „…" gekürzt
+FLAG_W, FLAG_H = 24, 16            # cwdecoder/data/flags/<iso>.png
+CALL_BTN_HOVER = "#e5f1fb"
 TOKENS_KEEP = 2000                 # so viele Zeichen merkt sich die Markierung
 
 
@@ -180,6 +187,8 @@ class App(tk.Tk):
         self.n1mm = None
         self.n1mm_note = None   # (Meldung, sichtbar bis time.monotonic())
         self.calls = []
+        self.call_rows = {}     # Rufzeichen -> Widgets des Knopfs (Tests)
+        self._flag_cache = {}   # ISO-Code -> PhotoImage; hält die Bilder gegen den GC
         self.devs = []
         # Generation des laufenden Decoders; wird bei Start und Stop erhöht.
         # Meldungen tragen ihre Generation, veraltete Status werden verworfen.
@@ -286,21 +295,27 @@ class App(tk.Tk):
         lbl = ttk.Label(right, text=_LBL_CALLS)
         lbl.pack(anchor="w")
         attach_tooltip(lbl, _TT_CALLS)
+        # N1MM-Block unten verankern und vor den Knöpfen packen: viele
+        # Rufzeichen-Knöpfe verdrängen ihn sonst nach unten aus dem Fenster
+        bottom = ttk.Frame(right)
+        bottom.pack(side="bottom", fill="x")
         self.call_frame = ttk.Frame(right)
+        self._call_bg = ttk.Style(self).lookup("TButton", "background") or self.cget("bg")
+        self._bold_font = None
         self.call_frame.pack(fill="both", expand=True)
         # standardmäßig aus: Ports werden erst gebunden, wenn der Haken gesetzt wird
         self.n1mm_var = tk.BooleanVar(value=self.n1mm_on_start)
-        cb = ttk.Checkbutton(right, text=_LBL_N1MM, variable=self.n1mm_var,
+        cb = ttk.Checkbutton(bottom, text=_LBL_N1MM, variable=self.n1mm_var,
                              command=self._n1mm_changed)
         cb.pack(anchor="w", pady=(6, 0))
         attach_tooltip(cb, _TT_N1MM)
         self.wipe_var = tk.BooleanVar(value=self.cfg["n1mm_wipe"])
-        cb = ttk.Checkbutton(right, text=_LBL_WIPE, variable=self.wipe_var,
+        cb = ttk.Checkbutton(bottom, text=_LBL_WIPE, variable=self.wipe_var,
                              command=self._n1mm_changed)
         cb.pack(anchor="w")
         attach_tooltip(cb, _TT_WIPE)
         self.n1mm_status = tk.StringVar(value=_MSG_N1MM_IDLE)
-        lbl = ttk.Label(right, textvariable=self.n1mm_status, wraplength=190)
+        lbl = ttk.Label(bottom, textvariable=self.n1mm_status, wraplength=190)
         lbl.pack(anchor="w", pady=4)
         attach_tooltip(lbl, _TT_N1MM_STATUS)
         self._n1mm_changed(save=False)
@@ -808,11 +823,12 @@ class App(tk.Tk):
             self._send_call(call)
         return "break"
 
-    def _call_tag_enter(self, _ev=None):
+    def _call_tag_enter(self, ev=None):
         self.text.configure(cursor="hand2")
         tip = getattr(self.text, "_cw_tooltip", None)
         if tip is not None:
-            tip.set_text(_TT_CALL_TAG)
+            call = self._call_at(ev.x, ev.y) if ev is not None else None
+            tip.set_text(self._call_tooltip(_TT_CALL_TAG, call))
             tip.schedule()
 
     def _call_tag_leave(self, _ev=None):
@@ -822,17 +838,115 @@ class App(tk.Tk):
             tip.cancel()
             tip.set_text(_TT_TEXT)
 
+    # -- Rufzeichen-Knöpfe mit Flagge und Landesname (ADR-0021) ----------
+    def _country(self, call):
+        """DXCC-Entität oder None; Datenfehler kosten nur die Anzeige."""
+        if not call:
+            return None
+        try:
+            from . import dxcc
+            return dxcc.lookup(call)
+        except (OSError, ValueError) as e:
+            log.warning("DXCC-Daten nicht lesbar: %s", e)
+            return None
+
+    def _call_tooltip(self, base, call):
+        """Tooltip-Text plus Zeile „Landesname (Präfix, Kontinent, CQ, ITU)"."""
+        e = self._country(call)
+        if e is None:
+            return base
+        return base + "\n" + _MSG_CALL_COUNTRY.format(
+            name=e.short, prefix=e.prefix, continent=e.continent, cq=e.cq, itu=e.itu)
+
+    def _flag_image(self, iso):
+        """PhotoImage der Flagge (gecacht); ohne iso oder Datei ein leeres
+        Bild gleicher Größe, damit die Namen untereinander stehen."""
+        key = iso or ""
+        img = self._flag_cache.get(key)
+        if img is not None:
+            return img
+        if iso:
+            try:
+                img = tk.PhotoImage(master=self, file=str(data_path("flags", f"{iso}.png")))
+            except tk.TclError as e:
+                log.warning("Flagge %s nicht lesbar: %s", iso, e)
+        if img is None:
+            img = self._flag_cache.get("") or tk.PhotoImage(master=self, width=FLAG_W,
+                                                            height=FLAG_H)
+            self._flag_cache[""] = img
+        self._flag_cache[key] = img
+        return img
+
+    def _call_font(self):
+        if self._bold_font is None:
+            self._bold_font = tkfont.nametofont("TkDefaultFont").copy()
+            self._bold_font.configure(weight="bold")
+        return self._bold_font
+
     def _add_call(self, call):
         if call in self.calls:
             return
         self.calls.insert(0, call)
-        self.calls = self.calls[:12]
+        self.calls = self.calls[:CALL_MAX]
         for wdg in self.call_frame.winfo_children():
             wdg.destroy()
+        self.call_rows = {}
         for cs in self.calls:
-            btn = ttk.Button(self.call_frame, text=cs, command=lambda c=cs: self._send_call(c))
-            btn.pack(fill="x", pady=1)
-            attach_tooltip(btn, _TT_CALL_BUTTON)
+            self._make_call_button(cs)
+
+    def _make_call_button(self, call):
+        """Knopf aus Labels: Rufzeichen links, rechts Flagge und Landesname.
+        Feste Breiten in Zeichen, damit die Spalte nicht springt. Klick auf
+        jede Stelle übergibt das Rufzeichen (_send_call)."""
+        e = self._country(call)
+        bg = self._call_bg
+        row = tk.Frame(self.call_frame, relief="raised", bd=1, bg=bg, cursor="hand2",
+                       takefocus=1)
+        row.pack(fill="x", pady=1)
+        lbl = tk.Label(row, text=call, font=self._call_font(), anchor="w",
+                       width=CALL_CHARS, bg=bg, pady=0)
+        lbl.pack(side="left", padx=(4, 2), pady=1)
+        parts = {"row": row, "call": lbl, "flag": None, "name": None, "entity": e}
+        if e is not None:
+            from .dxcc import short_name
+            parts["flag"] = tk.Label(row, image=self._flag_image(e.iso), bg=bg, pady=0)
+            parts["flag"].pack(side="left", padx=(2, 4))
+            parts["name"] = tk.Label(row, text=short_name(e, CALL_NAME_CHARS), anchor="w",
+                                     width=CALL_NAME_CHARS, bg=bg, pady=0)
+            parts["name"].pack(side="left", padx=(0, 4))
+        widgets = [w for w in (row, lbl, parts["flag"], parts["name"]) if w is not None]
+        parts["tooltip"] = tip = self._call_tooltip(_TT_CALL_BUTTON, call)
+
+        def paint(color):
+            for w in widgets:
+                try:
+                    w.configure(bg=color)
+                except tk.TclError:     # Knopf schon abgebaut
+                    pass
+
+        def inside():
+            try:
+                w = self.winfo_containing(*self.winfo_pointerxy())
+            except (tk.TclError, KeyError):
+                return False
+            return w is not None and str(w).startswith(str(row))
+
+        def release(_ev=None):
+            row.configure(relief="raised")
+            if inside():
+                self._send_call(call)
+
+        for w in widgets:
+            w.bind("<Enter>", lambda _e: paint(CALL_BTN_HOVER), add="+")
+            w.bind("<Leave>", lambda _e: self.after_idle(
+                lambda: None if inside() else paint(bg)), add="+")
+            w.bind("<ButtonPress-1>", lambda _e: row.configure(relief="sunken"), add="+")
+            w.bind("<ButtonRelease-1>", release, add="+")
+            attach_tooltip(w, tip)
+        row.bind("<Return>", lambda _e: self._send_call(call))
+        row.bind("<space>", lambda _e: self._send_call(call))
+        self.call_rows[call] = parts
+        return parts
 
     def _send_call(self, call):
         if not self.n1mm:
@@ -845,6 +959,14 @@ class App(tk.Tk):
             self.report_error(self.n1mm.last_failure, _MSG_CTX_N1MM)
 
 
+def _preload_dxcc():
+    try:
+        from . import dxcc
+        dxcc.load()
+    except Exception as e:  # noqa: BLE001 - Anzeige fällt dann nur weg
+        log.warning("DXCC-Daten nicht geladen: %s", e)
+
+
 def run_app(n1mm=None, lock=None, splash=None, timer=None):
     """Hauptfenster bauen und laufen lassen (Aufruf aus gui_start.main,
     nachdem der Lock erworben ist und das Startfenster steht)."""
@@ -852,6 +974,9 @@ def run_app(n1mm=None, lock=None, splash=None, timer=None):
     from .gui_start import close_splash
     # Für den Installer (AppMutex); Handle bis Prozessende halten
     mutex = create_app_mutex()
+    # cty.dat vorab laden (reines Python, kein tk), damit das erste
+    # Rufzeichen nicht wartet (ADR-0021)
+    threading.Thread(target=_preload_dxcc, daemon=True, name="dxcc-load").start()
     # Setup-Dateien früherer Updates aus %TEMP% entfernen (ohne tk, im Hintergrund)
     threading.Thread(target=updater.cleanup_old_installers, daemon=True,
                      name="update-cleanup").start()

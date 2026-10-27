@@ -28,6 +28,17 @@ log = logging.getLogger(__name__)
 AUDIO_WARN_INTERVAL_S = 5.0
 
 
+def call_with_country(call: str) -> str:
+    """"DJ7PR – Deutschland"; ohne bekannte Entität nur das Rufzeichen."""
+    try:
+        from .dxcc import lookup
+        e = lookup(call)
+    except (OSError, ValueError) as err:
+        log.warning("DXCC-Daten nicht lesbar: %s", err)
+        e = None
+    return f"{call} – {e.short}" if e else call
+
+
 class AudioDeviceError(RuntimeError):
     """Soundkarte lässt sich nicht öffnen (belegt, abgezogen, falsche Rate)."""
 
@@ -260,7 +271,7 @@ def main():
         sys.stderr.flush()
 
     def on_call(call):
-        sys.stderr.write(f"\n[Rufzeichen: {call}]\n")
+        sys.stderr.write(f"\n[Rufzeichen: {call_with_country(call)}]\n")
 
     live = LiveDecoder(fs, cfg, on_text=on_text, on_status=on_status, on_call=on_call,
                        on_audio_warning=lambda m: print(f"[audio] {m}", file=sys.stderr))

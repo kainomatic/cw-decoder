@@ -63,6 +63,22 @@ jobs:
           Write-Host $out
           if ($out -notmatch "CQ TEST DE DF1DS K") { Write-Error "Bundle decodiert nicht"; exit 1 }
 
+      - name: Bundle prüfen (DXCC-Daten und --dxcc)
+        shell: pwsh
+        run: |
+          $exe = "dist\CWDecoder\CWDecoder.exe"
+          $data = Get-ChildItem dist\CWDecoder -Recurse -Directory -Filter data |
+            Where-Object { $_.FullName -like "*\cwdecoder\data" } | Select-Object -First 1
+          if (-not $data) { Write-Error "cwdecoder\data fehlt im Bundle"; exit 1 }
+          foreach ($f in "cty.dat", "cty_copyright.txt", "dxcc_table.json", "flags\de.png") {
+            if (-not (Test-Path (Join-Path $data.FullName $f))) { Write-Error "$f fehlt im Bundle"; exit 1 }
+          }
+          Start-Process $exe -ArgumentList "--dxcc","DJ7PR" -Wait -NoNewWindow -RedirectStandardOutput dxcc.txt -RedirectStandardError dxcc-err.txt
+          Get-Content dxcc-err.txt
+          $d = (Get-Content dxcc.txt -Raw -Encoding utf8).Trim()
+          Write-Host "Bundle meldet: $d"
+          if ($d -ne "DJ7PR: Deutschland (DL, EU, CQ 14, ITU 28)") { Write-Error "--dxcc falsch: $d"; exit 1 }
+
       - name: Inno Setup installieren
         run: choco install innosetup --no-progress -y
 

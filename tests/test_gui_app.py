@@ -187,3 +187,51 @@ def test_rufzeichen_im_text_markiert_und_klickbar(app, monkeypatch):
     assert sent == ["DJ7PR"] and app.calls[0] == "DJ7PR"
     app._clear()
     assert app._tokens == {}
+
+
+@requires_display
+@pytest.mark.gui
+def test_rufzeichen_knoepfe_mit_flagge_und_land(app, monkeypatch):
+    """Knopf: Rufzeichen, Flagge, Landesname; ohne Flagge bzw. ohne Land (#11)."""
+    sent = []
+    monkeypatch.setattr(app, "_send_call", sent.append)
+    for call in ["OY1CT", "DP0GVN", "QQ1A", "UA9ABC", "DJ7PR"]:
+        app._add_call(call)
+    app.update()
+    rows = app.call_rows
+    # mit Flagge: Bild aus dem Cache, Name auf Deutsch
+    oy = rows["OY1CT"]
+    assert oy["name"]["text"] == "Färöer"
+    assert str(oy["flag"]["image"]) == str(app._flag_cache["fo"])
+    assert app._flag_cache["fo"].width() == 24
+    # iso null (Antarktis): Platzhalter statt Flagge, Name trotzdem da
+    ant = rows["DP0GVN"]
+    assert ant["name"]["text"] == "Antarktis"
+    assert str(ant["flag"]["image"]) == str(app._flag_cache[""])
+    # unbekannt: nur das Rufzeichen
+    qq = rows["QQ1A"]
+    assert qq["flag"] is None and qq["name"] is None and qq["call"]["text"] == "QQ1A"
+    # langer Name gekürzt, voll im Tooltip
+    ru = rows["UA9ABC"]
+    assert ru["name"]["text"] == "Asiat. Russla…"
+    assert "Asiat. Russland (UA9, AS, CQ 17, ITU 30)" in ru["tooltip"]
+    assert rows["DJ7PR"]["tooltip"].endswith("Deutschland (DL, EU, CQ 14, ITU 28)")
+    # feste Breite: alle Knöpfe mit Land gleich breit, Spalte springt nicht
+    widths = {rows[c]["row"].winfo_reqwidth() for c in ("OY1CT", "DP0GVN", "UA9ABC", "DJ7PR")}
+    assert len(widths) == 1, widths
+    col = app.right_col.winfo_width()
+    app._add_call("VP2VAB")      # Br. Jungfernins.
+    app.update()
+    assert app.right_col.winfo_width() == col
+    # Klick auf Flagge bzw. Namen übergibt das Rufzeichen
+    monkeypatch.setattr(app, "winfo_containing", lambda x, y: rows["OY1CT"]["flag"])
+    rows = app.call_rows
+    for part in ("flag", "name", "call"):
+        w = rows["OY1CT"][part]
+        monkeypatch.setattr(app, "winfo_containing", lambda x, y, w=w: w)
+        w.event_generate("<ButtonPress-1>")
+        w.event_generate("<ButtonRelease-1>")
+    app.update()
+    assert sent == ["OY1CT"] * 3
+    # Tooltip der Markierung im Text nennt das Land
+    assert "Färöer" in app._call_tooltip("x", "OY1CT")

@@ -18,6 +18,10 @@ for pkg in ("sounddevice", "_sounddevice_data"):
     binaries += b
     hiddenimports += h
 
+# Mitgelieferte Daten (ADR-0021): cty.dat, dxcc_table.json, Flaggen-PNGs;
+# paths.data_path() findet sie unter <_MEIPASS>/cwdecoder/data
+datas += [("cwdecoder/data", "cwdecoder/data")]
+
 # numpy und scipy bringen ihre Hooks mit (PyInstaller bzw. hooks-contrib).
 # scipy.signal und scipy.io.wavfile laden einige Erweiterungen dynamisch.
 hiddenimports += ["scipy.signal", "scipy.io.wavfile", "scipy.special._cdflib"]

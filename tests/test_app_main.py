@@ -64,3 +64,10 @@ def test_decode_missing_file_returns_error(tmp_path, capsys):
     Dialog blockieren (CI hängt)."""
     assert app_main.main(["--decode", str(tmp_path / "fehlt.wav")]) == 1
     assert "Fehler:" in capsys.readouterr().err
+
+
+def test_dxcc(capsys):
+    """CWDecoder.exe --dxcc DJ7PR (Bundle-Smoke-Test im Release-Workflow, #11)."""
+    assert app_main.main(["--dxcc", "DJ7PR", "w1aw/mm"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out == ["DJ7PR: Deutschland (DL, EU, CQ 14, ITU 28)", "W1AW/MM: unbekannt"]

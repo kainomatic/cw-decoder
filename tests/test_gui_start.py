@@ -44,7 +44,8 @@ def test_prozess_startzeit_plausibel():
 def test_gui_start_importiert_keine_schweren_module():
     """Bis zum Lock dürfen numpy/scipy/sounddevice nicht geladen sein."""
     code = ("import sys; sys.path.insert(0, %r); import cwdecoder.gui_start; "
-            "heavy = [m for m in ('numpy', 'scipy', 'sounddevice', 'cwdecoder.gui') "
+            "heavy = [m for m in ('numpy', 'scipy', 'sounddevice', 'cwdecoder.gui', "
+            "'cwdecoder.dxcc') "
             "if m in sys.modules]; print(heavy)") % ROOT
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
                          timeout=60).stdout.strip()

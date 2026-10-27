@@ -108,14 +108,26 @@ def run_scenario(ok_rate=48000, with_input=True, slow_recorder=False, n1mm=True)
     app.report_callback_exception = lambda *e: errors.append(
         "Tk: " + "".join(traceback.format_exception(*e)))
 
+    def flag_of(parts):
+        """ISO-Code des Flaggenbilds im Knopf, "" = Platzhalter, None = kein Bild."""
+        if parts["flag"] is None:
+            return None
+        img = str(parts["flag"]["image"])
+        return next((k for k, v in app._flag_cache.items() if k and str(v) == img), "")
+
     def snap(key):
         seen[key] = {"status": app.status.get(), "btn": str(app.btn_start["text"]),
                      "calls": list(app.calls), "text": app.text.get("1.0", "end"),
-                     "dialogs": [(i.title, i.expected) for i in app.shown_errors]}
+                     "dialogs": [(i.title, i.expected) for i in app.shown_errors],
+                     "rows": {c: (flag_of(p), p["name"]["text"] if p["name"] else None)
+                              for c, p in app.call_rows.items()}}
 
     steps = [
         (300, app._toggle),                                   # Start
         (1500, lambda: snap("läuft")),
+        # Knöpfe mit Flagge (DL1ABC), ohne Flagge (Antarktis), ohne Land (#11)
+        (10, lambda: (app._add_call("DP0GVN"), app._add_call("QQ1A"))),
+        (50, lambda: snap("knöpfe")),
         (10, lambda: app.canvas.event_generate("<Button-1>", x=100, y=50)),
         (300, lambda: snap("fest")),
         (10, lambda: (app.auto_var.set(True), app._auto_changed())),
@@ -204,6 +216,13 @@ def main():
             check("CQ TEST DE DL1ABC" in seen["läuft"]["text"],
                   f"Text nicht dekodiert: {seen['läuft']['text'][:60]!r}", problems)
             check("DL1ABC" in seen["läuft"]["calls"], "Rufzeichen DL1ABC nicht erkannt", problems)
+            rows = seen["knöpfe"]["rows"]
+            check(rows.get("DL1ABC") == ("de", "Deutschland"),
+                  f"Knopf DL1ABC ohne Flagge/Land: {rows.get('DL1ABC')}", problems)
+            check(rows.get("DP0GVN") == ("", "Antarktis"),
+                  f"Knopf ohne Flagge falsch: {rows.get('DP0GVN')}", problems)
+            check(rows.get("QQ1A") == (None, None),
+                  f"Knopf ohne Land falsch: {rows.get('QQ1A')}", problems)
             check(seen["gestoppt"]["status"] == "gestoppt",
                   f"Status nach Stop: {seen['gestoppt']['status']!r}", problems)
             check("REC" in seen["aufnahme"]["status"], "Aufnahme nicht in der Statuszeile", problems)

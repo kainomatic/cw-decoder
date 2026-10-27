@@ -64,6 +64,7 @@ Was folgt daraus, positiv wie negativ?
 | [ADR-0019](ADR-0019-rufzeichen-ohne-wortgrenzen.md) | Rufzeichen ohne Wortgrenzen erkennen |
 | [ADR-0020](ADR-0020-start-lock-zweitinstanz.md) | Start, gehärteter Instanz-Lock, zweite Instanz holt die erste nach vorn |
 | [ADR-0021](ADR-0021-dxcc-land-und-flagge.md) | Land und Flagge zum Rufzeichen aus cty.dat, Flaggen als PNG |
+| [ADR-0022](ADR-0022-n1mm-als-fldigi-kompatible-engine.md) | Anbindung an N1MM als fldigi-kompatible Engine für den CW Reader |
 
 ## Abgrenzung
 

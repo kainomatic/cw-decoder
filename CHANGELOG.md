@@ -9,6 +9,24 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 ## [Unreleased]
 
 ### Added
+- Der CW Decoder ist Engine für das Fenster **CW Reader** von N1MM Logger+:
+  Er stellt die XML-RPC-Schnittstelle von fldigi nach (Port 7367), N1MM
+  zeigt den decodierten Text, markiert die Rufzeichen, und ein Klick dort
+  setzt sie ins Entry Window. In N1MM unter CW Reader → Setup → Fldigi den
+  Pfad zu `CWDecoder.exe` eintragen; N1MM startet den Decoder dann selbst
+  bzw. holt die laufende Instanz nach vorn. Anleitung `docs/N1MM.md`
+  (ADR-0022, #3).
+- Dialog „Übergabe…" in der N1MM-Spalte: Wege einzeln wählbar (CW Reader,
+  Skimmer-Spot, Entry Window tippen, Zwischenablage), Port der Engine;
+  Statuszeile „CW Reader: N1MM verbunden / wartet auf N1MM".
+- `CWDecoder.exe --n1mm-engine`; die Argumente, mit denen N1MM fldigi
+  startet (`--xmlrpc-server-port`, `-ti` …), wirken genauso.
+- Skimmer-Spots nehmen die Frequenz, die N1MM dem CW Reader mitteilt, wenn
+  keine Radio-Broadcasts (UDP 12060) kommen.
+- Klartextfehler „Port für den N1MM CW Reader belegt" (läuft fldigi?) und
+  „Spot nicht gesendet"; der Decoder läuft weiter.
+- `tools/fldigi_stub.py`: Mitschnitt der Aufrufe von N1MM an eine
+  fldigi-Engine.
 - Rufzeichen-Knöpfe zeigen Flagge und Landesname (z. B. `OY1CT  Färöer`),
   der Tooltip dazu Hauptpräfix, Kontinent und CQ-/ITU-Zone; auch der
   Tooltip der Markierung im Text nennt das Land. Datenquelle `cty.dat`
@@ -81,6 +99,10 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   erweiterte `CLAUDE.md` (Onboarding, Rollen, Definition of Done).
 
 ### Changed
+- N1MM-Übergabe: Standard sind jetzt CW Reader (Engine) und Skimmer-Spot.
+  Tippen ins Entry Window und Zwischenablage sind abschaltbare Wege
+  (Standard aus) statt fester Standard; der Haken „vorher Alt+W" sitzt im
+  Dialog „Übergabe…" (ADR-0022).
 - Der N1MM-Block der rechten Spalte bleibt unten sichtbar, auch wenn viele
   Rufzeichen-Knöpfe da sind (#11).
 - Zweiter Start holt das vorhandene Fenster nach vorn statt des Dialogs
@@ -139,6 +161,9 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   der offenen Issues.
 
 ### Fixed
+- Skimmer-Spots kamen in N1MM nicht an, wenn dort „Automatically Logon" aus
+  ist: Der Telnet-Cluster wartete auf ein Rufzeichen, das N1MM nie schickt.
+  Spots gehen jetzt ab dem Verbindungsaufbau raus (#3).
 - Rufzeichen-Spalte, N1MM-Haken und Scrollbalken fehlten bei
   Windows-Skalierung 125–150 % (das Textfeld verdrängte sie) (#9).
 - Falsche Meldung „läuft bereits" nach einem nicht sauber beendeten Lauf,

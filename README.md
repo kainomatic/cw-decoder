@@ -82,10 +82,12 @@ Grafische Oberfläche mit Spektrum, Text, Rufzeichen-Buttons und N1MM:
 ```
 python -m cwdecoder.gui
 python -m cwdecoder.gui --n1mm   # N1MM-Anbindung gleich beim Start an
+python -m cwdecoder.gui --n1mm-engine   # dazu Engine für N1MMs CW Reader
 ```
 
 Die N1MM-Anbindung ist standardmäßig aus und belegt erst Ports (UDP 12060,
-TCP 7373), wenn der Haken "N1MM-Anbindung" gesetzt wird.
+TCP 7373, XML-RPC 7367), wenn der Haken "N1MM-Anbindung" gesetzt wird.
+Welche Wege ein Klick auf ein Rufzeichen auslöst, steht unter „Übergabe…".
 
 Erkannte Rufzeichen stehen rechts als Knöpfe, neueste oben, mit Flagge und
 Landesname (DXCC-Entität aus `cty.dat`, ADR-0021); der Tooltip nennt
@@ -182,20 +184,18 @@ sich eine Stelle im Text in der Aufnahme wiederfinden.
 
 ## N1MM Logger+
 
-N1MM nimmt laut Doku keine Rufzeichen per UDP entgegen (eingehend nur
-Spektrumdaten und QSY auf Port 13064), deshalb zwei Wege:
+Schritt-für-Schritt-Anleitung und Fehlersuche: [`docs/N1MM.md`](docs/N1MM.md)
+(ADR-0022).
 
-- **Tastatur** (Standard): Klick auf ein Rufzeichen holt das N1MM-Fenster in
-  den Vordergrund, sendet optional Alt+W (Wipe) und tippt das Rufzeichen in
-  das Entry Window. Das Entry Window wird am Titel erkannt
-  ("14053.63 CW Elecraft K3 VFO A": Frequenz, Mode, Radio, VFO A/B); alle
-  Fenstertitel von N1MM stehen im Log. Lässt sich N1MM nicht in den
-  Vordergrund holen, wird nichts getippt, sondern das Rufzeichen in die
-  Zwischenablage gelegt (Strg+V in N1MM).
-- **Spots**: Das Programm ist ein Mini-DX-Cluster auf `127.0.0.1:7373`.
-  In N1MM: Window → Telnet → Adresse `127.0.0.1`, Port `7373` eintragen und
-  verbinden. Angeklickte Rufzeichen erscheinen als Skimmer-Spot auf der
-  aktuellen Frequenz in der Bandmap.
+- **CW Reader von N1MM** (Standard): Der CW Decoder gibt sich als fldigi
+  aus (XML-RPC, Port 7367). In N1MM unter Window → CW Reader → Setup →
+  Fldigi den Pfad zu `CWDecoder.exe` eintragen. N1MM zeigt unseren Text,
+  markiert die Rufzeichen, und ein Klick setzt sie ins Entry Window.
+- **Skimmer-Spot** (Standard an): Mini-DX-Cluster auf `127.0.0.1:7373`
+  (N1MM: Window → Telnet). Ein Klick auf ein Rufzeichen im CW Decoder
+  schickt einen Spot auf der aktuellen Frequenz.
+- **Entry Window tippen** und **Zwischenablage** (Standard aus): unter
+  „Übergabe…" im CW Decoder wählbar.
 
 Damit das Programm die Frequenz kennt: in N1MM unter Config → Configure
 Ports → Broadcast Data den Haken bei "Radio" setzen (Standard

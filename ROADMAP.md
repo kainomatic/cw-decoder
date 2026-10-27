@@ -175,7 +175,7 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
   (Public Domain), Knopf mit Flagge und Landesname, Tooltip mit Zonen.
 - ✅ `--dxcc` in der EXE, Bundle-Prüfung im Release-Workflow.
 - Beta [`v0.1.0-beta10`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta10);
-  Review durch die Desktop-Session offen.
+  Review bestanden, Issue geschlossen.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

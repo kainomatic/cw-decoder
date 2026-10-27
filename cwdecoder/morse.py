@@ -28,6 +28,7 @@ PROSIGNS = {
     "...-.": "<SN>",      # verstanden
     "-.-.-": "<KA>",      # Beginn
     ".-...": "<AS>",      # warten
+    "-...-.-": "<BK>",    # break (BT und K ohne Pause, #20)
 }
 
 # Bei Kollisionen (z. B. .-.-. ist '+' und <AR>) gewinnt die Prosign-Darstellung,

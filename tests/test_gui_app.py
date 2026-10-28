@@ -119,7 +119,6 @@ def test_about_and_error_report_dialogs(app):
 
 @requires_display
 @pytest.mark.gui
-@pytest.mark.slow
 def test_gui_smoke():
     """Bestehender GUI-Rauchtest, im eigenen Prozess (mehrere Tk-Fenster,
     ausgetauschtes sounddevice-Modul)."""

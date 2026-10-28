@@ -1,16 +1,65 @@
 # CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
-# Tests bei jedem Push und Pull Request auf main (ADR-0002).
+# Tests bei Push und Pull Request auf main (ADR-0002), ausgewählt nach den
+# geänderten Dateien (ADR-0029, Regeln in tools/ci_select.py):
+#   nur Doku              -> kein Lauf
+#   Handbuch-Doku         -> nur tests/test_handbuch.py
+#   Code                  -> schnelle Tests (-m "not decoder and not gui")
+#   Decoder-Kern / GUI    -> zusätzlich -m decoder / -m gui
+#   Workflows, Abhängigkeiten, pytest-Konfiguration -> alles
+# Volllauf: von Hand (workflow_dispatch) und vor jedem Tag (release.yml ruft
+# diesen Workflow mit full: true auf).
 name: CI
 
 on:
   push:
     branches: [main]
+    # Reine Doku startet den Workflow gar nicht; die Handbuch-Dateien werden
+    # wieder eingeschlossen (spätere Muster gewinnen).
+    paths:
+      - "**"
+      - "!**.md"
+      - "!docs/adr/**"
+      - "README.md"
+      - "docs/N1MM.md"
+      - "docs/VERGLEICH.md"
+      - "docs/handbuch/**"
   pull_request:
     branches: [main]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      full:
+        description: "alle Tests, ohne Auswahl nach Dateien"
+        type: boolean
+        default: true
 
 jobs:
+  changes:
+    name: Testauswahl
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.select.outputs.run }}
+      mode: ${{ steps.select.outputs.mode }}
+      args: ${{ steps.select.outputs.args }}
+    steps:
+      # ganze Historie ohne Dateiinhalte: reicht für git diff --name-only
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Geänderte Dateien auswerten
+        id: select
+        env:
+          CI_BEFORE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          CI_AFTER: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          CI_FULL: ${{ (inputs.full || github.event_name == 'workflow_dispatch') && '--full' || '' }}
+        run: python3 tools/ci_select.py --git $CI_FULL --github-output "$GITHUB_OUTPUT"
+
   test:
     name: pytest (${{ matrix.os }}, Python 3.12)
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -36,5 +85,6 @@ jobs:
 
       # Linux-Runner haben kein Display: GUI-Tests werden per Skip-Guard
       # übersprungen. Unter Windows laufen sie mit.
-      - name: Tests
-        run: pytest -v
+      - name: Tests (${{ needs.changes.outputs.mode }})
+        shell: bash
+        run: pytest -v ${{ needs.changes.outputs.args }}

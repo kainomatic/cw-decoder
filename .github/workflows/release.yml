@@ -4,7 +4,9 @@
 #   vX.Y.Z-betaN  Beta-Pre-Release (darf Claude Code setzen)
 # __version__ im Repo trägt immer die Ziel-Stable-Nummer X.Y.Z und
 # CHANNEL = "stable". Für Betas patcht tools/release_tools.py beides im
-# Build (kein Commit). Normale Pushes testet ci.yml.
+# Build (kein Commit). Normale Pushes testet ci.yml nach geänderten Dateien;
+# vor dem Bundle läuft hier immer der volle Testlauf auf dem getaggten Commit
+# (Windows und Linux, alle Marker, ADR-0029).
 name: Release
 
 on:
@@ -16,8 +18,15 @@ permissions:
   contents: write
 
 jobs:
+  tests:
+    name: Volllauf
+    uses: ./.github/workflows/ci.yml
+    with:
+      full: true
+
   release:
     name: Build und Release (${{ github.ref_name }})
+    needs: tests
     runs-on: windows-latest
     timeout-minutes: 30
 

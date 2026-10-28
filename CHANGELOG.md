@@ -9,6 +9,17 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 ## [Unreleased]
 
 ### Changed
+- **CI testet nach geänderten Dateien** (#28, ADR-0029): Reine Doku startet
+  keinen Lauf, Handbuch-Doku (README, `docs/N1MM.md`, `docs/VERGLEICH.md`,
+  `docs/handbuch/`) nur `tests/test_handbuch.py`, sonstiger Code die
+  schnellen Tests; Änderungen am Decoder-Kern bzw. an der Oberfläche
+  zusätzlich die Marker `decoder` bzw. `gui`, Änderungen an Workflows,
+  Abhängigkeiten oder pytest-Konfiguration alles. Regeln in
+  `tools/ci_select.py`. Von Hand (`gh workflow run ci.yml`) und vor jedem
+  Tag läuft alles; der Release-Workflow baut erst nach grünem Volllauf
+  unter Windows und Linux. Der Marker `slow` entfällt (jetzt `decoder`
+  und `gui`). Blockgrößen-Test der echten Aufnahmen nur noch bei 160 und
+  512 Samples, Vertrauens-Vergleich an 20 statt 110 Matrix-Fällen.
 - **Decoder arbeitet in einem festen 10-ms-Takt** (#22, ADR-0028): Der Text
   hängt nicht mehr davon ab, in welchen Stücken die Samples kommen; die
   GUI (20 ms) und die Testmatrix (512 Samples) sehen exakt denselben Text.

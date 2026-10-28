@@ -71,6 +71,7 @@ Was folgt daraus, positiv wie negativ?
 | [ADR-0026](ADR-0026-super-check-partial-und-woerterbuch-segmentierung.md) | Super Check Partial und Wörterbuch-Segmentierung |
 | [ADR-0027](ADR-0027-handbuch-als-pdf.md) | Handbuch als PDF – Vorlage, Bilder per Werkzeug, Beispiel-Rufzeichen |
 | [ADR-0028](ADR-0028-fester-verarbeitungstakt-im-decoder.md) | Fester Verarbeitungstakt im Decoder (Blockgröße egal, Frequenz-Vorausschau) |
+| [ADR-0029](ADR-0029-ci-nach-geaenderten-dateien-volllauf-vor-jedem-tag.md) | CI nach geänderten Dateien, Volllauf vor jedem Tag |
 
 ## Abgrenzung
 

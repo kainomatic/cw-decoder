@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import run_matrix  # noqa: E402
 
 pytestmark = [
-    pytest.mark.slow,
+    pytest.mark.decoder,
     pytest.mark.skipif(not os.path.isdir(run_matrix.REAL_DIR),
                        reason="testdata/real/ fehlt"),
 ]

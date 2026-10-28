@@ -154,6 +154,20 @@ im Playbook (§2, §4). Projektspezifisch:
 
 ## Testen
 - Framework **pytest** (`pip install -r requirements-dev.txt`, dann `pytest`).
+- **Marker und CI-Auswahl (ADR-0029):** `decoder` (Matrix, echte
+  Aufnahmen, Blockgröße, Vertrauen, erste Zeichen) und `gui`
+  (GUI-Rauchtest, Fenster-Tests); ohne Marker = schnelle Tests
+  (`pytest -m "not decoder and not gui"`). Registriert in `pyproject.toml`
+  mit `--strict-markers`. Die CI wählt nach geänderten Dateien
+  (`tools/ci_select.py`, Probe: `python tools/ci_select.py <dateien>`):
+  nur Doku → kein Lauf; README, `docs/N1MM.md`, `docs/VERGLEICH.md`,
+  `docs/handbuch/**` → nur `test_handbuch.py`; Code → schnelle Tests;
+  Decoder-Kern bzw. GUI → zusätzlich `-m decoder` bzw. `-m gui`;
+  Workflows, `requirements*.txt`, `pyproject.toml`, `tests/conftest.py` →
+  alles. Volllauf von Hand: `gh workflow run ci.yml`; vor jedem Tag läuft
+  er in `release.yml` vor dem Bundle. Neue Module oder Daten der
+  Signalkette in `tools/ci_select.py` eintragen (`tests/test_ci_select.py`
+  prüft die Importe der decoder-Tests).
 - Logik tk-frei halten und direkt testen. Tests, die ein echtes Fenster
   brauchen, haben einen **Skip-Guard**, wenn kein Display vorhanden ist
   (`tests/conftest.py`: `requires_display`).

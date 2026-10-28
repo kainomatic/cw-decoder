@@ -4,8 +4,9 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-ra"
+addopts = "-ra --strict-markers"
 markers = [
-    "gui: braucht ein Display (wird ohne Display übersprungen)",
-    "slow: läuft länger als ein paar Sekunden (GUI-Rauchtest, Testmatrix)",
+    # Gruppen für die CI-Auswahl nach geänderten Dateien (tools/ci_select.py, ADR-0029)
+    "gui: Oberfläche, braucht ein Display (ohne Display übersprungen; GUI-Rauchtest, Fenster-Tests)",
+    "decoder: Decoder-Kern, läuft länger (Matrix, echte Aufnahmen, Blockgröße, Vertrauen, erste Zeichen)",
 ]

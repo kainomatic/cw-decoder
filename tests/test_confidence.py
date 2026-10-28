@@ -173,15 +173,22 @@ def test_decodier_log_dritte_spalte(tmp_path):
     assert all(r[2] == "" for r in rows if not r[1].strip())
 
 
-@pytest.mark.slow
+N_MATRIX = 20
+
+
+@pytest.mark.decoder
 def test_matrix_text_mit_und_ohne_vertrauen_identisch(monkeypatch):
-    """Alle 110 Fälle der Matrix (Seed 1000): gleicher Text ohne Berechnung."""
+    """20 Fälle der Matrix (Seed 1000), gleichmäßig über alle Kategorien:
+    gleicher Text ohne Berechnung (#28; vorher alle 110)."""
     cases = run_matrix.build_cases(10, 1000)
+    idx = np.linspace(0, len(cases) - 1, N_MATRIX).astype(int)
+    cases = [cases[i] for i in idx]
+    assert {c[0] for c in cases} == {c[0] for c in run_matrix.build_cases(1, 1000)}
     sigs = [render(text, fs=FS, seed=seed, **kw) for _c, _n, text, kw, seed in cases]
     with_conf = [decode(s).get_text() for s in sigs]
     neutralize(monkeypatch)
     without = [decode(s).get_text() for s in sigs]
     diff = [(cases[i][1], a, b) for i, (a, b) in enumerate(zip(with_conf, without)) if a != b]
     assert not diff, diff
-    assert len(with_conf) == 110
+    assert len(with_conf) == N_MATRIX
     assert np.mean([len(t) for t in with_conf]) > 10

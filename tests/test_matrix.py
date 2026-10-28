@@ -19,7 +19,7 @@ MIN_MEAN = 0.95
 MIN_NOISE = 0.99
 
 
-@pytest.mark.slow
+@pytest.mark.decoder
 def test_matrix_mean_does_not_collapse():
     overall, means = run_matrix.run(n_per_cat=10, verbose=False)
     assert overall >= MIN_MEAN, f"Mittel {100 * overall:.1f} %"

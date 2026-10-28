@@ -11,6 +11,8 @@ import pytest
 from cwdecoder.decode_wav import decode_signal
 from cwdecoder.gen import render
 
+pytestmark = pytest.mark.decoder
+
 
 @pytest.mark.parametrize("block_ms", [10, 20, 64])
 @pytest.mark.parametrize("lead_s", [1.0, 3.0, 6.0])

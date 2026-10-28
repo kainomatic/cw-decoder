@@ -81,9 +81,9 @@ Stable `v0.1.0`.
 Stand des Repos ohne GitHub-API; Claude Code pflegt die Tabelle bei jedem
 Auftrag (Beginn, Bericht, Schließen).
 
-Zurzeit keiner (#22 am 28.10. geschlossen, `v0.1.0-beta19`, Baseline
-neu gespeichert). Die CI-Frage (Tests nach geänderten Dateien) folgt als
-eigenes Issue.
+| Issue | Thema | Stand |
+|---|---|---|
+| #28 | CI gezielter: Tests verschlanken, Auswahl nach geänderten Dateien, Volllauf vor jedem Tag (ADR-0029) | umgesetzt, Bericht im Issue, wartet auf Review |
 
 Offen ohne Label
 `auftrag` (Ideen, Infos): #16 (mehrere Stationen), #17 (Ideensammlung).

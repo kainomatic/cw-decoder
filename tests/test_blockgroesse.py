@@ -4,6 +4,10 @@
 CWDecoder.process zerlegt die Samples intern in feste Teilblöcke
 (DecoderConfig.chunk_ms). Die GUI liefert 20-ms-Blöcke (160 Samples bei
 8 kHz), die Matrix 512: Beide müssen exakt denselben Text sehen.
+
+Die Matrix-Fälle prüfen 80/160/512/1024 Samples, die echten Aufnahmen nur
+160 und 512 (GUI und Matrix, #28). Alle Größen und Fälle:
+python tests/run_matrix.py --blocks
 """
 import os
 import sys
@@ -17,17 +21,19 @@ from cwdecoder.decode_wav import decode_signal  # noqa: E402
 from cwdecoder.decoder import CWDecoder, DecoderConfig  # noqa: E402
 
 SIZES = (80, 160, 512, 1024)
+REAL_SIZES = (160, 512)
 N_MATRIX = 20
 
 
-def _texts(x, fs):
-    return {b: decode_signal(x, fs, block=b)[0].get_text() for b in SIZES}
+def _texts(x, fs, sizes=SIZES):
+    return {b: decode_signal(x, fs, block=b)[0].get_text() for b in sizes}
 
 
 def _assert_same(texts, name):
-    ref = texts[SIZES[0]]
+    first = next(iter(texts))
+    ref = texts[first]
     diff = {b: t for b, t in texts.items() if t != ref}
-    assert not diff, f"{name}: Text hängt von der Blockgröße ab\n{SIZES[0]}: {ref}\n" + \
+    assert not diff, f"{name}: Text hängt von der Blockgröße ab\n{first}: {ref}\n" + \
         "\n".join(f"{b}: {t}" for b, t in diff.items())
 
 
@@ -38,7 +44,7 @@ def _matrix_cases():
     return [cases[i] for i in idx]
 
 
-@pytest.mark.slow
+@pytest.mark.decoder
 @pytest.mark.parametrize("case", _matrix_cases(), ids=lambda c: c[1])
 def test_matrix_blockgroesse(case):
     from cwdecoder.gen import render
@@ -47,13 +53,13 @@ def test_matrix_blockgroesse(case):
     _assert_same(_texts(sig, 8000), name)
 
 
-@pytest.mark.slow
+@pytest.mark.decoder
 @pytest.mark.skipif(not os.path.isdir(run_matrix.REAL_DIR), reason="testdata/real/ fehlt")
 @pytest.mark.parametrize("fname", run_matrix.real_files() if os.path.isdir(run_matrix.REAL_DIR) else [])
 def test_real_blockgroesse(fname):
     from cwdecoder.decode_wav import load_wav
     fs, x = load_wav(os.path.join(run_matrix.REAL_DIR, fname))
-    _assert_same(_texts(x, fs), fname)
+    _assert_same(_texts(x, fs, REAL_SIZES), fname)
 
 
 def test_rest_wartet_auf_naechsten_aufruf():

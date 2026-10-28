@@ -80,6 +80,7 @@ _LBL_MENU_FILE = "Datei"
 _LBL_MENU_RECDIR = "Aufnahmeordner öffnen"
 _LBL_MENU_QUIT = "Beenden"
 _LBL_MENU_HELP = "Hilfe"
+_LBL_MENU_MANUAL = "Handbuch"
 _LBL_MENU_UPDATE = "Nach Updates suchen"
 _LBL_MENU_LOGDIR = "Log-Ordner öffnen"
 _LBL_MENU_REPORT = "Fehler melden…"
@@ -125,6 +126,7 @@ _MSG_ENGINE_CONNECTED = "CW Reader: N1MM verbunden, letzter Abruf vor {s:.0f} s"
 _MSG_ENGINE_WAITING = "CW Reader: wartet auf N1MM (Port {port})"
 _MSG_CONFIG_RESET_DETAIL = "Beiseitegelegt als: {name}\nGrund: {reason}"
 _MSG_CTX_GUI = "Fehler in der Oberfläche"
+_MSG_CTX_MANUAL = "Handbuch öffnen"
 _MSG_CTX_DECODER = "Decoder abgebrochen"
 _MSG_CTX_N1MM = "N1MM-Anbindung"
 _MSG_DECODER_CRASHED = "Decoder abgebrochen – Details im Fehlerdialog"
@@ -336,6 +338,8 @@ class App(tk.Tk):
         bar.add_cascade(label=_LBL_MENU_SETTINGS, menu=m_set)
         self.settings_menu = m_set
         m_help = tk.Menu(bar, tearoff=False)
+        m_help.add_command(label=_LBL_MENU_MANUAL, command=self.open_manual)
+        m_help.add_separator()
         m_help.add_command(label=_LBL_MENU_UPDATE, command=self.check_updates_manual)
         m_help.add_separator()
         m_help.add_command(label=_LBL_MENU_LOGDIR, command=self.open_log_dir)
@@ -393,7 +397,7 @@ class App(tk.Tk):
         lbl.pack(side="left", padx=(8, 2))
         attach_tooltip(lbl, _TT_RATE)
         self.rate_var = tk.DoubleVar(value=self.replay_rate_now)
-        self.rate_scale = ttk.Scale(top2, from_=0.5, to=1.0, length=90,
+        self.rate_scale = ttk.Scale(top2, from_=0.5, to=1.0, length="68p",   # wächst mit der Skalierung
                                     variable=self.rate_var, command=self._rate_moved)
         self.rate_scale.pack(side="left")
         attach_tooltip(self.rate_scale, _TT_RATE)
@@ -770,6 +774,14 @@ class App(tk.Tk):
                                                                         pady=(12, 0))
         dlg.bind("<Escape>", lambda _e: dlg.destroy())
         return dlg
+
+    def open_manual(self):
+        """Hilfe → Handbuch: mitgeliefertes PDF, sonst das des Releases (#24)."""
+        from .manual import open_manual
+        try:
+            log.info("Handbuch geöffnet: %s", open_manual())
+        except OSError as e:
+            self.report_error(e, _MSG_CTX_MANUAL)
 
     def open_log_dir(self):
         open_folder_or_report(self, get_log_dir())

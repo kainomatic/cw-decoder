@@ -31,9 +31,11 @@ DEFAULTS = {
     "n1mm_enabled": False,
     "n1mm_wipe": True,
     # Übergabewege an N1MM (ADR-0022): Engine für den CW Reader, Skimmer-Spot,
-    # Entry Window tippen, Zwischenablage; Port der Engine wie N1MMs CW Reader 1
+    # Entry Window tippen, Zwischenablage; Port der Engine wie N1MMs CW Reader 1.
+    # Skimmer-Spot seit #24 standardmäßig aus (N1MM hält nur eine
+    # Telnet-Verbindung, meist zum DX-Cluster); gespeicherte Werte bleiben
     "n1mm_engine": True,
-    "n1mm_spot": True,
+    "n1mm_spot": False,
     "n1mm_type": False,
     "n1mm_clipboard": False,
     "n1mm_rpc_port": 7367,
@@ -52,6 +54,30 @@ DEFAULTS = {
     # bekommt die getrennten Wörter mit echten Leerzeichen
     "segment_words": True,
     "n1mm_engine_segmented": True,
+}
+
+# Bedeutung jedes Schlüssels für Menschen (Handbuch, #24). Ein neuer
+# Schlüssel in DEFAULTS braucht hier eine Zeile (tests/test_handbuch.py).
+DESCRIPTIONS = {
+    "update_check": "Beim Start nach einer neuen Version suchen",
+    "device_name": "Audio-Eingang (Name des Geräts); leer = Standard-Eingang",
+    "fixed_freq": "Feste Tonhöhe in Hz nach Klick ins Spektrum; leer = Ton automatisch suchen",
+    "n1mm_enabled": "N1MM-Anbindung eingeschaltet",
+    "n1mm_wipe": "Vor dem Tippen ins Entry Window das Feld leeren (Alt+W)",
+    "n1mm_engine": "Übergabe: Engine für N1MMs CW Reader",
+    "n1mm_spot": "Übergabe: Skimmer-Spot an N1MMs Telnet (127.0.0.1:7373)",
+    "n1mm_type": "Übergabe: Rufzeichen ins Entry Window tippen",
+    "n1mm_clipboard": "Übergabe: Rufzeichen in die Zwischenablage",
+    "n1mm_rpc_port": "Port der Engine für den CW Reader (wie N1MMs CW Reader 1)",
+    "record_default": "Haken „Aufnahme (WAV)“ beim Start gesetzt",
+    "ring_seconds": "Sekunden Audio im Speicher (Ringpuffer)",
+    "save_last_s": "Sekunden, die „Letzte … s speichern“ (Strg+S) schreibt",
+    "replay_s": "Sekunden, die „Nochmal hören“ (Strg+R) abspielt",
+    "replay_hold_s": "So lange bleibt der Ausschnitt nach der Wiedergabe festgehalten",
+    "replay_rate": "Starttempo von „Nochmal hören“ (Tonhöhe bleibt)",
+    "output_device": "Ausgabegerät für „Nochmal hören“ (Name); leer = Standard",
+    "segment_words": "Zusammengeklebte Wörter mit grauem · trennen",
+    "n1mm_engine_segmented": "N1MMs CW Reader bekommt getrennte Wörter mit Leerzeichen",
 }
 
 # Grenzen der Ringpuffer-Werte (Sekunden); save_last_s höchstens ring_seconds

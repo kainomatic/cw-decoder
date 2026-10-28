@@ -18,7 +18,7 @@ def test_defaults_match_spec():
     assert config.defaults() == {
         "update_check": True, "device_name": None, "fixed_freq": None,
         "n1mm_enabled": False, "n1mm_wipe": True, "record_default": False,
-        "n1mm_engine": True, "n1mm_spot": True, "n1mm_type": False,
+        "n1mm_engine": True, "n1mm_spot": False, "n1mm_type": False,
         "n1mm_clipboard": False, "n1mm_rpc_port": 7367,
         "ring_seconds": 60, "save_last_s": 30, "replay_s": 10,
         "replay_hold_s": 5, "replay_rate": 1.0, "output_device": None,
@@ -103,7 +103,7 @@ def test_n1mm_wege_und_port(cfg_path):
     }), encoding="utf-8")
     cfg = config.load(cfg_path)
     assert cfg["n1mm_engine"] is False and cfg["n1mm_type"] is True
-    assert cfg["n1mm_spot"] is True and cfg["n1mm_clipboard"] is False
+    assert cfg["n1mm_spot"] is False and cfg["n1mm_clipboard"] is False   # Standard aus (#24)
     assert cfg["n1mm_rpc_port"] == 7368
     for bad in (80, 70000, "7367", True, 7367.0):
         cfg_path.write_text(json.dumps({"n1mm_rpc_port": bad}), encoding="utf-8")
@@ -197,3 +197,9 @@ def test_migration_replay_slow(cfg_path):
     # replay_rate als ganze Zahl wird Gleitkommazahl
     cfg_path.write_text(json.dumps({"replay_rate": 1}), encoding="utf-8")
     assert isinstance(config.load(cfg_path)["replay_rate"], float)
+
+
+def test_gespeicherter_spot_bleibt(cfg_path):
+    """#24: Standard aus, aber eine gespeicherte Wahl gilt weiter."""
+    cfg_path.write_text(json.dumps({"n1mm_spot": True}), encoding="utf-8")
+    assert config.load(cfg_path)["n1mm_spot"] is True

@@ -84,6 +84,17 @@ jobs:
           Write-Host "Bundle meldet: $s"
           if ($s -ne "OY1CT: bekannt") { Write-Error "--scp falsch: $s"; exit 1 }
 
+      # Handbuch als PDF (ADR-0027): Chromium über Playwright, nur im Build
+      - name: Handbuch bauen
+        shell: pwsh
+        run: |
+          pip install playwright pypdf
+          python -m playwright install chromium
+          python tools/build_handbook.py --version "$env:FULL_VERSION" --out dist\CW-Decoder-Handbuch.pdf
+          if ($LASTEXITCODE -ne 0) { Write-Error "Handbuch nicht gebaut"; exit 1 }
+          Copy-Item dist\CW-Decoder-Handbuch.pdf "CW-Decoder-Handbuch-${{ github.ref_name }}.pdf"
+          Get-Item "CW-Decoder-Handbuch-${{ github.ref_name }}.pdf" | Format-List Name, Length
+
       - name: Inno Setup installieren
         run: choco install innosetup --no-progress -y
 
@@ -104,5 +115,7 @@ jobs:
           name: CW Decoder ${{ env.FULL_VERSION }}
           body_path: release_notes.md
           prerelease: ${{ env.IS_PRERELEASE }}
-          files: ${{ env.SETUP_FILE }}
+          files: |
+            ${{ env.SETUP_FILE }}
+            CW-Decoder-Handbuch-${{ github.ref_name }}.pdf
           fail_on_unmatched_files: true

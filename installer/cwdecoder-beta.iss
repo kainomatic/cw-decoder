@@ -62,6 +62,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "..\dist\CWDecoder\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Handbuch (tools/build_handbook.py, ADR-0027); Hilfe → Handbuch öffnet es
+Source: "..\dist\CW-Decoder-Handbuch.pdf"; DestDir: "{app}"; Flags: ignoreversion
 
 [InstallDelete]
 ; Reste einer älteren Version im Bundle-Ordner entfernen
@@ -69,6 +71,7 @@ Type: filesandordirs; Name: "{app}\_internal"
 
 [Icons]
 Name: "{group}\{#APP_NAME}"; Filename: "{app}\{#APP_EXE}"
+Name: "{group}\{#APP_NAME} – Handbuch"; Filename: "{app}\CW-Decoder-Handbuch.pdf"
 Name: "{group}\{cm:UninstallProgram,{#APP_NAME}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#APP_NAME}"; Filename: "{app}\{#APP_EXE}"; Tasks: desktopicon
 

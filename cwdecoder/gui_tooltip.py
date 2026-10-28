@@ -19,7 +19,7 @@ DELAY_MS = 500
 OFFSET_X = 12
 OFFSET_Y = 6
 MARGIN = 4
-WRAP_PX = 380
+WRAP = "285p"            # Umbruchbreite in Punkten (380 px bei 100 %), wächst mit der Skalierung
 BG = "#ffffe0"
 FG = "#202020"
 
@@ -106,7 +106,7 @@ class Tooltip:
                 pass
             tk.Label(win, text=self.text, justify="left", background=BG, foreground=FG,
                      relief="solid", borderwidth=1, padx=5, pady=3,
-                     wraplength=WRAP_PX).pack()
+                     wraplength=WRAP).pack()
             win.update_idletasks()
             top = self.widget.winfo_rooty()
             x, y = tooltip_position(self.widget.winfo_pointerx(), top,

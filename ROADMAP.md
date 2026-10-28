@@ -74,12 +74,14 @@ Stable `v0.1.0`.
 Stand des Repos ohne GitHub-API; Claude Code pflegt die Tabelle bei jedem
 Auftrag (Beginn, Bericht, Schließen).
 
-Zurzeit keiner (#25 und #20 am 28.10. geschlossen).
+| Issue | Titel | Stand |
+|-------|-------|-------|
+| #24 | Handbuch für Funker (PDF) mit reproduzierbaren Bildern und Pflege-Regel | in Arbeit; N1MM-Foto wartet auf Klick-Freigabe |
 
 Offen ohne Label
 `auftrag` (Ideen, Infos): #13 (Engine-Name gegenüber
-N1MM), #16 (mehrere Stationen), #17 (Ideensammlung), #22 (Blockgröße),
-#24 (Handbuch).
+N1MM), #16 (mehrere Stationen), #17 (Ideensammlung), #22 (Blockgröße,
+nach #24).
 
 ## Leitlinie
 

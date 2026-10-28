@@ -9,6 +9,13 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 ## [Unreleased]
 
 ### Changed
+- **Skimmer-Spot** unter „Übergabe…“ ist jetzt standardmäßig **aus**
+  (N1MM hält nur eine Telnet-Verbindung, meist zum DX-Cluster). Wer ihn
+  eingeschaltet hatte, behält die Einstellung (#24).
+- Tempo-Regler und Tooltips wachsen mit der Windows-Skalierung (vorher bei
+  150/200 % zu kurz bzw. zu schmal umbrochen).
+- README auf eine kurze Übersicht gekürzt; Bedienung steht im Handbuch.
+  In README und Doku stehen nur noch Beispiel-Rufzeichen.
 - **Nochmal hören hält den Ausschnitt fest** (#25): Strg+R fasst die
   letzten Sekunden (Standard 10 s) und spielt sie. Jedes weitere Strg+R
   innerhalb der Frist nach dem Ende der Wiedergabe (Standard 5 s, auch nach
@@ -48,6 +55,15 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   97,7/96,7/98,4 %), alte Matrix 98,3 %, Rauschen 100 %.
 
 ### Added
+- **Handbuch als PDF** (#24, ADR-0027): Anleitung für den Funkbetrieb in
+  neun Kapiteln mit Bildern – Installation, Anschluss ans Funkgerät, Farben
+  im Text, Rufzeichen, Nochmal hören, N1MM, Einstellungen, häufige Fragen.
+  Hängt an jedem Release (`CW-Decoder-Handbuch-vX.Y.Z….pdf`), wird mit
+  installiert (Programmordner und Startmenü) und öffnet sich über
+  **Hilfe → Handbuch**.
+- Werkzeuge: `tools/make_docs_images.py` (Bildschirmfotos ohne Klicks,
+  reproduzierbar), `tools/build_handbook.py` (PDF mit Seitenprüfung),
+  `tools/n1mm_demo_engine.py` (Beispielsignal als Engine für N1MM-Fotos).
 - **Ausgabegerät für Nochmal hören** wählbar (Liste aller Ausgänge,
   „Standard" voreingestellt). Gespeichert wird der Gerätename; gefunden
   wird es per Namensteil, auch wenn Windows die Nummern ändert. Fehlt das

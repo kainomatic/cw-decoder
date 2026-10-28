@@ -30,23 +30,27 @@ Anlass (DF1DS): fldigi ist die übliche Engine hinter N1MMs CW-Reader-Fenster; w
 | **Mittel** | **81,5 %** | **97,7 %** |
 
 Beobachtungen:
-- fldigi verliert in fast jedem Fall die ersten Zeichen, bis das Tempo eingemessen ist (`CQ TEST OZ1HGT…` → `T - 1HGTHGT TEST`). Bei uns durch die 60-ms-Vorausschau und die Clusterung abgesichert (`test_erstes_zeichen.py`).
+- fldigi verliert in fast jedem Fall die ersten Zeichen, bis das Tempo eingemessen ist (`CQ TEST <Rufzeichen>…` → `T - <Rest des Rufzeichens, doppelt> TEST`). Bei uns durch die 60-ms-Vorausschau und die Clusterung abgesichert (`test_erstes_zeichen.py`).
 - Ab etwa 35 WPM liefert fldigi mit Standardeinstellungen praktisch nichts (39 WPM → `E`, 45 WPM → `I`, 50 WPM → `I`); der Tempobereich ist dort konfigurierbar, aber die Voreinstellung ist eng.
-- Bei QSB und weiten Zeichenabständen zerfallen Rufzeichen (`PA8ACJ PA8ACJ PA8ACJ` → `T8ACJ PAT ACJ PA NJ`).
+- Bei QSB und weiten Zeichenabständen zerfallen Rufzeichen (dreimal dasselbe Rufzeichen → vier Bruchstücke, keines vollständig).
 - Bei gleichmäßigem Rauschen ist fldigi solide (0–6 dB: 88 %).
 - Reines Rauschen: in 7 von 9 Fällen gibt fldigi ein einzelnes Zeichen aus (S, L, E, I, 5 …).
 
 ## Ergebnis echte Aufnahmen (Fragmente gefunden)
+Rufzeichen der Stationen aus den Aufnahmen stehen hier als Platzhalter
+(Rufzeichen A, B …); die Prüfung selbst nutzt die echten Fragmente
+(`tests/run_matrix.py`, `REAL_CASES`).
+
 | Aufnahme | fldigi | CW Decoder |
 |---|---|---|
-| 185919 (GRAZIE, ANTONIO, IK1RZD) | 0/3 – Rufzeichen als `I K1 R Z D` zerrissen, davor 65 s `M M OM***T OTTT…` aus der unsauberen Handtaste | 3/3 |
-| 190242 (TNX FER, UR RST, TALLINN, DE ES3YJ) | 2/4 (`UR RST`, `DE ES3YJ`; `T A L L I NN`) | 2/4 (`TNX FER`, `DE ES3YJ`; `TALLINN`/`UR RST` sind bekannte Lücken) |
-| 190445 (LY2PX LY2PX CQ CQ CQ, WILLY, Z4BPF) | 1/3 (`WILLY`; `DY2P X LY2PX CQ CQ CQDE`, `4 BPF`) | 3/3 |
-| 190855 (ES3YJ; 65 s leere Frequenz) | 0/1 (`ES3 Y3`); **45 Zeichen Müll** in der leeren Strecke (`NEUEMME NNIWE NEOE UEETTTE * DD5BI*EIM…`) | 1/1; ≤ 5 Zeichen in der leeren Strecke |
-| 231339 (OY1CT, IK2ULV, DJ7PR, CALLED CQ, QRM, STRANGE) | 4/6 (`O Y1C T`, `IK 2 ULV`, `DJ7PR` → `*J 7*`) | 6/6 |
+| 185919 (GRAZIE, ANTONIO, Rufzeichen A) | 0/3 – Rufzeichen A in fünf Stücke zerrissen, davor 65 s `M M OM***T OTTT…` aus der unsauberen Handtaste | 3/3 |
+| 190242 (TNX FER, UR RST, TALLINN, DE + Rufzeichen B) | 2/4 (`UR RST`, `DE` + Rufzeichen B; `T A L L I NN`) | 2/4 (`TNX FER`, `DE` + Rufzeichen B; `TALLINN`/`UR RST` sind bekannte Lücken) |
+| 190445 (Rufzeichen C zweimal + CQ CQ CQ, WILLY, Rufzeichen D) | 1/3 (`WILLY`; Rufzeichen C einmal verstümmelt, D zerrissen) | 3/3 |
+| 190855 (Rufzeichen B; 65 s leere Frequenz) | 0/1 (Rufzeichen B falsch); **45 Zeichen Müll** in der leeren Strecke (`NEUEMME NNIWE NEOE UEETTTE * …`) | 1/1; ≤ 5 Zeichen in der leeren Strecke |
+| 231339 (Rufzeichen E, F, G, CALLED CQ, QRM, STRANGE) | 4/6 (E und F zerrissen, G → `*` und Bruchstücke) | 6/6 |
 | **Mittel** | **30 %** | **90 %** |
 
-Das Bild deckt sich mit dem Eindruck vom Funkgerät: Das 100-Hz-Filterrauschen liest fldigi als Dauertext, und weite Zeichenabstände reißen Rufzeichen auseinander (`O Y1C T`), was für den Klick ins Rufzeichenfeld in N1MM nicht brauchbar ist.
+Das Bild deckt sich mit dem Eindruck vom Funkgerät: Das 100-Hz-Filterrauschen liest fldigi als Dauertext, und weite Zeichenabstände reißen Rufzeichen auseinander (Bruchstücke mit Leerzeichen statt eines Rufzeichens), was für den Klick ins Rufzeichenfeld in N1MM nicht brauchbar ist.
 
 ## Einordnung
 - fldigi ist nicht „grottig“, sondern ein Decoder für gleichmäßige Signale bei bekannter Tonhöhe und moderatem Tempo; dort ist es ordentlich. Es fehlen genau die drei Dinge, um die es in diesem Projekt geht: Tempo-Einmessung ohne Verlust des Anfangs, Rauschsperre gegen schmales Filterrauschen, robuste Wort-/Zeichengrenzen bei echten Gebern.

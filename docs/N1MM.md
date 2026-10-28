@@ -7,6 +7,8 @@ Fensterwechsel. Daneben gibt es Skimmer-Spots, Tippen ins Entry Window und
 die Zwischenablage als wählbare Wege. Hintergrund: ADR-0022.
 
 Getestet mit N1MM Logger+ 1.0.7711 auf dem Entwicklungsrechner (Issue #3).
+Das Grundsätzliche mit Bildern steht im **Handbuch** (Kapitel 7, Hilfe →
+Handbuch); hier stehen die Einrichtung im Detail und die Fehlersuche.
 
 ## 1. CW Decoder vorbereiten
 
@@ -65,7 +67,7 @@ Für Skimmer-Spots und die Anzeige rechts unten:
 Ohne Broadcast nimmt der Decoder die Frequenz, die N1MM dem CW Reader
 mitteilt (nur solange der CW Reader offen ist).
 
-## 4. Skimmer-Spots (optional, Standard an)
+## 4. Skimmer-Spots (optional, Standard aus)
 
 Ein Klick auf ein Rufzeichen im CW Decoder (Knopf rechts oder Markierung
 im Text) schickt einen Spot auf der aktuellen Frequenz.
@@ -81,8 +83,10 @@ Das **×** rechts am Knopf entfernt das Rufzeichen nur aus der Liste und
    Bandmap. Liegt der Spot auf der eigenen Frequenz, zeigt das Entry Window
    das Rufzeichen im Call-Frame; die **Leertaste** übernimmt es.
 
-Wer keine Spots will: unter **Übergabe…** „Skimmer-Spot" abschalten.
-Sonst meldet ein Klick ohne Telnet-Verbindung „Spot nicht gesendet".
+Einschalten unter **Übergabe…** → „Skimmer-Spot" (seit beta17 Standard
+aus, #24: N1MM hält nur eine Telnet-Verbindung, meist zum DX-Cluster;
+gespeicherte Einstellungen bleiben). Ohne Telnet-Verbindung meldet ein
+Klick dann „Spot nicht gesendet".
 
 ## 5. Weitere Wege (optional, Standard aus)
 

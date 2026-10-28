@@ -64,114 +64,47 @@ nichts weiter installiert werden. Für die Tests zusätzlich
 
 ## Benutzung
 
-Geräte anzeigen:
+**Das Handbuch für den Funkbetrieb** ist ein PDF:
+`CW-Decoder-Handbuch-vX.Y.Z.pdf` an jedem
+[Release](https://github.com/kainomatic/cw-decoder/releases), installiert
+im Programmordner und im Programm unter **Hilfe → Handbuch**. Es erklärt
+Anschluss ans Funkgerät, Farben im Text, Rufzeichen, Nochmal hören,
+N1MM Logger+ und Einstellungen. Quelle: `docs/handbuch/` (ADR-0027).
+
+![Hauptfenster](docs/handbuch/img/hauptfenster.png)
+
+Kurz: Eingang wählen, **Start**. Der Text erscheint in der Mitte, erkannte
+Rufzeichen rechts als Knöpfe (gelb, grün = in Super Check Partial; Klick
+übergibt an N1MM). Grau = unsicher erkannt, `·` = ergänzter Wortabstand.
+**Strg+R** spielt die letzten Sekunden noch einmal, **Strg+S** speichert
+sie als WAV mit Text. Die N1MM-Anbindung (Haken rechts unten) belegt erst
+dann Ports (XML-RPC 7367 für den CW Reader, UDP 12060, TCP 7373); Details
+in [`docs/N1MM.md`](docs/N1MM.md).
+
+Aus dem Quelltext:
 
 ```
-python -m cwdecoder.live --list
+python -m cwdecoder.gui                 # Oberfläche
+python -m cwdecoder.gui --n1mm-engine   # mit Engine für N1MMs CW Reader
+python -m cwdecoder.live --list         # Audiogeräte
+python -m cwdecoder.live --device "USB Audio" --record qso.wav   # Terminal
 ```
 
-Live im Terminal (Gerät per Nummer oder Namensteil):
-
-```
-python -m cwdecoder.live --device "USB Audio"
-python -m cwdecoder.live --device 3 --record qso.wav
-```
-
-Grafische Oberfläche mit Spektrum, Text, Rufzeichen-Buttons und N1MM:
-
-```
-python -m cwdecoder.gui
-python -m cwdecoder.gui --n1mm   # N1MM-Anbindung gleich beim Start an
-python -m cwdecoder.gui --n1mm-engine   # dazu Engine für N1MMs CW Reader
-```
-
-Die N1MM-Anbindung ist standardmäßig aus und belegt erst Ports (UDP 12060,
-TCP 7373, XML-RPC 7367), wenn der Haken "N1MM-Anbindung" gesetzt wird.
-Welche Wege ein Klick auf ein Rufzeichen auslöst, steht unter „Übergabe…".
-
-Erkannte Rufzeichen stehen rechts als Knöpfe, neueste oben, mit Flagge und
-Landesname (DXCC-Entität aus `cty.dat`, ADR-0021); der Tooltip nennt
-Hauptpräfix, Kontinent und CQ-/ITU-Zone. Im Text sind sie markiert. Ein
-Klick auf Knopf oder Markierung übergibt das Rufzeichen an N1MM. Die
-Spalte zeigt so viele Knöpfe, wie hineinpassen; ältere Rufzeichen stehen
-im Text und sind dort anklickbar.
-
-Rufzeichen, die in **Super Check Partial** stehen (Rufzeichen aus
-Contest-Logs, `master.scp`), sind in Knopf und Text **grün** unterlegt,
-andere **gelb**. Der Tooltip sagt „in Super Check Partial" bzw. „nicht in
-SCP" und nennt ähnliche bekannte Rufzeichen („ähnlich: ES3YJ"). Gibt es
-genau einen, bietet ein **Rechtsklick** auf den Knopf „ES3YJ übernehmen"
-an; ersetzt wird nie automatisch. Rufzeichen mit Pausen innerhalb
-(`IK2J E T`) werden zusammengesetzt, wenn die Verkettung in SCP steht
-oder schon einmal ganz gehört wurde; ein vorher gemeldeter Teil (`IK2J`)
-wird dann durch das ganze Rufzeichen ersetzt (ADR-0026).
-
-Wörter, zwischen denen kein Wortabstand zu hören war (`TNXFERFBCALL`),
-trennt ein Wörterbuch aus QSO-Floskeln, Rapporten und Rufzeichen:
-`TNX·FER·FB·CALL`. Der graue Mittelpunkt `·` zeigt, dass der Abstand
-ergänzt und nicht gehört wurde; N1MMs CW Reader bekommt echte
-Leerzeichen. Beides lässt sich unter Einstellungen abschalten
-(„Zusammengeklebte Wörter trennen", „An N1MMs CW Reader getrennt mit
-Leerzeichen"); im Terminal schaltet `--no-segment` es ab.
-
-![Grüne und gelbe Rufzeichen, Vorschlag im Tooltip, Trenner ·](docs/img/scp-zerlegung.png)
-
-Unsicher erkannte Zeichen stehen im Text **grau** (ein Element lag knapp
-zwischen Punkt und Strich, das Tempo war noch nicht eingemessen oder das
-Signal schwach; ADR-0023). Dort lohnt es sich, selbst hinzuhören. Enthält
-ein Rufzeichen solche Zeichen, sagt es der Tooltip von Knopf und
-Markierung („enthält unsichere Zeichen"). Im Terminal (`live`,
-`decode_wav`) sind unsichere Zeichen klein geschrieben: `CQ TEST OZ1hGT`.
-
-**Letzte 30 s speichern** (Strg+S) sichert die letzten Sekunden Audio als
-WAV in `Dokumente\CW Decoder\Aufnahmen` (`cw_…_letzte30s.wav`), daneben
-den decodierten Text dieses Ausschnitts als `.txt` – ohne Daueraufnahme.
-**Nochmal hören** (Strg+R) spielt die letzten 10 s ab, der Decoder läuft
-weiter; ein zweiter Klick („Stopp") bricht ab. Der Ausschnitt bleibt
-**festgehalten**: Jedes Strg+R innerhalb von 5 s nach dem Ende spielt
-denselben noch einmal, Strg+S speichert dann genau ihn
-(`cw_…_festgehalten.wav`). Die Statuszeile zählt herunter („festgehalten
-10 s – noch 4 s"); danach verfällt er, und das nächste Strg+R fasst neu.
-Der **Tempo-Regler** daneben (0,5×–1,0×) wirkt sofort, auch mitten in der
-Wiedergabe, ohne die Tonhöhe zu ändern. Längen, Puffergröße (Standard
-60 s), Frist, Starttempo und das **Ausgabegerät** (z. B. Kopfhörer statt
-Lautsprecher) stehen unter Einstellungen → „Puffer und Nochmal hören…"
-(ADR-0024).
-
-Ein Rufzeichen verschwindet mit dem **×** rechts am Knopf (oder Rechtsklick
-→ „Entfernen") aus der Liste, **Alle löschen** leert sie. Die Markierung im
-Text bleibt; wird das Rufzeichen wieder gehört, erscheint es wieder.
-
-![Regler, festgehaltener Ausschnitt und ×-Knöpfe](docs/img/nochmal-festgehalten.png)
-
-![Knöpfe „Letzte 30 s speichern“ und „Nochmal hören“, Statuszeile nach dem Speichern](docs/img/ringpuffer.png)
-
-![Unsichere Zeichen grau (Geber mit 15 % Jitter)](docs/img/unsicher-jitter15.png)
-
-![Rufzeichen mit Flagge und Land](docs/img/rufzeichen-flaggen.png)
-
-Installiert heißt das Programm `CWDecoder.exe`; dieselben Funktionen gibt
-es dort per Kommandozeile: `CWDecoder.exe --decode datei.wav`,
-`CWDecoder.exe --list-devices`, `CWDecoder.exe --version`,
-`CWDecoder.exe --dxcc DJ7PR` (Land zum Rufzeichen; aus dem Quelltext:
-`python -m cwdecoder.dxcc DJ7PR`), `CWDecoder.exe --scp OY1CT` (in Super
-Check Partial? aus dem Quelltext: `python -m cwdecoder.scp OY1CT`).
-
-Die GUI merkt sich Gerät, feste Tonfrequenz und die Haken. Ablageorte:
+Installiert heißt das Programm `CWDecoder.exe`; per Kommandozeile:
+`--decode datei.wav`, `--list-devices`, `--version`, `--dxcc DL1ABC`
+(Land zum Rufzeichen; `python -m cwdecoder.dxcc`), `--scp DF1DS` (in
+Super Check Partial? `python -m cwdecoder.scp`). Im Terminal (`live`,
+`decode_wav`) sind unsichere Zeichen klein geschrieben, ergänzte
+Wortabstände stehen als `·` (`--no-segment` schaltet das ab).
 
 | Was | Wo (Windows) |
 |-----|--------------|
 | Einstellungen, Log, Lockfile | `%APPDATA%\CWDecoder\` (`config.json`, `logs\cwdecoder.log`); Beta: `%APPDATA%\CWDecoder-Beta\` |
 | Aufnahmen (Haken "Aufnahme", Strg+S) | `Dokumente\CW Decoder\Aufnahmen\` (Datei → Aufnahmeordner öffnen) |
 
-Den Log-Ordner öffnet auch **Hilfe → Log-Ordner öffnen**.
-
-Probleme melden: Hilfe → Fehler melden… zeigt einen Bericht (Version, System,
-Audiogerät, letzte Logzeilen) und öffnet auf Wunsch ein vorausgefülltes
-GitHub-Issue im Browser. Das Programm sendet selbst nichts.
-
-Ein Klick ins Spektrum setzt die Tonfrequenz fest (Haken "Ton automatisch
-suchen" geht aus); Haken wieder setzen schaltet zurück auf Automatik.
+Probleme melden: **Hilfe → Fehler melden…** zeigt einen Bericht (Version,
+System, Audiogerät, letzte Logzeilen) und öffnet auf Wunsch ein
+vorausgefülltes GitHub-Issue im Browser. Das Programm sendet selbst nichts.
 
 WAV-Datei offline decodieren (zum Tunen und zum Nachstellen von Problemen):
 
@@ -201,7 +134,7 @@ Testdaten: `testdata/real/` enthält echte Aufnahmen vom Funkgerät
 steht in `tests/real_baseline.json`). Es sind Mitschnitte öffentlichen
 Amateurfunkverkehrs; auf Wunsch einer betroffenen Station wird die
 jeweilige Aufnahme entfernt. `test_real.py` prüft auch Rufzeichen
-(`IK2JET` aus `IK2J E T`) und die Zerlegung (`TNX FER FB CALL`).
+(ein Rufzeichen mit Pausen im Rufzeichen) und die Zerlegung (`TNX FER FB CALL`).
 Fehlfälle im Betrieb mit **Strg+S** sichern
 (`…_letzte30s.wav` samt `.txt`) und nach `testdata/` kopieren; auswerten
 mit `python -m cwdecoder.decode_wav datei.wav --trace`.
@@ -234,11 +167,11 @@ mit `python -m cwdecoder.decode_wav datei.wav --trace`.
    für die nächste Station neu eingemessen.
 5. **Rufzeichen** (`callsign.py`): Wörter, die wie Rufzeichen aussehen,
    erscheinen als Buttons in der GUI. Auch zusammengeklebte Rufzeichen
-   (`DEDJ7PR`) werden gefunden; bekannte Rufzeichen auch, wenn sie zerrissen
-   sind (`OY 1 CT`) (ADR-0019).
+   (`DEDL1ABC`) werden gefunden; bekannte Rufzeichen auch, wenn sie zerrissen
+   sind (`OY 1 ABC`) (ADR-0019).
 6. **Super Check Partial und Zerlegung** (`scp.py`, `segment.py`):
-   Abgleich mit `master.scp` (grün/gelb, Vorschläge, `IK2J E T` →
-   IK2JET) und Trennung zusammengeklebter Wörter per Wörterbuch
+   Abgleich mit `master.scp` (grün/gelb, Vorschläge, `DL1A B C` →
+   DL1ABC) und Trennung zusammengeklebter Wörter per Wörterbuch
    (ADR-0026). Beides nur Anzeige; der rohe Decodertext bleibt.
 
 Im Textfenster beginnt nach einer Pause von mehr als 3 s oder wenn der Ton

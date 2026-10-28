@@ -100,6 +100,13 @@ im Playbook (§2, §4). Projektspezifisch:
 - „CI grün" heißt: GitHub Actions unter Windows **und** Linux.
 - Bei Änderungen an `dsp.py`, `timing.py`, `decoder.py`: Testmatrix vorher
   und nachher im Bericht (siehe „Testen").
+- **Handbuch (ADR-0027):** Jede sichtbare Änderung (Knopf, Dialog, Farbe,
+  Tastenkürzel, Config-Schlüssel, Dateiformat, N1MM-Verhalten) passt die
+  Vorlage `docs/handbuch/handbuch.html` an (Textänderungen mit der
+  Desktop-Session abstimmen), danach `python tools/make_docs_images.py` und
+  `python tools/build_handbook.py` laufen lassen und geänderte Bilder
+  committen; der Bericht nennt die Kapitel. Neue Config-Schlüssel brauchen
+  eine Zeile in `config.DESCRIPTIONS` (`tests/test_handbuch.py`).
 
 ## Arbeitsregeln (projektspezifisch)
 - Kopfzeile in jeder Python-Datei:
@@ -110,6 +117,13 @@ im Playbook (§2, §4). Projektspezifisch:
   `git log --format=%B origin/main..HEAD | grep -iE "qsl ?73"` müssen leer
   sein. Die Q-Gruppe QSL und die Zahl 73 sind normale Funkbegriffe und
   überall erlaubt (#7).
+- **Nur Beispiel-Rufzeichen in Doku und Bildern** (#24): In Handbuch,
+  README, `docs/*.md` und allen Bildschirmfotos erscheinen nur DF1DS oder
+  erfundene Rufzeichen nach dem Muster `DL1ABC`, `DR2ABC`, `OY1ABC`
+  (Suffix ABC). Keine echten fremden Rufzeichen, auch nicht aus den
+  Aufnahmen. Ausgenommen: `testdata/`, `tests/` und ADRs mit Befunden.
+  `tests/test_handbuch.py` prüft Handbuch, README, `docs/N1MM.md`,
+  `docs/VERGLEICH.md`.
 - Tuning-Parameter liegen in den `*Config`-Dataclasses (`TrackerConfig`,
   `ThresholdConfig`, `TimingConfig`, `DecoderConfig`).
 - Laufzeit-Abhängigkeiten nur numpy, scipy, sounddevice (weitere nur nach

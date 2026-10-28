@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>CW Decoder – Handbuch</title>
+<style>
+  /* Schriften liegen bei (fonts/, Lizenzen dort); keine Systemschriften */
+  @font-face { font-family: "Inter"; src: url("fonts/InterVariable.woff2") format("woff2");
+    font-weight: 100 900; font-style: normal; }
+  @font-face { font-family: "DejaVu Sans Mono"; src: url("fonts/DejaVuSansMono.ttf") format("truetype");
+    font-weight: 400; font-style: normal; }
+  @font-face { font-family: "DejaVu Sans Mono"; src: url("fonts/DejaVuSansMono-Bold.ttf") format("truetype");
+    font-weight: 700; font-style: normal; }
+  @page { size: A4; margin: 22mm 20mm 24mm 20mm; }
+  @page :first { margin: 0; }
+  :root {
+    --ink: #1d2733;
+    --soft: #4a5868;
+    --line: #d9dee5;
+    --navy: #142233;
+    --amber: #ffd98a;
+    --amber-ink: #8a5a00;
+    --green: #bfe8c3;
+    --green-ink: #1f6b2a;
+    --tip-bg: #fff6df;
+    --note-bg: #eef3f8;
+  }
+  * { box-sizing: border-box; }
+  html { font-family: "Inter", "Segoe UI", sans-serif; color: var(--ink); }
+  body { margin: 0; font-size: 12pt; line-height: 1.5; }
+
+  /* Titelseite */
+  .cover {
+    height: 297mm; width: 210mm; background: var(--navy); color: #fff;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 34mm 24mm 26mm; page-break-after: always;
+  }
+  .cover .morse { font-family: "DejaVu Sans Mono", monospace; color: var(--amber);
+    font-size: 19pt; letter-spacing: 2px; font-weight: 700; white-space: nowrap; }
+  .cover h1 { font-size: 46pt; line-height: 1.05; margin: 14mm 0 6mm; font-weight: 800; letter-spacing: -1px; }
+  .cover .sub { font-size: 17pt; color: #c9d5e3; max-width: 140mm; line-height: 1.4; }
+  .cover .meta { font-size: 11pt; color: #9fb0c3; line-height: 1.6; }
+  .cover .meta b { color: #fff; font-weight: 600; }
+
+  /* Inhalt */
+  .toc { page-break-after: always; }
+  .toc h2 { margin-top: 0; }
+  .toc ol { list-style: none; padding: 0; margin: 0; counter-reset: ch; }
+  .toc li { counter-increment: ch; display: flex; gap: 10px; padding: 9px 0;
+    border-bottom: 1px solid var(--line); font-size: 13.5pt; }
+  .toc li::before { content: counter(ch); font-weight: 700; color: var(--amber-ink); width: 22px; }
+  .toc li span { color: var(--soft); font-size: 11pt; margin-left: auto; }
+
+  h2 { font-size: 22pt; line-height: 1.2; margin: 0 0 4mm; font-weight: 800; color: var(--navy);
+       letter-spacing: -.3px; }
+  h2 .nr { color: var(--amber-ink); margin-right: 8px; }
+  h3 { font-size: 14.5pt; margin: 7mm 0 2mm; color: var(--navy); }
+  section.chapter { page-break-before: always; }
+  h2, h3 { break-after: avoid; page-break-after: avoid; }
+  .box, .two, table, figure, .steps { break-inside: avoid; }
+  .lead { font-size: 13.5pt; color: var(--soft); margin: 0 0 6mm; }
+  p { margin: 0 0 3.2mm; }
+  ul, ol { margin: 0 0 3.5mm; padding-left: 6mm; }
+  li { margin-bottom: 1.6mm; }
+  b, strong { font-weight: 650; }
+
+  .key { display: inline-block; font-size: 10.5pt; font-weight: 600; padding: 1px 7px;
+    border: 1px solid #b9c2cd; border-bottom-width: 2px; border-radius: 5px; background: #f7f9fb;
+    line-height: 1.4; white-space: nowrap; }
+  .ui { font-weight: 600; color: var(--navy); }
+  .mono { font-family: "DejaVu Sans Mono", monospace; font-size: 11pt; }
+  .path { font-family: "DejaVu Sans Mono", monospace; font-size: 10pt; background: #f2f4f7;
+    padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+
+  .box { border-radius: 10px; padding: 4mm 5mm; margin: 5mm 0; page-break-inside: avoid; }
+  .box.tip { background: var(--tip-bg); border-left: 5px solid #f0b429; }
+  .box.note { background: var(--note-bg); border-left: 5px solid #6b8bb0; }
+  .box .t { font-weight: 700; display: block; margin-bottom: 1mm; }
+  .box p:last-child { margin-bottom: 0; }
+
+  figure { margin: 4mm 0 5mm; page-break-inside: avoid; }
+  figure img { display: block; max-width: 100%; max-height: 92mm; border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(20,34,51,.10); }
+  figure.small img { max-width: 62%; }
+  figure.mid img { max-width: 80%; }
+  figcaption { font-size: 10.5pt; color: var(--soft); margin-top: 2mm; }
+
+  table { border-collapse: collapse; width: 100%; margin: 3mm 0 5mm; font-size: 11.5pt;
+    page-break-inside: avoid; }
+  th { text-align: left; font-weight: 650; color: var(--soft); font-size: 10pt;
+    text-transform: uppercase; letter-spacing: .5px; padding: 0 3mm 2mm 0; border-bottom: 2px solid var(--line); }
+  td { padding: 2.6mm 3mm 2.6mm 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td:first-child { white-space: nowrap; width: 34%; }
+
+  .sw { display: inline-block; font-family: "DejaVu Sans Mono", monospace; font-weight: 700;
+    font-size: 11pt; padding: 1px 6px; border-radius: 3px; }
+  .sw.y { background: var(--amber); }
+  .sw.g { background: var(--green); }
+  .sw.grey { color: #9aa3ad; font-weight: 400; }
+  .sw.plain { font-weight: 400; }
+  .dot { color: #9aa3ad; }
+
+  .steps { counter-reset: st; list-style: none; padding: 0; }
+  .steps > li { counter-increment: st; position: relative; padding-left: 12mm; margin-bottom: 4mm;
+    page-break-inside: avoid; }
+  .steps > li::before { content: counter(st); position: absolute; left: 0; top: -1px;
+    width: 8mm; height: 8mm; border-radius: 50%; background: var(--navy); color: #fff;
+    font-weight: 700; font-size: 11pt; display: flex; align-items: center; justify-content: center; }
+
+  .faq h3 { font-size: 12.5pt; margin: 4.5mm 0 1mm; }
+  .faq p { margin-bottom: 1.5mm; }
+  .two { display: flex; gap: 6mm; align-items: flex-start; }
+  .two > * { flex: 1; }
+</style>
+</head>
+<body>
+
+<!-- ============================ TITEL ============================ -->
+<div class="cover">
+  <div class="morse">-.-. .--   -.. . -.-. --- -.. . .-.</div>
+  <div>
+    <h1>CW Decoder</h1>
+    <div class="sub">Handbuch für den Funkbetrieb<br>Morsetext mitlesen, Rufzeichen anklicken, mit N1MM loggen</div>
+  </div>
+  <div class="meta">
+    Version <b>{{VERSION}}</b>{{CHANNEL}}<br>
+    DF1DS · github.com/kainomatic/cw-decoder<br>
+    Freie Software, GPL-3.0
+  </div>
+</div>
+
+<!-- ============================ INHALT ============================ -->
+<div class="toc">
+  <h2>Inhalt</h2>
+  <ol>
+    <li>Worum es geht <span>Was das Programm kann – und was nicht</span></li>
+    <li>Installieren und aktuell halten</li>
+    <li>Das Funkgerät anschließen</li>
+    <li>Das Fenster auf einen Blick</li>
+    <li>Rufzeichen</li>
+    <li>Nochmal hören und Stellen sichern</li>
+    <li>Zusammen mit N1MM Logger+</li>
+    <li>Einstellungen</li>
+    <li>Wenn etwas komisch aussieht</li>
+  </ol>
+</div>
+
+<!-- ============================ 1 ============================ -->
+<section>
+  <h2><span class="nr">1</span>Worum es geht</h2>
+  <p class="lead">Der CW Decoder hört mit, was aus deinem Funkgerät kommt, und schreibt den Morsetext live mit. Erkannte Rufzeichen kannst du anklicken – mit N1MM Logger+ landen sie direkt im Log.</p>
+
+  <p>Das Programm soll dich <b>unterstützen, nicht ersetzen</b>. Bei gut lesbaren Signalen nimmt es dir das Mitschreiben ab. Wo es knapp wird, zeigt es dir, wo du selbst hinhören solltest, und spielt dir die Stelle auf Knopfdruck noch einmal vor.</p>
+
+  <div class="box note">
+    <span class="t">Gut zu wissen</span>
+    <p>Bei reinem Rauschen schreibt der CW Decoder absichtlich <b>nichts</b>. Lieber ein leeres Fenster als Buchstabensalat. Sobald eine Station kommt, geht es los.</p>
+  </div>
+
+  <div class="box note">
+    <span class="t">Was er nicht kann</span>
+    <p>Der CW Decoder liest eine Station zur Zeit. Sehr schwache Signale knapp über dem Rauschen und sehr unregelmäßiges Geben liest das geübte Ohr besser – dafür gibt es <b>Nochmal hören</b> mit langsamem Tempo.</p>
+  </div>
+
+  <h3>Was du brauchst</h3>
+  <ul>
+    <li>einen Windows-PC (Windows 10 oder 11)</li>
+    <li>das Audio deines Empfängers am PC – meist über das USB-Kabel des Funkgeräts</li>
+    <li>für das Loggen: N1MM Logger+ (nicht zwingend)</li>
+  </ul>
+</section>
+
+<!-- ============================ 2 ============================ -->
+<section class="chapter">
+  <h2><span class="nr">2</span>Installieren und aktuell halten</h2>
+
+  <ol class="steps">
+    <li>Die Setup-Datei von der Projektseite laden:<br>
+      <span class="path">github.com/kainomatic/cw-decoder/releases</span><br>
+      <b>CWDecoder-Setup-…exe</b> ist die normale Version, <b>CWDecoder-Beta-Setup-…exe</b> die Vorabversion zum Testen.</li>
+    <li>Setup starten. Meldet Windows „Der Computer wurde durch Windows geschützt“, auf <span class="ui">Weitere Informationen</span> und dann <span class="ui">Trotzdem ausführen</span> klicken.</li>
+    <li>Fertig. Der CW Decoder startet von selbst.</li>
+  </ol>
+
+  <div class="box tip">
+    <span class="t">Der erste Start dauert etwas</span>
+    <p>Nach der Installation und nach jedem Update prüft der Virenscanner die neuen Dateien. Das kann bis zu 10 Sekunden dauern. Solange steht „CW Decoder startet …“ auf dem Bildschirm. Bitte nicht noch einmal starten – ab dem zweiten Mal geht es in einer Sekunde.</p>
+  </div>
+
+  <h3>Updates</h3>
+  <p>Kurz nach dem Start schaut das Programm nach, ob es eine neuere Version gibt. Wenn ja, fragt es dich. Ein Klick auf <span class="ui">Herunterladen und installieren</span> erledigt alles, danach startet die neue Version. Von Hand geht es über <span class="ui">Hilfe → Nach Updates suchen</span>.</p>
+
+  <h3>Normale Version und Beta</h3>
+  <p>Beide sind getrennte Programme mit eigenen Einstellungen und können gleichzeitig installiert sein. Die Beta erkennst du an „BETA“ im Fenstertitel.</p>
+
+  <h3>Wo die Dateien liegen</h3>
+  <table>
+    <tr><th>Was</th><th>Wo</th></tr>
+    <tr><td>Aufnahmen und gespeicherte Stellen</td><td><span class="path">Dokumente\CW Decoder\Aufnahmen</span></td></tr>
+    <tr><td>Einstellungen und Protokoll</td><td><span class="path">%APPDATA%\CWDecoder</span> (Beta: <span class="path">CWDecoder-Beta</span>)</td></tr>
+  </table>
+</section>
+
+<!-- ============================ 3 ============================ -->
+<section class="chapter">
+  <h2><span class="nr">3</span>Das Funkgerät anschließen</h2>
+  <p class="lead">Der Decoder braucht den Ton des Empfängers als Eingang am PC.</p>
+
+  <table>
+    <tr><th>Wie ist dein Funkgerät verbunden?</th><th>Was du oben bei „Eingang“ wählst</th></tr>
+    <tr><td>USB-Kabel (die meisten neueren Geräte)</td><td>das Gerät, das meist <b>USB Audio CODEC</b> heißt</td></tr>
+    <tr><td>Über ein anderes Programm (virtuelles Kabel, z.&nbsp;B. VB-Cable)</td><td><b>CABLE Output</b></td></tr>
+    <tr><td>Kabel in den Line-In oder Mikrofoneingang</td><td>den Line-In bzw. das Mikrofon</td></tr>
+  </table>
+
+  <p>Dann auf <span class="ui">Start</span>. Unter den Knöpfen erscheint zum Beispiel:</p>
+  <p class="mono">Ton: 840 Hz &nbsp; SNR 28 dB &nbsp; 25 WPM</p>
+  <p>Das ist die gefundene Tonhöhe, der Abstand des Signals zum Rauschen und das Tempo der Station.</p>
+
+  <h3>Drei Tipps für ein gutes Ergebnis</h3>
+  <ul>
+    <li><b>Lautstärke am Funkgerät einstellen</b>, nicht in Windows. Das Signal soll im Spektrum deutlich zu sehen sein.</li>
+    <li><b>CW-Filter 300 bis 500 Hz</b> ist ideal. Sehr schmale Filter (um 100 Hz) gehen auch, dann braucht der Decoder aber ein etwas kräftigeres Signal, bevor er schreibt.</li>
+    <li>Der Decoder <b>sucht den Ton selbst</b> und folgt ihm, wenn er wandert. Sind zwei Stationen nah beieinander, klickst du im Spektrum auf die gewünschte. Der Haken <span class="ui">Ton automatisch suchen</span> schaltet zurück.</li>
+  </ul>
+</section>
+
+<!-- ============================ 4 ============================ -->
+<section class="chapter">
+  <h2><span class="nr">4</span>Das Fenster auf einen Blick</h2>
+
+  <figure>
+    <img style="max-height:95mm" src="img/hauptfenster.png" alt="Hauptfenster">
+    <figcaption>Oben Eingang und Start, darunter das Spektrum mit der gefundenen Tonhöhe. In der Mitte der Text, rechts die erkannten Rufzeichen.</figcaption>
+  </figure>
+
+  <h3>Was die Farben im Text bedeuten</h3>
+  <table>
+    <tr><th>So sieht es aus</th><th>Das bedeutet es</th></tr>
+    <tr><td><span class="sw y">DR2ABC</span></td><td>ein erkanntes Rufzeichen</td></tr>
+    <tr><td><span class="sw g">DF1DS</span></td><td>ein Rufzeichen aus der Contest-Datenbank – sehr wahrscheinlich richtig gelesen (Kapitel 5)</td></tr>
+    <tr><td><span class="sw plain">DR</span><span class="sw grey" style="padding:0">2</span><span class="sw plain" style="padding-left:0">ABC</span></td><td>grau: unsicher erkannt – hier lohnt es sich, selbst hinzuhören</td></tr>
+    <tr><td><span class="sw plain">TNX<span class="dot">·</span>FER<span class="dot">·</span>FB</span></td><td>hier hat der Geber keine Pause gemacht; der Decoder hat die Lücke ergänzt</td></tr>
+    <tr><td><span class="sw plain">*</span></td><td>ein Zeichen, das es im Morsealphabet nicht gibt</td></tr>
+    <tr><td>leere Zeile</td><td>längere Pause oder eine neue Station</td></tr>
+  </table>
+
+  <figure>
+    <img src="img/text-farben.png" alt="Text mit Farben">
+    <figcaption>Gelbe und grüne Rufzeichen, graue unsichere Zeichen, ergänzte Lücken mit Punkt.</figcaption>
+  </figure>
+
+  <div class="box note">
+    <span class="t">Grau heißt „nachprüfen“, nicht „falsch“</span>
+    <p>Oft stimmt das graue Zeichen. Der Decoder sagt dir nur: Hier war es knapp. Was er gar nicht gehört hat – etwa bei starkem Fading – kann er nicht grau markieren.</p>
+  </div>
+
+  <h3>Zeichen in spitzen Klammern</h3>
+  <p>Zusammengezogene Morsezeichen stehen so da: <span class="mono">&lt;AR&gt;</span> Ende der Nachricht, <span class="mono">&lt;KN&gt;</span> nur du, <span class="mono">&lt;SK&gt;</span> Ende der Verbindung, <span class="mono">&lt;BT&gt;</span> Trennung, <span class="mono">&lt;BK&gt;</span> Break.</p>
+</section>
+
+<!-- ============================ 5 ============================ -->
+<section class="chapter">
+  <h2><span class="nr">5</span>Rufzeichen</h2>
+  <p class="lead">Jedes erkannte Rufzeichen erscheint rechts als Knopf – das neueste oben, mit Flagge und Land.</p>
+
+  <div class="two">
+    <figure>
+      <img style="max-height:32mm" src="img/knoepfe.png" alt="Rufzeichen-Knöpfe">
+      <figcaption>Ein Klick auf den Knopf – oder auf das Rufzeichen im Text – gibt es an N1MM weiter.</figcaption>
+    </figure>
+    <div>
+      <p><b>Grün</b> heißt: Das Rufzeichen steht in <b>Super Check Partial</b>. Diese Liste nutzen auch N1MM und andere Contest-Logger: rund 50.000 Stationen, die in Contesten aktiv waren.</p>
+      <p><b>Gelb</b> heißt nur: steht nicht in der Liste. Wer nur gemütliche QSOs fährt, steht oft nicht drin – das Rufzeichen kann trotzdem stimmen.</p>
+    </div>
+  </div>
+
+  <h3>Vorschläge</h3>
+  <div class="two">
+    <div>
+      <p>Fehlt einem gelben Rufzeichen nur ein Buchstabe zu einem bekannten, steht der Vorschlag im Hinweis, wenn du mit der Maus darauf zeigst.</p>
+      <p>Mit <b>Rechtsklick → „… übernehmen“</b> ersetzt du den Knopf. Von allein wird nie etwas ersetzt.</p>
+    </div>
+    <figure>
+      <img style="max-height:38mm" src="img/vorschlag.png" alt="Vorschlag im Tooltip">
+      <figcaption>„ähnlich: DF1DS“ – Rechtsklick übernimmt.</figcaption>
+    </figure>
+  </div>
+
+  <div class="box tip">
+    <span class="t">Rufzeichen mit Pausen</span>
+    <p>Manche Geber machen mitten im Rufzeichen eine lange Pause, dann steht da <span class="mono">DL1A B C</span>. Kennt der Decoder das Rufzeichen – aus der Liste oder weil er es schon einmal am Stück gehört hat –, macht er trotzdem den richtigen Knopf <b>DL1ABC</b> daraus.</p>
+  </div>
+
+  <h3>Liste aufräumen</h3>
+  <p>Das <b>×</b> rechts am Knopf nimmt ein Rufzeichen aus der Liste, <span class="ui">Alle löschen</span> leert sie. Im Text bleibt alles stehen. Hört der Decoder das Rufzeichen wieder, kommt der Knopf zurück.</p>
+
+</section>
+
+<!-- ============================ 6 ============================ -->
+<section class="chapter">
+  <h2><span class="nr">6</span>Nochmal hören und Stellen sichern</h2>
+  <p class="lead">Der Decoder merkt sich immer die letzten 60 Sekunden. Damit kannst du eine Stelle sofort noch einmal hören.</p>
+
+  <figure>
+    <img src="img/nochmal.png" alt="Nochmal hören">
+    <figcaption>Die Knöpfe oben im Fenster: Der Ausschnitt ist festgehalten, noch 4 Sekunden lang; der Regler steht auf 0,60×.</figcaption>
+  </figure>
+
+  <table>
+    <tr><th>Taste</th><th>Was passiert</th></tr>
+    <tr><td><span class="key">Strg</span> + <span class="key">R</span></td><td><b>Nochmal hören:</b> spielt die letzten 10 Sekunden ab. Der Decoder läuft dabei weiter.</td></tr>
+    <tr><td><span class="key">Strg</span> + <span class="key">R</span> nochmal</td><td>innerhalb von 5 Sekunden nach dem Ende: <b>dieselbe Stelle</b> noch einmal – so oft du willst</td></tr>
+    <tr><td><span class="key">Strg</span> + <span class="key">S</span></td><td><b>Speichern:</b> die letzten 30 Sekunden als Tondatei, dazu der mitgeschriebene Text</td></tr>
+  </table>
+
+  <p>Die Statuszeile zählt die 5 Sekunden herunter. Danach nimmt das nächste <span class="key">Strg</span> + <span class="key">R</span> wieder die letzten 10 Sekunden.</p>
+
+  <h3>Langsamer abspielen</h3>
+  <p>Mit dem Regler <span class="ui">Tempo</span> spielst du bis auf halbe Geschwindigkeit ab – <b>die Tonhöhe bleibt dabei gleich</b>. Der Regler wirkt sofort, auch mitten im Abspielen.</p>
+
+  <div class="box tip">
+    <span class="t">Damit hilfst du am meisten</span>
+    <p>Liest der Decoder etwas falsch, drück sofort <span class="key">Strg</span> + <span class="key">S</span>. Ist gerade eine Stelle festgehalten, wird genau diese gespeichert. Die Dateien findest du unter <span class="ui">Datei → Aufnahmeordner öffnen</span> – mit einer Zeile, was gesendet wurde, helfen sie bei der Verbesserung am meisten.</p>
+  </div>
+</section>
+
+<!-- ============================ 7 ============================ -->
+<section class="chapter">
+  <h2><span class="nr">7</span>Zusammen mit N1MM Logger+</h2>
+  <p class="lead">Der CW Decoder arbeitet hinter N1MMs Fenster „CW Reader“. N1MM zeigt den Text dort an, markiert die Rufzeichen rot – und ein Klick setzt das Rufzeichen ins Log.</p>
+
+  <figure>
+    <img style="max-height:52mm" src="img/n1mm-cwreader.png" alt="N1MM CW Reader und Eingabefenster">
+    <figcaption>Links N1MMs CW Reader mit dem Text des CW Decoders, rechts das Eingabefenster: Ein Klick auf DL1ABC hat es ins Rufzeichenfeld gesetzt.</figcaption>
+  </figure>
+
+  <h3>Einmal einrichten</h3>
+  <ol class="steps">
+    <li><b>Im CW Decoder</b> rechts unten den Haken <span class="ui">N1MM-Anbindung</span> setzen. Unten steht dann „CW Reader: wartet auf N1MM“.</li>
+    <li><b>In N1MM</b> muss das Log auf <b>Mode CW</b> stehen.</li>
+    <li>Im Eingabefenster von N1MM <span class="ui">Window → CW Reader</span> öffnen. In den Einstellungen bei <b>Fldigi</b> den Haken <span class="ui">Enable</span> setzen und bei <span class="ui">Path to Fldigi</span> den CW Decoder eintragen:<br>
+      <span class="path">C:\Program Files\CW Decoder\CWDecoder.exe</span><br>
+      (Beta: <span class="path">C:\Program Files\CW Decoder Beta\CWDecoder.exe</span>). Dann <span class="ui">Save</span>.</li>
+    <li>Nach etwa 10 Sekunden steht der Text im CW Reader, und der CW Decoder meldet „CW Reader: N1MM verbunden“.</li>
+  </ol>
+
+  <p>Ab jetzt genügt <span class="ui">Window → CW Reader</span>. Läuft der CW Decoder noch nicht, startet N1MM ihn selbst.</p>
+
+  <div class="box note">
+    <span class="t">Keine Sorge</span>
+    <p>Beim Verbinden blitzt kurz ein leeres Fenster „Fldigi CW Engine 1“ auf – das braucht N1MM. Schließt du den CW Reader, läuft der Decoder weiter.</p>
+  </div>
+
+</section>
+
+<!-- ============================ 8 ============================ -->
+<section class="chapter">
+  <h2><span class="nr">8</span>Einstellungen</h2>
+  <p class="lead">Normalerweise musst du nichts einstellen. Das Programm merkt sich Eingang, Tonhöhe und alle Haken.</p>
+
+  <table>
+    <tr><th>Wo</th><th>Was du dort einstellst</th></tr>
+    <tr><td><span class="ui">Einstellungen → Puffer und Nochmal hören…</span></td><td>wie lange zurück gespeichert und abgespielt wird, das Starttempo und das <b>Ausgabegerät</b> – zum Beispiel Kopfhörer statt Lautsprecher</td></tr>
+    <tr><td><span class="ui">Einstellungen → Zusammengeklebte Wörter trennen</span></td><td>die ergänzten Lücken mit Punkt ein- oder ausschalten</td></tr>
+    <tr><td><span class="ui">Übergabe…</span> (rechts unten)</td><td>auf welchen Wegen ein Rufzeichen zu N1MM geht</td></tr>
+  </table>
+
+  <h3>Andere Wege zu N1MM</h3>
+  <p>Unter <span class="ui">Übergabe…</span> kannst du weitere Wege einschalten:</p>
+      <ul>
+        <li><b>Skimmer-Spot:</b> schickt das Rufzeichen an N1MMs Bandmap – nur, wenn N1MMs Telnet-Fenster mit dem CW Decoder statt mit einem DX-Cluster verbunden ist.</li>
+        <li><b>Ins Entry Window tippen:</b> tippt das Rufzeichen direkt in N1MM.</li>
+        <li><b>Zwischenablage:</b> zum Einfügen mit <span class="key">Strg</span> + <span class="key">V</span>.</li>
+      </ul>
+  <h3>Tastenkürzel</h3>
+  <table>
+    <tr><th>Taste</th><th>Wirkung</th></tr>
+    <tr><td><span class="key">Strg</span> + <span class="key">R</span></td><td>Nochmal hören</td></tr>
+    <tr><td><span class="key">Strg</span> + <span class="key">S</span></td><td>Letzte 30 Sekunden speichern</td></tr>
+  </table>
+
+</section>
+
+<!-- ============================ 9 ============================ -->
+<section class="chapter faq">
+  <h2><span class="nr">9</span>Wenn etwas komisch aussieht</h2>
+
+  <h3>Bei Rauschen steht nichts da.</h3>
+  <p>Das ist Absicht. Der Decoder schreibt erst, wenn wirklich eine Station sendet.</p>
+
+  <h3>Die ersten Zeichen einer Station fehlen oder sind grau.</h3>
+  <p>Der Decoder muss das Tempo jeder neuen Station erst kennenlernen. Nach ein, zwei Zeichen sitzt es.</p>
+
+  <h3>Da steht „DL1A B C“ statt DL1ABC.</h3>
+  <p>Der Geber hat mitten im Rufzeichen Pausen gemacht. Der Decoder schreibt, was gesendet wurde – der Knopf rechts wird trotzdem richtig, sobald das Rufzeichen bekannt ist.</p>
+
+  <h3>Wörter kleben zusammen: „TNXFERFBCALL“.</h3>
+  <p>Der Geber hat keine Pausen zwischen den Wörtern gemacht. Mit eingeschaltetem Trennen steht dort <span class="mono">TNX<span class="dot">·</span>FER<span class="dot">·</span>FB<span class="dot">·</span>CALL</span>.</p>
+
+  <h3>Zwei Stationen gleichzeitig – der Text wird wirr.</h3>
+  <p>Der Decoder folgt immer einer Station. Liegen zwei sehr dicht beieinander, kann er sie nicht trennen. Klick im Spektrum auf die Station, die du lesen willst.</p>
+
+  <h3>N1MM meldet: „The window 'Fldigi CW Engine 1' could not be found“.</h3>
+  <p>Im CW Decoder ist der Haken <span class="ui">N1MM-Anbindung</span> aus. Haken setzen, CW Reader in N1MM schließen und neu öffnen.</p>
+
+  <h3>Meldung „Port für den N1MM CW Reader belegt“.</h3>
+  <p>Meist läuft noch fldigi als Decoder für N1MM. fldigi beenden und im CW Decoder den Haken <span class="ui">N1MM-Anbindung</span> einmal aus- und wieder einschalten.</p>
+
+  <h3>Einen Fehler melden</h3>
+  <p><span class="ui">Hilfe → Fehler melden…</span> zeigt einen Bericht und öffnet auf Wunsch eine vorausgefüllte Meldung auf GitHub. Das Programm sendet selbst nichts. Am meisten hilft eine mit <span class="key">Strg</span> + <span class="key">S</span> gespeicherte Stelle.</p>
+
+
+  <p style="margin-top:6mm; font-size:10pt; color: var(--soft)">CW Decoder ist freie Software (GPL-3.0). Länderdaten: cty.dat (AD1C). Rufzeichen-Liste: Super Check Partial. Viel Spaß und 73 de DF1DS.</p>
+</section>
+
+</body>
+</html>

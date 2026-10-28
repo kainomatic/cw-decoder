@@ -11,10 +11,11 @@ werden im Hauptthread eingespeist, der Decoder-Thread arbeitet sie ab; so
 entsteht bei gleichem Code dasselbe Bild. Keine Klicks, keine Bildschirm-
 kopie: jedes Fenster per PrintWindow (geht auch ohne aktive RDP-Sitzung).
 
-Fenster 900×600 Pixel bei 100 %. Der Prozess ist DPI-bewusst und zeichnet
-in der Skalierung des Rechners (Titelleiste, Menü, Haken und Inhalt
-einheitlich); die Fotos werden danach auf 100 % verkleinert. So sehen sie
-auf jedem Rechner gleich aus, auch bei 150 oder 200 %.
+Fenster 900×600 (bei 100 %). Der Prozess ist DPI-bewusst und zeichnet in
+der Skalierung des Rechners (Titelleiste, Menü, Haken und Inhalt
+einheitlich). Die Fotos bleiben in dieser Auflösung (auf dem
+Entwicklungsrechner 150 %, also 1,5-fache Pixel), damit die Schrift im PDF
+scharf und ohne Lupe lesbar ist; die Größe im Handbuch bestimmt das CSS.
 
 Erzeugt: hauptfenster.png, text-farben.png, knoepfe.png, vorschlag.png,
 nochmal.png, uebergabe.png. Das N1MM-Foto (n1mm-cwreader.png) entsteht von
@@ -196,10 +197,6 @@ class Shooter:
         self.settle()
 
     def save(self, img, name):
-        from PIL import Image
-        if abs(self.scale - 1.0) > 0.01:
-            img = img.resize((round(img.width / self.scale), round(img.height / self.scale)),
-                             Image.LANCZOS)
         path = self.out / name
         img.save(path, optimize=True)
         self.written.append(path)
@@ -221,9 +218,16 @@ class Shooter:
         self.pump(0.2)
         for p in parts[:-1]:
             self.feed(p)
+        # Foto, sobald das letzte Wort „HW“ dasteht, noch im Nachlauf: die
+        # Linie steht noch im Spektrum (Max-Hold), der Text ist vollständig
         last = parts[-1]
-        cut = int(len(last) * 0.78)
-        self.feed(last[:cut])
+        step = int(FS * 0.2)
+        cut = 0
+        while cut < len(last):
+            self.feed(last[cut:cut + step])
+            cut += step
+            if app.text.get("1.0", "end").rstrip().endswith("HW"):
+                break
         app._draw_spectrum()
         # Statuszeile aus dem Decoderzustand (sonst Zahlen vom Sekundentakt)
         app._show_status(app.live.dec.status)
@@ -295,10 +299,15 @@ class Shooter:
         app._refresh_status()
         self.pump(0.1)
         full = print_window(hwnd_of(app))
-        top2 = app.btn_save.master
-        x0, y0, x1, _ = self.client_box(top2)
+        # nur der linke Teil: Speichern, Nochmal (festgehalten), Regler mit
+        # Wert, darunter die Statuszeile bis „noch … s“
+        x0, y0, _x1, _y1 = self.client_box(app.btn_save)
+        _, _, x1, _ = self.client_box(app.rate_label)
         _, _, _, y1 = self.client_box(app.status_label)
-        self.save(full.crop((x0, y0 - 2, x1, y1 + 2)), "nochmal.png")
+        pad = round(6 * self.scale)
+        top = round(2 * self.scale)       # sonst ragt die Zeile darüber hinein
+        left = self.client_box(app.btn_save.master)[0]     # nicht in den Fensterrand
+        self.save(full.crop((max(left, x0 - pad), y0 - top, x1 + pad, y1 - 1)), "nochmal.png")
 
     def uebergabe(self):
         app = self.app

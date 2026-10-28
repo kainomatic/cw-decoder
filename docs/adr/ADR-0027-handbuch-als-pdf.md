@@ -39,8 +39,12 @@ echte Oberfläche mit einer Attrappe der Soundkarte und einem synthetischen
 Signal (`gen.py`) mit Beispiel-Rufzeichen; die Blöcke speist das Werkzeug
 selbst ein, die Statuszeile setzt es aus dem Decoderzustand – zwei Läufe
 ergeben pixelgleiche Bilder. Aufnahme per `PrintWindow` (auch ohne aktive
-RDP-Sitzung). Der Prozess zeichnet in der Skalierung des Rechners und
-verkleinert auf 100 %; so sind Titelleiste, Menü und Inhalt einheitlich.
+RDP-Sitzung). Der Prozess zeichnet in der Skalierung des Rechners
+(Titelleiste, Menü und Inhalt einheitlich), und die Fotos behalten diese
+Auflösung (Entwicklungsrechner: 150 %). Die Größe im PDF bestimmt das CSS;
+so bleibt die Schrift im Fensterfoto scharf (Review #24). Fotos des
+Hauptfensters entstehen, wenn der letzte Text vollständig dasteht, aber die
+Linie noch im Spektrum steht.
 Nur das N1MM-Foto entsteht von Hand am echten N1MM
 (`tools/n1mm_demo_engine.py`, Ablauf in `docs/handbuch/README.md`).
 

@@ -24,7 +24,9 @@ DOCS = [HTML, ROOT / "README.md", ROOT / "docs" / "N1MM.md", ROOT / "docs" / "VE
 EXAMPLE_RE = re.compile(r"^(DF1DS|DF1DSE|[A-Z0-9]{1,3}[0-9]ABC)$")
 ALLOWED = {
     "N1MM", "N1MMS",    # Programmname N1MM Logger+ (auch „N1MMs CW Reader“)
-    "AD1C",     # Autor von cty.dat (Quellenangabe)
+    # Quellenangaben (Urheber mitgelieferter Daten) sind ausgenommen,
+    # Entscheidung DF1DS (#24); über diesen Weg keine weiteren echten Rufzeichen
+    "AD1C",     # Autor von cty.dat
     "DL1A",     # Bruchstück des Beispiels „DL1A B C“
 }
 

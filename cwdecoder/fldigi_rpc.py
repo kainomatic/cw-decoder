@@ -3,8 +3,10 @@
 
 N1MM Logger+ zeigt im Fenster „CW Reader" den Text einer externen Engine
 und übernimmt angeklickte Rufzeichen ins Entry Window. Als Engine erwartet
-es fldigi. Dieses Modul stellt den Teil der fldigi-Schnittstelle nach, den
-N1MM aufruft (Mitschnitt in Issue #3):
+es fldigi. Dieses Modul bildet den Teil der fldigi-Schnittstelle nach, den
+N1MM aufruft (Mitschnitt in Issue #3). Auf die Frage nach Name und Version
+meldet sich der CW Decoder mit eigenem Namen; N1MM akzeptiert das
+(Mitschnitt in Issue #13, es fragt nur `fldigi.version` ab):
 
     fldigi.version                       einmal, auch vor dem Start
     modem.set_by_name('CW'), rig.set_mode('CW'), main.set_frequency(Hz)
@@ -17,7 +19,8 @@ Dazu die naheliegenden Nachbarn (text.get_rx, text.get_rx_length,
 text.clear_rx, modem.get_name, main.get_frequency …). Unbekannte Methoden
 werden einmal je Name geloggt und mit einem Fault beantwortet wie bei fldigi.
 
-Nur das Protokoll ist nachgebaut, kein fldigi-Code (fldigi: W1HKJ, GPL).
+Nur das Protokoll ist nachgebildet, kein fldigi-Code. fldigi (W1HKJ, GPL)
+ist ein eigenständiges Projekt und mit dem CW Decoder nicht verbunden.
 
 Threading (ADR-0009): Der Server läuft in eigenen Threads und fasst kein tk
 an. Die GUI hängt Text per `RxBuffer.append` an (gelockt) und setzt
@@ -31,13 +34,20 @@ import xmlrpc.client
 from socketserver import ThreadingMixIn
 from xmlrpc.server import SimpleXMLRPCRequestHandler, SimpleXMLRPCServer
 
+from .__version__ import APP_NAME, __version__
+
 log = logging.getLogger(__name__)
 
 # N1MM startet die CW-Reader-Engine mit diesem Port und Fenstertitel
 # (Reader 1; 7362/7366 gehören dem Digital Interface)
 DEFAULT_PORT = 7367
 DEFAULT_TITLE = "Fldigi CW Engine 1"
-FLDIGI_VERSION = "4.2.05"       # gibt sich als aktuelles fldigi aus
+# Eigener Name und eigene Version, kein fremder Programmname (#13).
+# fldigi.version nur numerisch X.Y.Z wie bei fldigi (Beta: ohne „-betaN“);
+# so in N1MM 1.0.7711 nachgewiesen. Die volle Bezeichnung steht in name_version.
+ENGINE_NAME = APP_NAME
+ENGINE_VERSION = __version__.split("-")[0]
+ENGINE_NAME_VERSION = f"{APP_NAME} {__version__} (fldigi-kompatibel)"
 RX_BUFFER_BYTES = 64 * 1024
 CONNECTED_S = 3.0               # so lange nach dem letzten Abruf gilt N1MM als verbunden
 FAULT_NO_METHOD = -506          # wie xmlrpc-c in fldigi
@@ -148,7 +158,7 @@ class FldigiRpcServer(threading.Thread):
             return False
         srv.register_instance(self)
         self.srv = srv
-        log.info("fldigi-Engine für N1MM auf %s:%d", self.host, self.port)
+        log.info("CW-Reader-Engine für N1MM auf %s:%d", self.host, self.port)
         return True
 
     def run(self):
@@ -185,11 +195,11 @@ class FldigiRpcServer(threading.Thread):
         if fn is None:
             if method not in self._unknown:
                 self._unknown.add(method)
-                log.info("fldigi-Engine: unbekannte Methode %s%r", method, tuple(params))
+                log.info("CW-Reader-Engine: unbekannte Methode %s%r", method, tuple(params))
             raise xmlrpc.client.Fault(FAULT_NO_METHOD, f"Method '{method}' not defined")
         if method not in ("rx.get_data", "main.get_trx_status", "text.get_rx",
                           "text.get_rx_length"):
-            log.info("fldigi-Engine: %s%r", method, tuple(params))
+            log.info("CW-Reader-Engine: %s%r", method, tuple(params))
         return fn(self, *params)
 
     def _carrier(self) -> int:
@@ -219,8 +229,17 @@ class FldigiRpcServer(threading.Thread):
 
     def _terminate(self, *_):
         # N1MM schließt sein CW-Reader-Fenster; der CW Decoder läuft weiter
-        log.info("fldigi-Engine: N1MM hat den CW Reader geschlossen")
+        log.info("CW-Reader-Engine: N1MM hat den CW Reader geschlossen")
         return None
+
+
+def _version_struct(version: str) -> dict:
+    """„0.1.0" -> {"major": 0, "minor": 1, "patch": "0"} (Form wie bei fldigi)."""
+    parts = (version.split("-")[0].split(".") + ["0", "0", "0"])[:3]
+    try:
+        return {"major": int(parts[0]), "minor": int(parts[1]), "patch": parts[2]}
+    except ValueError:
+        return {"major": 0, "minor": 0, "patch": "0"}
 
 
 def _names(_srv):
@@ -228,10 +247,10 @@ def _names(_srv):
 
 
 _METHODS = {
-    "fldigi.version": lambda s: FLDIGI_VERSION,
-    "fldigi.name": lambda s: "fldigi",
-    "fldigi.name_version": lambda s: f"fldigi {FLDIGI_VERSION}",
-    "fldigi.version_struct": lambda s: {"major": 4, "minor": 2, "patch": "05"},
+    "fldigi.version": lambda s: ENGINE_VERSION,
+    "fldigi.name": lambda s: ENGINE_NAME,
+    "fldigi.name_version": lambda s: ENGINE_NAME_VERSION,
+    "fldigi.version_struct": lambda s: _version_struct(ENGINE_VERSION),
     "fldigi.list": lambda s: [{"name": n, "signature": "", "help": ""} for n in _names(s)],
     "fldigi.terminate": FldigiRpcServer._terminate,
     "system.listMethods": _names,

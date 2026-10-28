@@ -23,7 +23,8 @@ Vier Bausteine:
    Das ist der "saubere" Weg, der ohne Fenster-Fokus auskommt.
 
 4. FldigiRpcServer (cwdecoder/fldigi_rpc.py, ADR-0022)
-   Engine hinter N1MMs Fenster "CW Reader": N1MM hält uns für fldigi, zeigt
+   Engine hinter N1MMs Fenster "CW Reader" über die nachgebildete
+   fldigi-Schnittstelle (eigener Name, #13). N1MM zeigt
    unseren Text und übernimmt angeklickte Rufzeichen selbst ins Entry
    Window. Standardweg; braucht bei uns keinen Klick.
 

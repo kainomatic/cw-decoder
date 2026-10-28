@@ -24,7 +24,7 @@ _LBL_PORT = "Port der Engine:"
 _LBL_CLOSE = "Schließen"
 _MSG_PORT_INVALID = "Port {value!r} ungültig (1024–65535), bleibt bei {port}"
 
-_TT_ENGINE = ("Der CW Decoder gibt sich als fldigi aus. In N1MM: Window → CW Reader → "
+_TT_ENGINE = ("Der CW Decoder spricht die Schnittstelle von fldigi. In N1MM: Window → CW Reader → "
               "Setup → Fldigi, Pfad zu CWDecoder.exe. N1MM zeigt dann unseren Text; "
               "ein Klick auf ein Rufzeichen dort setzt es ins Entry Window.")
 _TT_SPOT = ("Klick auf ein Rufzeichen schickt einen Skimmer-Spot auf der aktuellen "

@@ -1,11 +1,13 @@
 # CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
 """fldigi-kompatible Engine für N1MMs CW Reader (cwdecoder/fldigi_rpc.py, #3)."""
+import re
 import socket
 import xmlrpc.client
 
 import pytest
 
-from cwdecoder.fldigi_rpc import FldigiRpcServer, RxBuffer
+from cwdecoder.__version__ import APP_NAME, __version__
+from cwdecoder.fldigi_rpc import FldigiRpcServer, RxBuffer, _version_struct
 
 
 def free_port():
@@ -31,7 +33,7 @@ def engine():
 def test_ablauf_wie_n1mm(engine):
     """Reihenfolge aus dem Mitschnitt (Issue #3, Phase A)."""
     srv, p, _ = engine
-    assert p.fldigi.version() == "4.2.05"
+    assert p.fldigi.version() == __version__.split("-")[0]
     assert p.modem.set_by_name("CW") == "CW"
     p.rig.set_mode("CW")
     p.main.set_frequency(7025000.0)
@@ -45,6 +47,26 @@ def test_ablauf_wie_n1mm(engine):
     p.rig.release_control()
     p.fldigi.terminate(0)
     assert srv.is_alive()                        # Schließen in N1MM beendet uns nicht
+
+
+def test_eigener_name_und_version(engine):
+    """#13: Der CW Decoder meldet sich mit eigenem Namen, nicht als fldigi.
+    fldigi.version bleibt numerisch X.Y.Z (so in N1MM 1.0.7711 nachgewiesen)."""
+    _, p, _ = engine
+    assert re.fullmatch(r"\d+\.\d+\.\d+", p.fldigi.version())
+    assert p.fldigi.name() == APP_NAME == "CW Decoder"
+    assert p.fldigi.name_version() == f"CW Decoder {__version__} (fldigi-kompatibel)"
+    for answer in (p.fldigi.version(), p.fldigi.name(), p.fldigi.name_version()):
+        assert "4.2.05" not in answer
+        assert not answer.lower().startswith("fldigi")
+    major, minor, patch = (int(x) for x in __version__.split("-")[0].split("."))
+    assert p.fldigi.version_struct() == {"major": major, "minor": minor, "patch": str(patch)}
+
+
+def test_version_struct():
+    assert _version_struct("0.1.0") == {"major": 0, "minor": 1, "patch": "0"}
+    assert _version_struct("1.2.3-beta18") == {"major": 1, "minor": 2, "patch": "3"}
+    assert _version_struct("kaputt") == {"major": 0, "minor": 0, "patch": "0"}
 
 
 def test_laengen_und_ausschnitte(engine):

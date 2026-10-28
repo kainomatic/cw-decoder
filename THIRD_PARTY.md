@@ -50,6 +50,16 @@ liefert folgende Daten anderer Herkunft mit (ADR-0021):
   `docs/handbuch/fonts/DejaVu-LICENSE.txt`.
 - Beide werden ins PDF eingebettet (`tools/build_handbook.py`, ADR-0027).
 
+## Schnittstelle von fldigi (kein Code, keine Daten)
+
+- Betrifft: `cwdecoder/fldigi_rpc.py` (Engine für N1MMs CW Reader, ADR-0022)
+- Nachbildung der XML-RPC-Schnittstelle von fldigi (W1HKJ, GPL,
+  <http://www.w1hkj.com/>) ohne Übernahme von Code: nur Methodennamen und
+  Datentypen, die N1MM Logger+ aufruft. fldigi ist ein eigenständiges
+  Projekt und mit dem CW Decoder nicht verbunden. Der CW Decoder meldet
+  sich über die Schnittstelle mit eigenem Namen und eigener Version; der
+  Fenstertitel „Fldigi CW Engine 1“ ist von N1MM vorgegeben.
+
 ## Wortschatz der Segmentierung
 
 `cwdecoder/data/qso_words.txt` (QSO-Floskeln) ist eigene Arbeit des

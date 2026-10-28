@@ -45,7 +45,10 @@ und sag mir, was als Nächstes zu tun ist."*
 Programm-Infrastruktur stehen; das Programm ist als Setup mit Self-Update
 installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 
-- Neueste Beta: [`v0.1.0-beta17`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta17)
+- Neueste Beta: [`v0.1.0-beta18`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta18)
+  (Engine meldet sich mit eigenem Namen, N1MM hängt nicht mehr beim Start
+  bei laufendem CW Decoder, #13; Handbuch-PDF mit nachgebesserten Bildern).
+  Davor [`v0.1.0-beta17`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta17)
   mit Handbuch als PDF (#24). Davor: [`v0.1.0-beta16`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta16)
   (`CWDecoder-Beta-Setup-v0.1.0.exe`: Nochmal hören mit Festhalten,
   Tempo-Regler und Ausgabegerät, Rufzeichen entfernen, #25; enthält auch
@@ -61,8 +64,8 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 - Laufender Auftrag: siehe „Offene Aufträge" unten bzw. Issues mit Label
   `auftrag` (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** Shack-Test mit `v0.1.0-beta17` (Handbuch: Hilfe → Handbuch; das PDF mit den nachgebesserten Bildern kommt mit der nächsten Beta).
-DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta17` (Self-Update), richtet
+**Nächster Schritt:** Review #13, dann Shack-Test mit `v0.1.0-beta18` (Handbuch: Hilfe → Handbuch).
+DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta18` (Self-Update), richtet
 N1MM nach `docs/N1MM.md` ein und testet mit Funkgerät und N1MM (siehe
 „Testablauf Installer/Beta"). Danach
 Auswertung der Aufnahmen durch die Desktop-Session und Entscheidung über die
@@ -75,12 +78,13 @@ Stable `v0.1.0`.
 Stand des Repos ohne GitHub-API; Claude Code pflegt die Tabelle bei jedem
 Auftrag (Beginn, Bericht, Schließen).
 
-Zurzeit keiner (#24 am 28.10. geschlossen).
+- #13 Engine meldet sich mit eigenem Namen gegenüber N1MM, dazu Fix
+  „N1MM hängt beim Start, wenn der CW Decoder schon läuft“: umgesetzt,
+  `v0.1.0-beta18`, Bericht im Issue, wartet auf Review.
 
 Offen ohne Label
-`auftrag` (Ideen, Infos): #13 (Engine-Name gegenüber
-N1MM), #16 (mehrere Stationen), #17 (Ideensammlung), #22 (Blockgröße,
-nach #24).
+`auftrag` (Ideen, Infos): #16 (mehrere Stationen), #17 (Ideensammlung),
+#22 (Blockgröße, nach #24).
 
 ## Leitlinie
 

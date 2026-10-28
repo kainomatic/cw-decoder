@@ -600,3 +600,53 @@ def test_rufzeichen_entfernen(app):
     app.btn_calls_clear.invoke()
     assert app.calls == [] and app.call_rows == {}
     assert app.text.tag_ranges(gui.CALL_TAG)            # Text unverändert markiert
+
+
+def _free_port():
+    import socket
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
+
+def _wait(app, cond, timeout=3.0):
+    import time
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        app.update()
+        if cond():
+            return True
+        time.sleep(0.02)
+    return cond()
+
+
+@requires_display
+@pytest.mark.gui
+def test_engine_fenster_schliesst_bei_wm_close(app, monkeypatch):
+    """#13: N1MM schickt beim Start WM_CLOSE an das Engine-Fenster, bis es
+    verschwindet. Es muss wirklich zugehen (sonst hängt N1MM) und danach
+    neu entstehen, damit N1MM die Engine wiederfindet."""
+    from cwdecoder import gui
+    monkeypatch.setattr(gui, "ENGINE_WIN_REOPEN_MS", 300)
+    app.rpc_port = _free_port()
+    app.n1mm_var.set(True)
+    app._n1mm_changed()
+    win = app.engine_win
+    assert win is not None and win.title() == "Fldigi CW Engine 1"
+    if sys.platform == "win32":
+        import ctypes
+        user32 = ctypes.windll.user32
+        hwnd = int(win.wm_frame(), 16)
+        for _ in range(200):                     # wie N1MM: viele WM_CLOSE
+            user32.PostMessageW(hwnd, 0x0010, 0, 0)
+        assert _wait(app, lambda: app.engine_win is None)
+        assert not user32.IsWindow(hwnd)
+    else:
+        app.tk.eval(win.protocol("WM_DELETE_WINDOW"))
+        assert app.engine_win is None
+    assert app.n1mm is not None and app.n1mm.engine is not None   # Engine läuft weiter
+    assert _wait(app, lambda: app.engine_win is not None)
+    assert app.engine_win.title() == "Fldigi CW Engine 1"
+    assert app.engine_win.state() == "withdrawn"

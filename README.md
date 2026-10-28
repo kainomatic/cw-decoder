@@ -193,10 +193,13 @@ Wortgrenzen.
 Schritt-für-Schritt-Anleitung und Fehlersuche: [`docs/N1MM.md`](docs/N1MM.md)
 (ADR-0022).
 
-- **CW Reader von N1MM** (Standard): Der CW Decoder gibt sich als fldigi
-  aus (XML-RPC, Port 7367). In N1MM unter Window → CW Reader → Setup →
+- **CW Reader von N1MM** (Standard): Der CW Decoder bildet die
+  XML-RPC-Schnittstelle von fldigi nach (Port 7367) und meldet sich dort mit
+  eigenem Namen. In N1MM unter Window → CW Reader → Setup →
   Fldigi den Pfad zu `CWDecoder.exe` eintragen. N1MM zeigt unseren Text,
   markiert die Rufzeichen, und ein Klick setzt sie ins Entry Window.
+  Nachgebildet ist nur die Schnittstelle, kein Code: fldigi (GPL)
+  ist ein eigenständiges Projekt und mit dem CW Decoder nicht verbunden.
 - **Skimmer-Spot** (Standard an): Mini-DX-Cluster auf `127.0.0.1:7373`
   (N1MM: Window → Telnet). Ein Klick auf ein Rufzeichen im CW Decoder
   schickt einen Spot auf der aktuellen Frequenz.

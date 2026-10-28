@@ -446,7 +446,8 @@ def main():
             check(shown.get("win_hidden") is True,
                   f"Engine-Fenster bleibt nach dem Einblenden sichtbar: {shown}", problems)
             got = seen.get("engine text", {})
-            check(got.get("version") == "4.2.05" and "CQ DE DJ7PR" in got.get("rx", ""),
+            from cwdecoder.fldigi_rpc import ENGINE_VERSION
+            check(got.get("version") == ENGINE_VERSION and "CQ DE DJ7PR" in got.get("rx", ""),
                   f"Engine liefert den Text nicht: {got}", problems)
             check(seen.get("engine aus", {}).get("win") is None,
                   f"Engine-Fenster bleibt nach Abschalten: {seen.get('engine aus')}", problems)

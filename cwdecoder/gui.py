@@ -201,6 +201,7 @@ _TT_UPDATE_OK = "Dialog schließen."
 
 NO_DEVICE = _LBL_NO_DEVICE
 UPDATE_CHECK_DELAY_MS = 1500
+ENGINE_WIN_REOPEN_MS = 1500        # Engine-Fenster nach WM_CLOSE neu anlegen (#13)
 MIN_WIDTH, MIN_HEIGHT = 760, 480   # Rufzeichen-Spalte bleibt sichtbar
 TEXT_FONT = ("Consolas", 16)
 CALL_TAG = "call"                  # Markierung erkannter Rufzeichen im Text
@@ -1107,10 +1108,9 @@ class App(tk.Tk):
             win = tk.Toplevel(self)
             win.title(self.engine_title)
             # Kein transient(): ein Fenster mit Besitzer findet N1MM nicht
-            # (getestet). Schließen versteckt es nur; _poll versteckt es
-            # wieder, wenn N1MM es einblendet, sonst hielte Windows es für
-            # das Hauptfenster (taskkill, Taskleiste).
-            win.protocol("WM_DELETE_WINDOW", win.withdraw)
+            # (getestet). _poll versteckt es wieder, wenn N1MM es einblendet,
+            # sonst hielte Windows es für das Hauptfenster (taskkill, Taskleiste).
+            win.protocol("WM_DELETE_WINDOW", self._engine_window_closed)
             win.withdraw()
             self.engine_win = win
             log.info("Engine-Fenster %r angelegt", self.engine_title)
@@ -1120,6 +1120,26 @@ class App(tk.Tk):
             except tk.TclError:
                 pass
             self.engine_win = None
+
+    def _engine_window_closed(self):
+        """WM_CLOSE am Engine-Fenster: wirklich schließen, gleich neu anlegen.
+
+        N1MM schließt beim Start mit offenem CW Reader eine vermeintlich
+        übrige fldigi-Engine: Es schickt WM_CLOSE an das Fenster mit dem
+        Engine-Titel, bis es verschwindet (gemessen über 3000-mal pro
+        Sekunde, Issue #13). Bliebe es nur versteckt, hinge N1MM beim
+        Startbild. Danach sucht N1MM das Fenster wieder; deshalb kommt es
+        nach ENGINE_WIN_REOPEN_MS neu."""
+        if self.engine_win is None:
+            return
+        log.info("Engine-Fenster von außen geschlossen (N1MM-Start?), "
+                 "neu in %d ms", ENGINE_WIN_REOPEN_MS)
+        try:
+            self.engine_win.destroy()
+        except tk.TclError:
+            pass
+        self.engine_win = None
+        self.after(ENGINE_WIN_REOPEN_MS, self._sync_engine_window)
 
     # ------------------------------------------------------------------
     def _poll(self):

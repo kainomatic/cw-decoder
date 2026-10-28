@@ -9,6 +9,14 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 ## [Unreleased]
 
 ### Changed
+- **Engine für N1MMs CW Reader meldet sich mit eigenem Namen** (#13): Auf
+  `fldigi.name` antwortet sie „CW Decoder“, auf `fldigi.version` mit der
+  eigenen Version (X.Y.Z), auf `fldigi.name_version` mit „CW Decoder X.Y.Z
+  (fldigi-kompatibel)“; bisher gab sie sich als fldigi 4.2.05 aus. N1MM
+  1.0.7711 akzeptiert das (Mitschnitt a/b/c in ADR-0022). Nachgebildet ist
+  nur die Schnittstelle; fldigi ist ein eigenständiges Projekt und mit dem
+  CW Decoder nicht verbunden (`THIRD_PARTY.md`). Log-Zeilen heißen
+  `CW-Reader-Engine: …`.
 - **Skimmer-Spot** unter „Übergabe…“ ist jetzt standardmäßig **aus**
   (N1MM hält nur eine Telnet-Verbindung, meist zum DX-Cluster). Wer ihn
   eingeschaltet hatte, behält die Einstellung (#24).
@@ -294,6 +302,11 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   der offenen Issues.
 
 ### Fixed
+- **N1MM hing beim Start**, wenn der CW Decoder schon mit Engine lief
+  (#13): N1MM schließt beim Start das Fenster „Fldigi CW Engine 1“ per
+  WM_CLOSE und wartet, bis es verschwindet; der CW Decoder versteckte es
+  nur. Jetzt schließt er es und legt es nach 1,5 s neu an, die Engine läuft
+  weiter.
 - Skimmer-Spots kamen in N1MM nicht an, wenn dort „Automatically Logon" aus
   ist: Der Telnet-Cluster wartete auf ein Rufzeichen, das N1MM nie schickt.
   Spots gehen jetzt ab dem Verbindungsaufbau raus (#3).

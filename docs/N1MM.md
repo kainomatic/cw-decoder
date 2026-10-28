@@ -6,6 +6,12 @@ ein Klick setzt das Rufzeichen ins Entry Window, ohne Tippen und ohne
 Fensterwechsel. Daneben gibt es Skimmer-Spots, Tippen ins Entry Window und
 die Zwischenablage als wählbare Wege. Hintergrund: ADR-0022.
 
+N1MM erwartet als Engine fldigi. Der CW Decoder bildet dessen
+XML-RPC-Schnittstelle nach, ohne Code zu übernehmen, und meldet sich dort
+mit eigenem Namen und eigener Version („CW Decoder 0.1.0
+(fldigi-kompatibel)“). fldigi (GPL) ist ein eigenständiges Projekt
+und mit dem CW Decoder nicht verbunden.
+
 Getestet mit N1MM Logger+ 1.0.7711 auf dem Entwicklungsrechner (Issue #3).
 Das Grundsätzliche mit Bildern steht im **Handbuch** (Kapitel 7, Hilfe →
 Handbuch); hier stehen die Einrichtung im Detail und die Fehlersuche.
@@ -52,7 +58,11 @@ Zum Ablauf:
 - Schließt man den CW Reader in N1MM, läuft der CW Decoder weiter.
 - **Clear RX** im CW Reader leert nur die Anzeige in N1MM.
 - N1MM blendet das (leere) Fenster „Fldigi CW Engine 1" kurz ein; der CW
-  Decoder versteckt es sofort wieder.
+  Decoder versteckt es sofort wieder. Den Titel schreibt N1MM vor.
+- Die Reihenfolge beim Start ist egal. Startet N1MM, während der CW Decoder
+  schon läuft, schließt N1MM zuerst das Fenster „Fldigi CW Engine 1“ (es
+  hält es für ein übrig gebliebenes fldigi). Der CW Decoder lässt es zu und
+  legt es nach 1,5 s neu an; die Engine läuft dabei weiter (Issue #13).
 - Die Knöpfe **AFC** und **Align** im CW Reader haben keine Wirkung; der
   Decoder folgt dem Ton selbst (Klick ins Spektrum setzt eine feste
   Tonfrequenz).
@@ -103,6 +113,7 @@ Unter **Übergabe…** im CW Decoder:
 |---|---|
 | N1MM: „The window 'Fldigi CW Engine 1' could not be found after multiple tries" | Der CW Decoder bietet die Engine nicht an. Im CW Decoder Haken **N1MM-Anbindung** setzen, unter **Übergabe…** „CW Reader von N1MM (Engine)" anhaken, CW Reader in N1MM schließen und neu öffnen. Startet N1MM den Decoder bei laufender Instanz, erklärt ein Hinweisfenster dasselbe. |
 | CW Decoder: „Port für den N1MM CW Reader belegt" / „Port 7367 belegt – läuft fldigi …" | Ein anderes Programm hat Port 7367, meist fldigi als CW-Reader-Engine. fldigi beenden (bzw. in N1MM als Engine abwählen) und im CW Decoder die N1MM-Anbindung aus- und einschalten. |
+| N1MM bleibt beim Start im Fenster „About N1MM Logger+" stehen, Windows meldet „reagiert nicht" | Betrifft CW Decoder bis `v0.1.0-beta17`, wenn er beim Start von N1MM schon mit Engine lief (Issue #13). Auf eine neuere Version aktualisieren; bis dahin N1MM vor dem CW Decoder starten. |
 | N1MM: „CW Readers can only be loaded when in CW mode" | Log bzw. Contest auf Mode CW stellen (Abschnitt 2). |
 | CW Reader bleibt leer, Statuszeile „CW Reader: N1MM verbunden" | Der Decoder hört nichts: Start gedrückt? Richtiger Audio-Eingang? Erscheint Text im CW Decoder selbst? |
 | CW Reader bleibt leer, Statuszeile „wartet auf N1MM" | N1MM fragt nicht ab: Pfad im CW-Reader-Setup prüfen (Fldigi, Enable), CW Reader schließen und neu öffnen. |
@@ -112,4 +123,4 @@ Unter **Übergabe…** im CW Decoder:
 
 Diagnose: *Hilfe → Log-Ordner öffnen*, Datei `cwdecoder.log`. Jeder Aufruf
 von N1MM an die Engine außer dem Dauerabruf steht dort
-(`fldigi-Engine: …`), unbekannte Methoden einmal je Name.
+(`CW-Reader-Engine: …`), unbekannte Methoden einmal je Name.

@@ -130,3 +130,47 @@ Logger+ 1.0.7711 gemessen:
   Typen), kein fldigi-Code.
 - Bisherige Nutzer, die das Tippen gewohnt waren, finden es jetzt unter
   „Übergabe…" (Standard aus).
+
+## Nachtrag #13 (28.10.2026): Eigener Name statt „fldigi“, Engine-Fenster bei WM_CLOSE
+
+**Lizenz und Namen.** Nachgebildet ist die XML-RPC-Schnittstelle von fldigi
+(W1HKJ, GPL), ohne Übernahme von Code; fldigi ist ein eigenständiges
+Projekt und mit dem CW Decoder nicht verbunden. Bisher meldete sich die
+Engine als fldigi (`fldigi.name` → „fldigi“, `fldigi.version` → „4.2.05“).
+Das Nachbilden einer Schnittstelle ist unproblematisch, sich als fremdes
+Programm auszugeben nicht (Namensrecht; im Fehlerfall fiele der Verdacht
+auf fldigi). Beschluss: eigener Name, sofern N1MM ihn akzeptiert.
+
+**Mitschnitt** auf dem Entwicklungsrechner, N1MM 1.0.7711, Demo-Engine
+mit `CQ TEST DE DL1ABC …`, nur Fensternachrichten (CW Reader per Menü
+öffnen, Klick auf DL1ABC, Rufzeichenfeld per `WM_GETTEXT`):
+
+| Variante | `fldigi.name` / `fldigi.version` | Text im CW Reader | Klick → Rufzeichenfeld | Meldung von N1MM |
+|---|---|---|---|---|
+| a | „CW Decoder“ / „0.1.0“ | ja | DL1ABC | keine |
+| b | „CW Decoder“ / „4.2.05“ | ja | DL1ABC | keine |
+| c | „fldigi“ / „4.2.05“ (bisher) | ja | DL1ABC | keine |
+
+N1MM ruft nur `fldigi.version` auf und prüft keine Mindestversion;
+`fldigi.name` und `fldigi.name_version` fragt es nicht ab.
+
+**Entscheidung: Variante a.** `fldigi.name` → `APP_NAME` („CW Decoder“),
+`fldigi.version` → `__version__` ohne Beta-Anhang (rein numerisch X.Y.Z wie
+bei fldigi; nachgewiesen ist nur diese Form, ein Anhang „-beta18“ wäre
+ungeprüft), `fldigi.name_version` → „CW Decoder 0.1.0-beta18
+(fldigi-kompatibel)“ mit voller Version, `fldigi.version_struct` passend.
+Der Fenstertitel „Fldigi CW Engine 1“ bleibt, N1MM schreibt ihn vor
+(`-ti`). Log-Zeilen heißen jetzt `CW-Reader-Engine: …`.
+
+**Engine-Fenster bei WM_CLOSE (beim Mitschnitt gefunden).** N1MM blieb beim
+Start im Startbild hängen, wenn der CW Decoder schon mit Engine lief (auch
+die Hänger in #24). Ursache: Beim Start schickt N1MM WM_CLOSE an jedes
+Fenster „Fldigi CW Engine 1“, bis es verschwindet (gemessen gut 3600-mal
+pro Sekunde), vermutlich um ein übrig gebliebenes fldigi zu beenden. Unser
+Fenster versteckte sich bei WM_CLOSE nur. Jetzt zerstört der CW Decoder
+das Fenster bei WM_CLOSE und legt es nach `ENGINE_WIN_REOPEN_MS` (1,5 s)
+neu an; der XML-RPC-Server läuft weiter. Nachgewiesen: N1MM startet bei
+laufender Engine normal, der CW Reader zeigt danach Text, Klick setzt
+DL1ABC. Test: `tests/test_gui_app.py::test_engine_fenster_schliesst_bei_wm_close`.
+Nebenbefund: `CWReader1` in der N1MM-INI steht unter
+`[FontSizeAdjustments]` und hat mit dem Öffnen des CW Readers nichts zu tun.

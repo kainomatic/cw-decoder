@@ -64,7 +64,7 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 - Laufender Auftrag: siehe „Offene Aufträge" unten bzw. Issues mit Label
   `auftrag` (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** Review #13, dann Shack-Test mit `v0.1.0-beta18` (Handbuch: Hilfe → Handbuch).
+**Nächster Schritt:** Shack-Test mit `v0.1.0-beta18` (Handbuch: Hilfe → Handbuch).
 DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta18` (Self-Update), richtet
 N1MM nach `docs/N1MM.md` ein und testet mit Funkgerät und N1MM (siehe
 „Testablauf Installer/Beta"). Danach
@@ -78,9 +78,7 @@ Stable `v0.1.0`.
 Stand des Repos ohne GitHub-API; Claude Code pflegt die Tabelle bei jedem
 Auftrag (Beginn, Bericht, Schließen).
 
-- #13 Engine meldet sich mit eigenem Namen gegenüber N1MM, dazu Fix
-  „N1MM hängt beim Start, wenn der CW Decoder schon läuft“: umgesetzt,
-  `v0.1.0-beta18`, Bericht im Issue, wartet auf Review.
+Zurzeit keiner (#13 am 28.10. geschlossen, `v0.1.0-beta18`).
 
 Offen ohne Label
 `auftrag` (Ideen, Infos): #16 (mehrere Stationen), #17 (Ideensammlung),

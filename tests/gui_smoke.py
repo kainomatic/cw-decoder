@@ -37,7 +37,8 @@ def make_fake_sounddevice(ok_rate, with_input=True):
     fake.default = types.SimpleNamespace(device=[1 if with_input else -1, 0])
 
     def query_devices():
-        devs = [{"name": "Fake Out", "max_input_channels": 0}]
+        devs = [{"name": "Fake Out", "max_input_channels": 0, "max_output_channels": 2},
+                {"name": "Fake Kopfhörer", "max_input_channels": 0, "max_output_channels": 2}]
         if with_input:
             devs.append({"name": "Fake USB Audio", "max_input_channels": 1})
         return devs
@@ -79,8 +80,9 @@ def make_fake_sounddevice(ok_rate, with_input=True):
 
     class OutputStream:
         """Wiedergabe „Nochmal hören“ (ADR-0024): sammelt die Daten."""
-        def __init__(self, samplerate, channels, dtype):
+        def __init__(self, samplerate, channels, dtype, device=None):
             self.samplerate = samplerate
+            self.device = device
             fake.played.append(self)
             self.n = 0
             self.events = []
@@ -139,6 +141,7 @@ def run_scenario(ok_rate=48000, with_input=True, slow_recorder=False, n1mm=True)
     rec_dir = tempfile.mkdtemp(prefix="cw_smoke_")
 
     app = App()
+    app.set_ring_settings(replay_hold_s=1)      # Verfall im Rauchtest schneller (#25)
     app.rec_dir = rec_dir
     app.report_callback_exception = lambda *e: errors.append(
         "Tk: " + "".join(traceback.format_exception(*e)))
@@ -186,6 +189,19 @@ def run_scenario(ok_rate=48000, with_input=True, slow_recorder=False, n1mm=True)
             "sep": [app.text.get(rng[i], rng[i + 1]) for i in range(0, len(rng), 2)],
             "text": app.text.get("1.0", "end")}
 
+    def snap_replay(key):
+        import sounddevice
+        out = sounddevice.played[-1] if sounddevice.played else None
+        seen[key] = {"clip": id(app.hold.clip), "btn": str(app.btn_replay["text"]),
+                     "rate": app.replay_rate_now, "status": app.status.get(),
+                     "device": getattr(out, "device", None), "n": len(sounddevice.played)}
+
+    def open_dialog_and_pick(name):
+        dlg = app.open_ring_settings()
+        seen["geräteliste"] = list(dlg.device_values)
+        dlg.select_device(name)
+        dlg.close()
+
     steps = [
         (300, app._toggle),                                   # Start
         # Rufzeichen ohne SCP-Treffer kommt erst mit dem Folgewort (ADR-0026)
@@ -197,9 +213,33 @@ def run_scenario(ok_rate=48000, with_input=True, slow_recorder=False, n1mm=True)
         (150, lambda: snap("wiedergabe")),
         (10, app.toggle_replay),
         (300, lambda: snap("wiedergabe gestoppt")),
+        # Festhalten/Verfall, Regler, Ausgabegerät (#25)
+        (10, lambda: seen.__setitem__("clip1", id(app.hold.clip))),
+        (10, app.toggle_replay),                              # innerhalb der Frist
+        (50, lambda: app.set_replay_rate(0.6)),               # mitten im Durchgang
+        (50, lambda: snap_replay("erneut")),
+        (10, app.toggle_replay),
+        (1800, lambda: snap_replay("verfallen")),
+        (10, lambda: open_dialog_and_pick("Fake Kopfhörer")),
+        (10, app.toggle_replay),
+        (100, app.toggle_replay),
+        (300, lambda: snap_replay("gerät")),
+        (10, lambda: (app.hold.release(),
+                      app.set_ring_settings(output_device="Abgezogen"))),
+        (10, app.toggle_replay),
+        (100, app.toggle_replay),
+        (300, lambda: snap_replay("gerät fehlt")),
+        (10, lambda: (app.hold.release(), app.set_ring_settings(output_device=None))),
         # Knöpfe mit Flagge (DL1ABC), ohne Flagge (Antarktis), ohne Land (#11)
         (10, lambda: (app._add_call("DP0GVN"), app._add_call("QQ1A"))),
         (50, lambda: snap("knöpfe")),
+        # Rufzeichen entfernen (#25): „×“, Kontextmenü, wieder hinzufügen, alle
+        (10, lambda: app.call_rows["QQ1A"]["remove"].event_generate("<ButtonRelease-1>")),
+        (10, lambda: (lambda m: m.invoke(m.index("end")))(app.call_menu_for("DP0GVN"))),
+        (50, lambda: snap("entfernt")),
+        (10, app.btn_calls_clear.invoke),
+        (50, lambda: snap("alle gelöscht")),
+        (10, lambda: (app._add_call("DP0GVN"), app._add_call("QQ1A"))),
         (10, lambda: app.canvas.event_generate("<Button-1>", x=100, y=50)),
         (300, lambda: snap("fest")),
         (10, lambda: (app.auto_var.set(True), app._auto_changed())),
@@ -364,7 +404,29 @@ def main():
             check(seen["wiedergabe"]["replay_btn"] == "Stopp"
                   and "Wiedergabe" in seen["wiedergabe"]["status"],
                   f"Wiedergabe läuft nicht: {seen['wiedergabe']}", problems)
-            check(seen["wiedergabe gestoppt"]["replay_btn"] == "Nochmal hören",
+            # Festhalten/Verfall, Regler, Ausgabegerät (#25)
+            er, vf = seen.get("erneut", {}), seen.get("verfallen", {})
+            check(er.get("clip") == seen.get("clip1") and er.get("btn") == "Stopp"
+                  and er.get("rate") == 0.6 and "0.60×" in er.get("status", ""),
+                  f"festgehaltener Ausschnitt/Regler falsch: {er}", problems)
+            check(vf.get("btn") == "Nochmal hören" and vf.get("rate") == 1.0
+                  and vf.get("clip") == id(None),
+                  f"Ausschnitt nicht verfallen: {vf}", problems)
+            check(seen.get("geräteliste") == ["Standard", "Fake Out", "Fake Kopfhörer"],
+                  f"Geräteliste falsch: {seen.get('geräteliste')}", problems)
+            check(seen.get("gerät", {}).get("device") == 1,
+                  f"Ausgabegerät nicht benutzt: {seen.get('gerät')}", problems)
+            gf = seen.get("gerät fehlt", {})
+            check(gf.get("device") is None and "Ausgabegerät" in gf.get("status", ""),
+                  f"Rückfall auf Standard ohne Hinweis: {gf}", problems)
+            # Rufzeichen entfernen (#25)
+            check("QQ1A" not in seen.get("entfernt", {}).get("calls", ["QQ1A"])
+                  and "DP0GVN" not in seen.get("entfernt", {}).get("calls", ["DP0GVN"])
+                  and "DL1ABC" in seen.get("entfernt", {}).get("calls", []),
+                  f"Entfernen falsch: {seen.get('entfernt', {}).get('calls')}", problems)
+            check(seen.get("alle gelöscht", {}).get("calls") == [],
+                  f"Alle löschen falsch: {seen.get('alle gelöscht', {}).get('calls')}", problems)
+            check(seen["wiedergabe gestoppt"]["replay_btn"] == "Nochmal (festgehalten)",
                   f"Wiedergabe nicht gestoppt: {seen['wiedergabe gestoppt']}", problems)
             recs = [r for r in recs if "_letzte" not in r]
             # Starts mit Aufnahme: 1x normal, 1x sofort, 3x schnell, 1x vor Beenden

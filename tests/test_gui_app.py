@@ -3,6 +3,7 @@
 import gc
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -368,12 +369,17 @@ def test_ringpuffer_speichern_und_nochmal_hoeren(app):
     assert app.btn_replay["text"] == "Stopp"
     assert _pump(app, 1, lambda: "Wiedergabe" in app.status.get())
     app.text.event_generate("<Control-r>")
-    assert _pump(app, 5, lambda: app.btn_replay["text"] == "Nochmal hören")
+    # nach dem Abbruch bleibt der Ausschnitt festgehalten (#25)
+    assert _pump(app, 5, lambda: app.btn_replay["text"] == gui._LBL_REPLAY_HELD)
     out = sounddevice.played[-1]
     assert out.samplerate == 48000 and 0 < out.n < 10 * 48000
     assert "abort" in out.events
     assert "Wiedergabe abgebrochen" in app.status.get()
+    assert re.search(r"festgehalten \d+ s – noch \d+ s", app.status.get())
     app._toggle()                                   # Stop
+    app.hold.release()
+    app._tick_hold()
+    app._update_ring_buttons()
     assert str(app.btn_save["state"]) == "disabled"
     assert str(app.btn_replay["state"]) == "disabled"
 
@@ -388,19 +394,22 @@ def test_ringpuffer_einstellungen(app):
     dlg = app.open_ring_settings()
     app.update()
     assert all(e._cw_tooltip.text for e in dlg.entries.values())
-    assert dlg.check_slow._cw_tooltip.text
+    assert dlg.entry_rate._cw_tooltip.text and dlg.device_box._cw_tooltip.text
     dlg.set_text("save_last_s", "20")
     dlg.set_text("replay_s", "99")                  # ungültig: springt zurück
     assert dlg.apply() is False
     assert "ungültig" in dlg.note.cget("text")
     assert dlg.entries["replay_s"].get() == "10"
     assert app.btn_save["text"] == "Letzte 20 s speichern"
-    dlg.check_slow.invoke()
+    dlg.set_text("replay_rate", "0,7")
+    dlg.set_text("replay_hold_s", "8")
     dlg.set_text("ring_seconds", "15")              # kleiner als Speichern: kürzt mit
     dlg.close()
     saved = json.loads(config.get_config_path().read_text(encoding="utf-8"))
     assert saved["ring_seconds"] == 15 and saved["save_last_s"] == 15
-    assert saved["replay_slow"] is True and saved["replay_s"] == 10
+    assert saved["replay_rate"] == 0.7 and saved["replay_s"] == 10
+    assert saved["replay_hold_s"] == 8 and app.hold.hold_s == 8
+    assert app.replay_rate_now == 0.7               # Regler springt auf das neue Starttempo
     assert app.ring_dialog is None
 
 
@@ -509,3 +518,83 @@ def test_kurzer_knopf_wird_ersetzt(app):
     # ohne kurzen Knopf: neues Rufzeichen kommt wie gewohnt nach oben
     app.replace_call("XX1XX", "DL1ABC")
     assert app.calls[0] == "DL1ABC"
+
+
+@requires_display
+@pytest.mark.gui
+def test_festhalten_regler_und_geraet(app, monkeypatch):
+    """#25: Strg+R hält fest, innerhalb der Frist dasselbe Material, danach
+    neu; Strg+S speichert das festgehaltene; Regler wirkt sofort; Gerät."""
+    import sounddevice
+    from cwdecoder import gui
+    app.set_ring_settings(replay_hold_s=1)
+    app.rec_var.set(False)
+    app.auto_var.set(True)
+    app._toggle()
+    assert _pump(app, 5, lambda: "CQ" in app.text.get("1.0", "end"))
+    app.toggle_replay()
+    first = app.hold.clip
+    assert first is not None and app.btn_replay["text"] == "Stopp"
+    app.set_replay_rate(0.5)                        # mitten im Durchgang
+    assert app.replay_rate_now == 0.5 and "0.50×" in app.status.get()
+    assert app.rate_label["text"] == "0.50×"
+    app.toggle_replay()                             # Stopp
+    assert _pump(app, 5, lambda: app.replay_secs is None)
+    assert app.btn_replay["text"] == gui._LBL_REPLAY_HELD
+    # Strg+S speichert genau den festgehaltenen Ausschnitt
+    app.save_last()
+    assert _pump(app, 5, lambda: app.saved_paths)
+    assert app.saved_paths[-1].endswith("_festgehalten.wav")
+    assert os.path.exists(app.saved_paths[-1][:-4] + ".txt")
+    # innerhalb der Frist: dasselbe Material, Regler bleibt
+    app.toggle_replay()
+    assert app.hold.clip is first and app.replay_rate_now == 0.5
+    app.toggle_replay()
+    assert _pump(app, 5, lambda: app.replay_secs is None)
+    # nach der Frist verfällt er: Knopf wieder normal, Regler zurück, neues Material
+    assert _pump(app, 3, lambda: app.btn_replay["text"] == gui._LBL_REPLAY)
+    assert app.replay_rate_now == 1.0
+    app.toggle_replay()
+    assert app.hold.clip is not first
+    app.toggle_replay()
+    assert _pump(app, 5, lambda: app.replay_secs is None)
+    # Ausgabegerät: fehlt es, spielt die Standard-Ausgabe und die Statuszeile sagt es
+    app.hold.release()
+    app.set_ring_settings(output_device="Gibt es nicht")
+    app.toggle_replay()
+    assert _pump(app, 5, lambda: app.replay_secs is None)
+    assert "Standard" in app.status.get() or "Ausgabegerät" in app.status.get()
+    assert sounddevice.played[-1].device is None
+    app._toggle()
+
+
+@requires_display
+@pytest.mark.gui
+def test_rufzeichen_entfernen(app):
+    """#25: „×“, Rechtsklick „Entfernen“, „Alle löschen“; Markierung bleibt,
+    wieder gehört -> wieder da."""
+    from cwdecoder import gui
+    g = app.gen
+    _feed_word(app, g, "DL1ABC", spans=[("DL1ABC", 0, 6)])
+    _feed_word(app, g, "OY1CT", spans=[("OY1CT", 6, 11)], start=6)
+    for c in ("DL1ABC", "OY1CT", "IK2ULV"):
+        app.msgs.put(("call", g, c))
+    app._poll()
+    app.update()
+    rm = app.call_rows["DL1ABC"]["remove"]
+    assert rm["text"] == "×" and rm._cw_tooltip.text == gui._TT_CALL_REMOVE
+    rm.event_generate("<ButtonRelease-1>")
+    assert "DL1ABC" not in app.calls and app.text.tag_ranges(gui.CALL_TAG_PREFIX + "DL1ABC")
+    menu = app.call_menu_for("OY1CT")
+    labels = [menu.entrycget(i, "label") for i in range(menu.index("end") + 1)]
+    assert labels[-1] == gui._LBL_CALL_REMOVE
+    menu.invoke(menu.index("end"))
+    assert app.calls == ["IK2ULV"]
+    # wieder gehört (Spotter meldet nur die Spanne, kein on_call) -> wieder da
+    _feed_word(app, g, "DL1ABC", spans=[("DL1ABC", 11, 17)], start=11)
+    app._poll()
+    assert app.calls[0] == "DL1ABC"
+    assert app.btn_calls_clear._cw_tooltip.text == gui._TT_CALLS_CLEAR
+    app.btn_calls_clear.invoke()
+    assert app.calls == [] and app.call_rows == {}
+    assert app.text.tag_ranges(gui.CALL_TAG)            # Text unverändert markiert

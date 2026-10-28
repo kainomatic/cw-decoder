@@ -85,6 +85,14 @@ _MSG_REPLAY = ("„Nochmal hören“ konnte nichts abspielen: Das Standard-Ausga
                "prüfen, ob ein anderes Programm es exklusiv nutzt. Der Decoder "
                "läuft weiter.")
 _STATUS_REPLAY = "Wiedergabe nicht möglich – Ausgabegerät prüfen"
+_TITLE_OUTPUT_MISSING = "Ausgabegerät nicht gefunden"
+_MSG_OUTPUT_MISSING = ("Das unter Einstellungen → „Puffer und Nochmal hören…“ gewählte "
+                       "Ausgabegerät fehlt (abgezogen oder umbenannt) oder lässt sich "
+                       "nicht öffnen. „Nochmal hören“ spielt deshalb über die "
+                       "Standard-Ausgabe.\n\n"
+                       "Gerät wieder anschließen oder dort ein anderes wählen. Der "
+                       "Decoder läuft weiter.")
+_STATUS_OUTPUT_MISSING = "Ausgabegerät fehlt – Standard-Ausgabe benutzt"
 
 _TITLE_UNEXPECTED = "Unerwarteter Fehler"
 _MSG_UNEXPECTED = ("Es ist ein unerwarteter Fehler aufgetreten:\n{err}\n\n"
@@ -134,11 +142,14 @@ def classify_error(exc: BaseException) -> ErrorInfo:
     from .config import ConfigError
     from .n1mm import EnginePortInUseError, EntryWindowNotFoundError, SpotNotSentError
     from .updater import UpdateError
-    from .replay import ReplayError
+    from .replay import OutputDeviceMissingError, ReplayError
     from .ringbuffer import SaveLastError
 
     detail = str(exc) or None
     # vor Soundkarte und Port: beides sind eigene Fälle (ADR-0024)
+    if isinstance(exc, OutputDeviceMissingError):
+        return ErrorInfo(_TITLE_OUTPUT_MISSING, _MSG_OUTPUT_MISSING, _STATUS_OUTPUT_MISSING,
+                         True, detail)
     if isinstance(exc, ReplayError):
         return ErrorInfo(_TITLE_REPLAY, _MSG_REPLAY, _STATUS_REPLAY, True, detail)
     if isinstance(exc, SaveLastError):

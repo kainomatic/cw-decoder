@@ -42,7 +42,12 @@ DEFAULTS = {
     "ring_seconds": 60,
     "save_last_s": 30,
     "replay_s": 10,
-    "replay_slow": False,
+    # Nochmal hören (#25): Frist des Festhaltens nach dem Ende der
+    # Wiedergabe, Starttempo des Reglers (0,5–1,0), Ausgabegerät als
+    # Namensteil (None = Standard). Ersetzt replay_slow (True -> 0,7)
+    "replay_hold_s": 5,
+    "replay_rate": 1.0,
+    "output_device": None,
     # Wörterbuch-Zerlegung (ADR-0026): Trenner · im Text; N1MMs CW Reader
     # bekommt die getrennten Wörter mit echten Leerzeichen
     "segment_words": True,
@@ -53,6 +58,9 @@ DEFAULTS = {
 RING_SECONDS_RANGE = (10, 300)
 SAVE_LAST_RANGE = (5, 300)
 REPLAY_RANGE = (3, 30)
+REPLAY_HOLD_RANGE = (1, 60)
+REPLAY_RATE_RANGE = (0.5, 1.0)
+LEGACY_SLOW_RATE = 0.7      # replay_slow=True aus Versionen bis beta15
 
 
 class ConfigError(ValueError):
@@ -78,6 +86,13 @@ def _int_in(lo, hi):
     return check
 
 
+def _float_in(lo, hi):
+    def check(v):
+        return (isinstance(v, (int, float)) and not isinstance(v, bool)
+                and lo <= float(v) <= hi)
+    return check
+
+
 def _is_port(v):
     return isinstance(v, int) and not isinstance(v, bool) and 1024 <= v <= 65535
 
@@ -97,7 +112,9 @@ _VALIDATORS = {
     "ring_seconds": _int_in(*RING_SECONDS_RANGE),
     "save_last_s": _int_in(*SAVE_LAST_RANGE),
     "replay_s": _int_in(*REPLAY_RANGE),
-    "replay_slow": _is_bool,
+    "replay_hold_s": _int_in(*REPLAY_HOLD_RANGE),
+    "replay_rate": _float_in(*REPLAY_RATE_RANGE),
+    "output_device": _is_opt_str,
     "segment_words": _is_bool,
     "n1mm_engine_segmented": _is_bool,
 }
@@ -121,13 +138,17 @@ def parse(text: str) -> dict:
     if not isinstance(data, dict):
         raise ConfigError("JSON enthält kein Objekt")
     cfg = defaults()
+    if "replay_rate" not in data and data.get("replay_slow") is True:
+        # bis beta15: Haken „langsamer (0,7×)“ (#25)
+        log.info("Config: replay_slow -> replay_rate %.1f", LEGACY_SLOW_RATE)
+        data = dict(data, replay_rate=LEGACY_SLOW_RATE)
     for key, value in data.items():
         check = _VALIDATORS.get(key)
         if check is not None and not check(value):
             log.warning("Config: ungültiger Wert für %s (%r), Standard %r wird benutzt",
                         key, value, DEFAULTS[key])
             continue
-        cfg[key] = value
+        cfg[key] = float(value) if key == "replay_rate" else value
     if cfg["save_last_s"] > cfg["ring_seconds"]:
         log.warning("Config: save_last_s %r größer als ring_seconds %r, gekürzt",
                     cfg["save_last_s"], cfg["ring_seconds"])

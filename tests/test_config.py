@@ -20,7 +20,8 @@ def test_defaults_match_spec():
         "n1mm_enabled": False, "n1mm_wipe": True, "record_default": False,
         "n1mm_engine": True, "n1mm_spot": True, "n1mm_type": False,
         "n1mm_clipboard": False, "n1mm_rpc_port": 7367,
-        "ring_seconds": 60, "save_last_s": 30, "replay_s": 10, "replay_slow": False,
+        "ring_seconds": 60, "save_last_s": 30, "replay_s": 10,
+        "replay_hold_s": 5, "replay_rate": 1.0, "output_device": None,
         "segment_words": True, "n1mm_engine_segmented": True,
     }
 
@@ -112,13 +113,17 @@ def test_n1mm_wege_und_port(cfg_path):
 def test_ringpuffer_werte(cfg_path):
     """Puffergröße 10–300, Speichern 5…Puffergröße, Wiedergabe 3–30 (ADR-0024)."""
     cfg_path.write_text(json.dumps({"ring_seconds": 120, "save_last_s": 90,
-                                    "replay_s": 5, "replay_slow": True}), encoding="utf-8")
+                                    "replay_s": 5, "replay_hold_s": 12,
+                                    "replay_rate": 0.65, "output_device": "Lautsprecher"}),
+                        encoding="utf-8")
     cfg = config.load(cfg_path)
     assert (cfg["ring_seconds"], cfg["save_last_s"], cfg["replay_s"]) == (120, 90, 5)
-    assert cfg["replay_slow"] is True
+    assert (cfg["replay_hold_s"], cfg["replay_rate"], cfg["output_device"]) ==         (12, 0.65, "Lautsprecher")
     for key, bad in (("ring_seconds", 9), ("ring_seconds", 301), ("ring_seconds", 60.0),
                      ("save_last_s", 4), ("save_last_s", True), ("replay_s", 2),
-                     ("replay_s", 31), ("replay_s", "10"), ("replay_slow", 1)):
+                     ("replay_s", 31), ("replay_s", "10"), ("replay_hold_s", 0),
+                     ("replay_hold_s", 61), ("replay_rate", 0.4), ("replay_rate", 1.1),
+                     ("replay_rate", True), ("output_device", 3)):
         cfg_path.write_text(json.dumps({key: bad}), encoding="utf-8")
         assert config.load(cfg_path)[key] == config.DEFAULTS[key], (key, bad)
     # Speichern länger als der Puffer: auf die Puffergröße gekürzt
@@ -178,3 +183,17 @@ def test_default_path_in_app_dir(app_env):
     assert p.name == "config.json"
     assert p.parent.is_dir()
     assert str(app_env) in str(p)
+
+
+def test_migration_replay_slow(cfg_path):
+    """Bis beta15 gab es nur den Haken „langsamer (0,7×)“ (#25)."""
+    cfg_path.write_text(json.dumps({"replay_slow": True}), encoding="utf-8")
+    assert config.load(cfg_path)["replay_rate"] == 0.7
+    cfg_path.write_text(json.dumps({"replay_slow": False}), encoding="utf-8")
+    assert config.load(cfg_path)["replay_rate"] == 1.0
+    # ein schon gesetztes Tempo gewinnt
+    cfg_path.write_text(json.dumps({"replay_slow": True, "replay_rate": 0.9}), encoding="utf-8")
+    assert config.load(cfg_path)["replay_rate"] == 0.9
+    # replay_rate als ganze Zahl wird Gleitkommazahl
+    cfg_path.write_text(json.dumps({"replay_rate": 1}), encoding="utf-8")
+    assert isinstance(config.load(cfg_path)["replay_rate"], float)

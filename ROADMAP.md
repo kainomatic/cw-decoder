@@ -61,7 +61,7 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 - Laufender Auftrag: siehe „Offene Aufträge" unten bzw. Issues mit Label
   `auftrag` (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** Review #24, dann Shack-Test mit `v0.1.0-beta17` (Handbuch: Hilfe → Handbuch).
+**Nächster Schritt:** Shack-Test mit `v0.1.0-beta17` (Handbuch: Hilfe → Handbuch; das PDF mit den nachgebesserten Bildern kommt mit der nächsten Beta).
 DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta17` (Self-Update), richtet
 N1MM nach `docs/N1MM.md` ein und testet mit Funkgerät und N1MM (siehe
 „Testablauf Installer/Beta"). Danach
@@ -75,9 +75,7 @@ Stable `v0.1.0`.
 Stand des Repos ohne GitHub-API; Claude Code pflegt die Tabelle bei jedem
 Auftrag (Beginn, Bericht, Schließen).
 
-| Issue | Titel | Stand |
-|-------|-------|-------|
-| #24 | Handbuch für Funker (PDF) mit reproduzierbaren Bildern und Pflege-Regel | umgesetzt, Beta `v0.1.0-beta17`, Review ausstehend |
+Zurzeit keiner (#24 am 28.10. geschlossen).
 
 Offen ohne Label
 `auftrag` (Ideen, Infos): #13 (Engine-Name gegenüber
@@ -317,6 +315,19 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
 - Kein Eingriff in `dsp.py`/`timing.py`/`decoder.py`.
 - Beta [`v0.1.0-beta16`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta16);
   Review bestanden, #25 und #20 geschlossen.
+
+## ✅ Handbuch als PDF (#24)
+
+- ✅ `docs/handbuch/handbuch.html` (Gestaltung und Text der Desktop-Session),
+  Schriften Inter und DejaVu Sans Mono, PDF per `tools/build_handbook.py`
+  mit Seitenprüfung (ADR-0027).
+- ✅ Bilder ohne Klicks und reproduzierbar (`tools/make_docs_images.py`),
+  nur Beispiel-Rufzeichen; N1MM-Foto mit DL1ABC am echten N1MM.
+- ✅ PDF am Release, im Installer, Hilfe → Handbuch.
+- ✅ Skimmer-Spot Standard aus; `config.DESCRIPTIONS`; Pflege-Tests
+  (`tests/test_handbuch.py`), Regeln in CLAUDE.md.
+- Beta [`v0.1.0-beta17`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta17);
+  Review bestanden, #24 geschlossen.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

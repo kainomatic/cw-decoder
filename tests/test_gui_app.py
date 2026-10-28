@@ -368,6 +368,8 @@ def test_ringpuffer_speichern_und_nochmal_hoeren(app):
     app.text.event_generate("<Control-r>")
     assert app.btn_replay["text"] == "Stopp"
     assert _pump(app, 1, lambda: "Wiedergabe" in app.status.get())
+    # erst abbrechen, wenn schon etwas gespielt wurde (langsame CI-Rechner)
+    assert _pump(app, 5, lambda: sounddevice.played and sounddevice.played[-1].n > 0)
     app.text.event_generate("<Control-r>")
     # nach dem Abbruch bleibt der Ausschnitt festgehalten (#25)
     assert _pump(app, 5, lambda: app.btn_replay["text"] == gui._LBL_REPLAY_HELD)

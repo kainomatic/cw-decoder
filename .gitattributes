@@ -1,2 +1,5 @@
 cwdecoder/data/cty.dat binary
 cwdecoder/data/flags/*.png binary
+docs/handbuch/fonts/*.woff2 binary
+docs/handbuch/fonts/*.ttf binary
+docs/handbuch/img/*.png binary

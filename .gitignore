@@ -11,3 +11,6 @@ installer/Output/
 
 # Mitschnitt-Stub (#3)
 tools/fldigi_stub.log
+
+# Zwischendatei des Handbuch-Baus (tools/build_handbook.py)
+docs/handbuch/_build.html

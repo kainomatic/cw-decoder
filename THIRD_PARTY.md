@@ -39,6 +39,17 @@ liefert folgende Daten anderer Herkunft mit (ADR-0021):
   Zeilenenden LF).
 - Aktualisieren: `python tools/update_scp.py` (ADR-0026)
 
+## Schriften im Handbuch (nur im PDF, nicht im Programm)
+
+- **Inter** (`docs/handbuch/fonts/InterVariable.woff2`), The Inter Project
+  Authors, <https://github.com/rsms/inter> (v4.1). Lizenz: SIL Open Font
+  License 1.1, Text in `docs/handbuch/fonts/Inter-LICENSE.txt`.
+- **DejaVu Sans Mono** (`DejaVuSansMono.ttf`, `DejaVuSansMono-Bold.ttf`),
+  <https://dejavu-fonts.github.io/> (2.37). Lizenz: Bitstream-Vera-Lizenz
+  mit DejaVu-Ergänzungen (frei), Text in
+  `docs/handbuch/fonts/DejaVu-LICENSE.txt`.
+- Beide werden ins PDF eingebettet (`tools/build_handbook.py`, ADR-0027).
+
 ## Wortschatz der Segmentierung
 
 `cwdecoder/data/qso_words.txt` (QSO-Floskeln) ist eigene Arbeit des

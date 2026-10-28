@@ -45,7 +45,9 @@ und sag mir, was als Nächstes zu tun ist."*
 Programm-Infrastruktur stehen; das Programm ist als Setup mit Self-Update
 installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 
-- Neueste Beta: [`v0.1.0-beta18`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta18)
+- Neueste Beta: [`v0.1.0-beta19`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta19)
+  (fester 10-ms-Takt im Decoder, Live und Test sehen denselben Text, #22).
+  Davor [`v0.1.0-beta18`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta18)
   (Engine meldet sich mit eigenem Namen, N1MM hängt nicht mehr beim Start
   bei laufendem CW Decoder, #13; Handbuch-PDF mit nachgebesserten Bildern).
   Davor [`v0.1.0-beta17`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta17)
@@ -58,14 +60,15 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
   Entwicklungsrechner nachgewiesen. Noch keine Stable.
 - Testmatrix (`python tests/run_matrix.py`, zufällige Texte, 11 Kategorien,
   ADR-0017/0018): Mittelwert **97,9 %**, Rauschen 100 % (auch durch
-  CW-Filter); Stichproben Seed 5000/7777: 97,2/98,5 %. Alte Matrix
-  (`--legacy`): **98,3 %**. Echte Aufnahmen: Fragmente in
+  CW-Filter); Stichproben Seed 5000/7777: 97,8/98,6 %. Alte Matrix
+  (`--legacy`): **98,4 %**. Seit #22 (ADR-0028) fester 10-ms-Takt im
+  Decoder: GUI und Matrix sehen denselben Text (`tests/test_blockgroesse.py`). Echte Aufnahmen: Fragmente in
   `tests/test_real.py`, Volltext-Stand `tests/real_baseline.json`. Erstes Zeichen nach langer Pause: `tests/test_erstes_zeichen.py`.
 - Laufender Auftrag: siehe „Offene Aufträge" unten bzw. Issues mit Label
   `auftrag` (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** Shack-Test mit `v0.1.0-beta18` (Handbuch: Hilfe → Handbuch).
-DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta18` (Self-Update), richtet
+**Nächster Schritt:** Review #22, dann Shack-Test mit `v0.1.0-beta19` (Handbuch: Hilfe → Handbuch).
+DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta19` (Self-Update), richtet
 N1MM nach `docs/N1MM.md` ein und testet mit Funkgerät und N1MM (siehe
 „Testablauf Installer/Beta"). Danach
 Auswertung der Aufnahmen durch die Desktop-Session und Entscheidung über die
@@ -78,11 +81,12 @@ Stable `v0.1.0`.
 Stand des Repos ohne GitHub-API; Claude Code pflegt die Tabelle bei jedem
 Auftrag (Beginn, Bericht, Schließen).
 
-Zurzeit keiner (#13 am 28.10. geschlossen, `v0.1.0-beta18`).
+- #22 Fester Verarbeitungstakt im Decoder (Blockgröße egal): umgesetzt,
+  `v0.1.0-beta19`, Bericht im Issue, wartet auf Review; danach
+  `--real-baseline` neu speichern.
 
 Offen ohne Label
-`auftrag` (Ideen, Infos): #16 (mehrere Stationen), #17 (Ideensammlung),
-#22 (Blockgröße, nach #24).
+`auftrag` (Ideen, Infos): #16 (mehrere Stationen), #17 (Ideensammlung).
 
 ## Leitlinie
 

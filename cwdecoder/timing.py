@@ -64,6 +64,11 @@ class TimingConfig:
     # Aus: Bei Fading sind echte Punkte so kurz und gingen verloren
     # (Matrix und Aufnahmen schlechter, ADR-0025)
     glitch_discard: bool = False
+    # In der Einmessphase (vor conf_warmup_marks Tönen, z. B. nach
+    # reset_tempo) ist der Störmark-Filter aus. Ein Ton kürzer als ein Punkt
+    # bei 60 WPM (dit_min_ms) zählt dann nicht als Element, sonst zieht ein
+    # einzelner Störimpuls das frische Tempo an die Obergrenze (#22)
+    warmup_min_mark: bool = True
     word_thr: float = 5.0         # Pause länger als word_thr * dit => Wortende
     history: int = 24             # Fenster für die Geschwindigkeitsschätzung
     adapt: float = 0.5            # Nachführung der Punktlänge (0..1)
@@ -315,7 +320,10 @@ class TimingDecoder:
     def _mark_normal(self, duration_ms: float):
         c = self.cfg
         self._last_gap = None
-        if duration_ms < max(c.dit_min_ms * 0.5, 0.3 * self.dit_ms):
+        floor = max(c.dit_min_ms * 0.5, 0.3 * self.dit_ms)
+        if c.warmup_min_mark and not self._filter_active():
+            floor = max(floor, c.dit_min_ms)
+        if duration_ms < floor:
             self._dropped_ms = duration_ms
             return  # Störimpuls: viel kürzer als ein Punkt beim aktuellen Tempo
         # Plausibilität: extrem lange Töne (Träger, Störung) nicht lernen

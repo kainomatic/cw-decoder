@@ -9,6 +9,9 @@
                                           dazu Ähnlichkeit zum gespeicherten Stand
     python tests/run_matrix.py --real-baseline   Stand der echten Aufnahmen
                                           neu speichern (tests/real_baseline.json)
+    python tests/run_matrix.py --blocks   Text bei Blockgrößen 80/160/320/512/1024
+                                          (echte Aufnahmen + Matrix Seed 1000),
+                                          Ähnlichkeit zu 160 und Unterschiede (#22)
 
 Die Texte kommen aus cwdecoder.testtext (zufällige Rufzeichen, Exchanges,
 QSO-Floskeln, Fünfergruppen); Tempo, Tonhöhe und Störparameter werden je
@@ -238,10 +241,10 @@ REAL_SPOTS = {
 # (Stand #8). In test_real.py als bekannte Lücke (xfail, nicht strikt):
 # - "TALLINN": Der OP gibt mit sehr weiten Zeichenabständen, die
 #   Wortschwelle trennt "T A L L INN".
-# - "UR RST": seit der 60-ms-Vorausschau kommt "UR FST" (R -> F).
+# ("UR RST" kam seit der 60-ms-Vorausschau als "UR FST"; mit dem festen
+# Takt aus #22 wieder richtig, deshalb keine Lücke mehr.)
 REAL_KNOWN_GAPS = {
     ("cw_20261026_190242_839_8k.wav", "TALLINN"),
-    ("cw_20261026_190242_839_8k.wav", "UR RST"),
 }
 
 
@@ -325,6 +328,70 @@ def run_real():
         print("   Rufzeichen: " + ", ".join(spot_real(text)))
 
 
+# ---------------------------------------------------------------------------
+# Blockgrößen (#22): Der Text darf nicht davon abhängen, in welchen Stücken
+# der Aufrufer die Samples liefert (GUI 20 ms = 160, Matrix 512)
+# ---------------------------------------------------------------------------
+BLOCK_SIZES = (80, 160, 320, 512, 1024)
+BLOCK_REF = 160
+
+
+def block_items(base_seed: int = 1000, n_per_cat: int = 10):
+    """[(name, signal, fs)]: alle echten Aufnahmen und die Matrix-Fälle."""
+    from cwdecoder.decode_wav import load_wav
+    items = []
+    for f in real_files():
+        fs, x = load_wav(os.path.join(REAL_DIR, f))
+        items.append((f, x, fs))
+    for cat, name, text, kw, seed in build_cases(n_per_cat, base_seed):
+        items.append((name, render(text, fs=8000, seed=seed, **kw), 8000))
+    return items
+
+
+def block_texts(x, fs, sizes=BLOCK_SIZES) -> dict:
+    return {b: " ".join(decode_signal(x, fs, block=b)[0].get_text().split()) for b in sizes}
+
+
+def _diff_snippet(a: str, b: str, context: int = 12, limit: int = 3) -> list:
+    out = []
+    sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            continue
+        pre = a[max(0, i1 - context):i1]
+        out.append(f"…{pre}[{a[i1:i2]}→{b[j1:j2]}]{a[i2:i2 + context]}…")
+        if len(out) >= limit:
+            break
+    return out
+
+
+def run_blocks(base_seed: int = 1000, n_per_cat: int = 10, sizes=BLOCK_SIZES):
+    """Druckt je Fall die Ähnlichkeit zu BLOCK_REF und die Unterschiede;
+    liefert {name: {blockgröße: text}}."""
+    result = {}
+    sims = {b: [] for b in sizes}
+    n_diff = 0
+    for name, x, fs in block_items(base_seed, n_per_cat):
+        texts = block_texts(x, fs, sizes)
+        result[name] = texts
+        ref = texts[BLOCK_REF]
+        row = {}
+        for b in sizes:
+            sim = difflib.SequenceMatcher(None, ref, texts[b], autojunk=False).ratio() if ref or texts[b] else 1.0
+            sims[b].append(sim)
+            row[b] = sim
+        if any(texts[b] != ref for b in sizes):
+            n_diff += 1
+            print(f"\n== {name}: " + "  ".join(f"{b}: {100 * row[b]:.1f}" for b in sizes))
+            for b in sizes:
+                if texts[b] != ref:
+                    print(f"   {b:5d}: " + "  ".join(_diff_snippet(ref, texts[b])))
+    print(f"\n{n_diff} von {len(result)} Fällen hängen von der Blockgröße ab")
+    print("Mittlere Ähnlichkeit zu " + str(BLOCK_REF) + ": "
+          + "  ".join(f"{b}: {100 * float(np.mean(v)):.2f} %" for b, v in sims.items()))
+    return result
+
+
 def main():
     utf8_console()
     verbose = "--verbose" in sys.argv
@@ -336,6 +403,9 @@ def main():
         return
     if "--real" in sys.argv:
         run_real()
+        return
+    if "--blocks" in sys.argv:
+        run_blocks()
         return
     if "--legacy" in sys.argv:
         print(f"\nMittel (alte Matrix): {100 * run_legacy(verbose):.1f} %")

@@ -163,12 +163,12 @@ im Playbook (§2, §4). Projektspezifisch:
   `cwdecoder/dsp.py`, `timing.py` oder `decoder.py`:
   `python tests/run_matrix.py`, Mittelwert vorher/nachher notieren. Er darf
   nicht sinken (zuletzt 97,9 % bei 11 Kategorien inkl. „CW-Filter"; alte
-  Matrix `--legacy` 98,3 %), sonst begründen oder zurücknehmen. Die
+  Matrix `--legacy` 98,4 %), sonst begründen oder zurücknehmen. Die
   Kategorie **Rauschen** (zur Hälfte durch ein schmales CW-Filter) muss
   100 % bleiben: Bei reinem Rauschen gibt der Decoder nichts aus
   (ADR-0017, ADR-0018).
   Stichprobe gegen Übertuning: `run_matrix.run(base_seed=5000)` bzw. `7777`
-  (zuletzt 97,2 / 98,5 %).
+  (zuletzt 97,8 / 98,6 %).
 - Unter Windows Tests über das Bash-Tool laufen lassen (längere Läufe).
 - GUI-Nachweise auf dem Entwicklungsrechner zuerst ohne echte Eingaben
   (Fensternachrichten, UI-Automation, Konfigurationsdateien,
@@ -206,11 +206,17 @@ Bandbreite abhängig vom Tempo) -> `Thresholder` (Rauschteppich/Signalpegel,
 Hysterese, Squelch aus Pegel + Dynamik + Gate, Entprellung ->
 `KeyEvent(on, duration_ms)`) -> `TimingDecoder` (Punktlänge per Clusterung,
 Zeichen/Wortgrenzen, Ausgabe per Timeout) -> `morse.decode_symbol`.
-`CWDecoder.process(samples)` verbindet alles und ist blockgrößen-unabhängig.
+`CWDecoder.process(samples)` verbindet alles und arbeitet **intern in einem
+festen Takt** (ADR-0028): 10-ms-Teilblöcke (`chunk_ms`), Rest bis zum
+nächsten Aufruf gepuffert. Die Hüllkurve läuft 60 ms hinter dem Tracker
+(`freq_lookahead_ms`, Frequenz-Vorausschau). Der Text ist damit per
+Konstruktion unabhängig von der Blockgröße des Aufrufers
+(`tests/test_blockgroesse.py`, `run_matrix.py --blocks`).
 
 Wichtige Zusammenhänge:
 - `TimingDecoder.dit_ms` steuert rückwärts die Filterbandbreite und die
-  Entprellzeit (`CWDecoder._update_bandwidth`). Wer dort etwas ändert,
+  Entprellzeit (`CWDecoder._update_bandwidth`), nach einem Ton im
+  60-ms-Takt (`bw_step_ms`), nicht sofort. Wer dort etwas ändert,
   ändert die ganze Kette.
 - Der `Thresholder` schätzt den Rauschteppich im linearen Bereich (Mittel),
   nicht im dB-Bereich; das ist Absicht (Rayleigh-Einbrüche).
@@ -230,7 +236,8 @@ Wichtige Zusammenhänge:
   Schwelle läuft dahinter. Damit ist das Ergebnis unabhängig von der
   Blockgröße (GUI: 20 ms, Matrix: 64 ms), und das erste Zeichen nach
   einer Pause bleibt vollständig (`tests/test_erstes_zeichen.py`). Nie
-  wieder Logik einbauen, die vom Blockende abhängt.
+  wieder Logik einbauen, die vom Blockende des Aufrufers abhängt; was im
+  Takt laufen soll, gehört in `CWDecoder._process_delayed`.
 - Fällt `tone_present` weg, schließt `CWDecoder` das Zeichen ab und setzt
   das Tempo zurück (`TimingDecoder.reset_tempo`), damit die nächste
   Station frisch eingemessen wird. Tempo-Suchbereich 5–60 WPM
@@ -247,7 +254,9 @@ Wichtige Zusammenhänge:
   Zeichen gelten als unsicher (`char_split_conf` 0,45).
 - **Störmark-Filter** (ADR-0025): Bei eingemessenem Tempo wird ein Ton
   < 0,4 Punkt mit dem Nachbarton verschmolzen, wenn die Pause dazwischen
-  < 0,5 Punkt ist. Verwerfen (`glitch_discard`) ist aus.
+  < 0,5 Punkt ist. Verwerfen (`glitch_discard`) ist aus. Davor (die
+  ersten 8 Töne, z. B. nach Tonverlust) zählt ein Ton unter 20 ms nicht
+  (`warmup_min_mark`, ADR-0028).
 - **Nach dem Decoder** (ADR-0026): Der Spotter (`callsign.py`) gleicht mit
   Super Check Partial ab (`scp.py`, grün/gelb, `IK2J E T` → IK2JET) und
   zerlegt zusammengeklebte Wörter (`segment.py`, Trenner `·`). Das ist nur

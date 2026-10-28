@@ -1,5 +1,6 @@
 # CW Decoder — Copyright (C) 2026 DF1DS (kainomatic) — SPDX-License-Identifier: GPL-3.0-or-later
 """Komplette Decoder-Kette: Audio-Blöcke rein, Text raus."""
+from collections import deque
 from dataclasses import dataclass, field
 import numpy as np
 
@@ -41,6 +42,21 @@ class DecoderConfig:
     conf_snr_low_db: float = 10.0
     conf_snr_full_db: float = 16.0
     conf_snr_min: float = 0.7
+    # Fester Verarbeitungstakt (ADR-0028): process() zerlegt die Samples
+    # intern in Teilblöcke dieser Länge; der Rest wartet auf den nächsten
+    # Aufruf. Bandbreite, Lock-/Tonverlust und poll() laufen damit in einem
+    # festen Takt, und der Text hängt nicht von der Blockgröße des
+    # Aufrufers ab (#22)
+    chunk_ms: float = 10.0
+    # Frequenz-Vorausschau: Die Hüllkurve läuft so weit hinter dem Tracker
+    # her und mischt mit der Frequenz, die der Tracker bis "jetzt" kennt.
+    # Rastet er auf eine neue Station ein, bekommt so schon der Anfang des
+    # ersten Elements die richtige Frequenz (ADR-0028). Kostet dieselbe
+    # Latenz.
+    freq_lookahead_ms: float = 60.0
+    # Nachführung von Filterbandbreite und Entprellzeit nach einem Ton nur
+    # in diesem Takt (Vielfaches von chunk_ms), nicht sofort (ADR-0028)
+    bw_step_ms: float = 60.0
 
 
 class CWDecoder:
@@ -77,6 +93,16 @@ class CWDecoder:
         self._out_paragraph = on_paragraph or (lambda: None)
         self._since_paragraph = False   # Text seit dem letzten Absatz?
         self.timing = TimingDecoder(c.timing, on_char=self._on_char, on_space=self._out_space)
+        self.chunk = max(1, int(round(c.chunk_ms * self.fs / 1000.0)))
+        self._rest = np.zeros(0)        # dezimierte Samples bis zum nächsten vollen Teilblock
+        # Teilblöcke, die der Tracker schon kennt, die Hüllkurve noch nicht:
+        # (Samples, Gate je Sample, Lock, Ton vorhanden) zum Zeitpunkt des Teilblocks
+        self._ahead = deque()
+        self._ahead_n = max(0, int(round(c.freq_lookahead_ms / c.chunk_ms)))
+        self._locked = self.tracker.locked   # Lock im Zeitraster der Hüllkurve
+        self._bw_every = max(1, int(round(c.bw_step_ms / c.chunk_ms)))
+        self._bw_due = False                 # Ton seit der letzten Nachführung
+        self._n_env = 0                      # verarbeitete Teilblöcke (Hüllkurve)
         self._update_bandwidth()
 
     # ------------------------------------------------------------------
@@ -115,7 +141,7 @@ class CWDecoder:
         dit = self.timing.dit_ms
         cutoff = c.bw_factor * 1000.0 / dit
         cutoff = float(np.clip(cutoff, c.bw_min_hz, c.bw_max_hz))
-        if not self.tracker.locked and not self.cfg.tracker.fixed_freq:
+        if not self._locked and not self.cfg.tracker.fixed_freq:
             # Frequenz noch nicht gefunden: breiter hören, damit das erste
             # Element nicht verschluckt wird
             cutoff = max(cutoff, 80.0)
@@ -124,19 +150,37 @@ class CWDecoder:
 
     def set_fixed_frequency(self, f: float = None):
         self.tracker.set_fixed(f)
+        self._locked = self.tracker.locked
         self._update_bandwidth()
 
     # ------------------------------------------------------------------
     def process(self, samples: np.ndarray):
+        """Beliebig große Blöcke; verarbeitet wird in festen Teilblöcken
+        (chunk_ms), der Rest wartet auf den nächsten Aufruf oder flush()."""
         x = np.asarray(samples, dtype=np.float64)
         if x.ndim > 1:
             x = x.mean(axis=1)
         x = self.decim.process(x)
         if len(x) == 0:
             return
-        was_locked = self.tracker.locked
+        if len(self._rest):
+            x = np.concatenate([self._rest, x])
+        n = len(x) - len(x) % self.chunk
+        for i in range(0, n, self.chunk):
+            self._process_chunk(x[i:i + self.chunk])
+        self._rest = x[n:].copy()
+
+    def _process_chunk(self, x: np.ndarray):
+        """Ein Teilblock: Tracker sofort, Hüllkurve und Rest der Kette
+        freq_lookahead_ms später (mit der dann bekannten Frequenz)."""
         gate_fs = self.tracker.process(x)
-        if self.tracker.locked != was_locked:
+        self._ahead.append((x, gate_fs, self.tracker.locked, self.tracker.tone_present))
+        if len(self._ahead) > self._ahead_n:
+            self._process_delayed(*self._ahead.popleft())
+
+    def _process_delayed(self, x, gate_fs, locked, tone_present):
+        if locked != self._locked:
+            self._locked = locked
             self._update_bandwidth()
         env = self.envelope.process(x, self.tracker.freq)
         # Gate auf das Hüllkurven-Raster bringen (hop-genau reicht)
@@ -145,7 +189,7 @@ class CWDecoder:
             gate_env = gate_fs[pos]
         else:
             gate_env = gate_fs[:0]
-        if self.thresh.gate and not self.tracker.tone_present:
+        if self.thresh.gate and not tone_present:
             # Ton ist weg: laufendes Zeichen abschließen und das Tempo-
             # Gedächtnis verwerfen, damit die nächste Station frisch
             # eingemessen wird statt mit einem verschleppten Tempo
@@ -153,14 +197,18 @@ class CWDecoder:
             self.timing.reset_tempo()
             self._update_bandwidth()
             self._paragraph()
-        self.thresh.gate = self.tracker.tone_present
+        self.thresh.gate = tone_present
         events = self.thresh.process(env, gate_env)
         for ev in events:
             if ev.on:
                 self.timing.mark(ev.duration_ms)
-                self._update_bandwidth()
+                self._bw_due = True
             else:
                 self.timing.gap(ev.duration_ms)
+        self._n_env += 1
+        if self._bw_due and self._n_env % self._bw_every == 0:
+            self._bw_due = False
+            self._update_bandwidth()
         # Live-Ausgabe von Zeichen/Wortabstand während einer laufenden Pause
         if not self.thresh.state:
             self.timing.poll(self.thresh.current_run_ms())
@@ -169,6 +217,11 @@ class CWDecoder:
         self.t_ms += 1000.0 * len(x) / self.fs
 
     def flush(self):
+        if len(self._rest):
+            self._process_chunk(self._rest)
+            self._rest = np.zeros(0)
+        while self._ahead:
+            self._process_delayed(*self._ahead.popleft())
         for ev in self.thresh.flush():
             if ev.on:
                 self.timing.mark(ev.duration_ms)

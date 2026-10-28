@@ -9,6 +9,23 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 ## [Unreleased]
 
 ### Changed
+- **Decoder arbeitet in einem festen 10-ms-Takt** (#22, ADR-0028): Der Text
+  hängt nicht mehr davon ab, in welchen Stücken die Samples kommen; die
+  GUI (20 ms) und die Testmatrix (512 Samples) sehen exakt denselben Text.
+  Vorher hingen 39 von 119 Mess-Fällen von der Blockgröße ab. Dazu eine
+  Frequenz-Vorausschau von 60 ms (die Hüllkurve mischt mit der Frequenz,
+  die der Tracker 60 ms später kennt; beim Einrasten auf eine neue Station
+  bleibt das erste Element ganz), die Filterbandbreite folgt dem Tempo im
+  60-ms-Takt, und in der Einmessphase zählt ein Ton unter 20 ms nicht als
+  Element (verhindert, dass ein Störimpuls nach Tonverlust das Tempo auf
+  60 WPM zieht). Testmatrix Seed 1000/5000/7777: 97,9/97,8/98,6 %
+  (vorher 97,9/97,2/98,5 %), alte Matrix 98,4 % (vorher 98,3 %),
+  Rauschen 100 %. „UR RST“ in der Aufnahme 190242 wird wieder gelesen.
+  Neue Schlüssel in `DecoderConfig`: `chunk_ms`, `freq_lookahead_ms`,
+  `bw_step_ms`; in `TimingConfig`: `warmup_min_mark`.
+- `python tests/run_matrix.py --blocks` misst die Abhängigkeit von der
+  Blockgröße (80–1024 Samples); `tests/test_blockgroesse.py` verlangt
+  identischen Text.
 - **Engine für N1MMs CW Reader meldet sich mit eigenem Namen** (#13): Auf
   `fldigi.name` antwortet sie „CW Decoder“, auf `fldigi.version` mit der
   eigenen Version (X.Y.Z), auf `fldigi.name_version` mit „CW Decoder X.Y.Z

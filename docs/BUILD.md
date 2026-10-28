@@ -90,6 +90,19 @@ gebaut wurde; sonst schreibt die installierte Beta in den Stable-App-Ordner.
 Lokal dafür `cwdecoder/__version__.py` vorübergehend ändern und **nicht
 committen** (der Release-Workflow macht das automatisch, ADR-0014).
 
+## 4a. Handbuch (PDF, ADR-0027)
+
+```
+pip install -r requirements-dev.txt
+python -m playwright install chromium
+python tools/make_docs_images.py      # nur nach Änderungen an der Oberfläche (Windows)
+python tools/build_handbook.py        # -> dist\CW-Decoder-Handbuch.pdf
+```
+
+Der Installer erwartet `dist\CW-Decoder-Handbuch.pdf` (legt es in den
+Programmordner). Der Release-Workflow baut es selbst und hängt es zusätzlich
+als `CW-Decoder-Handbuch-vX.Y.Z[-betaN].pdf` an das Release.
+
 ## 5. Release
 
 Releases entstehen nur über Tags (ADR-0002, ADR-0014):

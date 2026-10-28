@@ -3,3 +3,7 @@
 pytest>=8.0
 # nur für tools/make_icon.py (Build), nicht zur Laufzeit
 pillow>=10.0
+# nur für das Handbuch-PDF (tools/build_handbook.py, ADR-0027), nicht zur
+# Laufzeit; Chromium dazu: python -m playwright install chromium
+playwright>=1.40
+pypdf>=4.0

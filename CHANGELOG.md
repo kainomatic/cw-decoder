@@ -9,6 +9,27 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 ## [Unreleased]
 
 ### Changed
+- **Nochmal hören hält den Ausschnitt fest** (#25): Strg+R fasst die
+  letzten Sekunden (Standard 10 s) und spielt sie. Jedes weitere Strg+R
+  innerhalb der Frist nach dem Ende der Wiedergabe (Standard 5 s, auch nach
+  „Stopp") spielt **denselben** Ausschnitt noch einmal, beliebig oft. Vergeht
+  die Frist, verfällt er; das nächste Strg+R fasst die dann letzten
+  Sekunden. Der Decoder läuft die ganze Zeit weiter. Statuszeile:
+  „festgehalten 10 s – noch 4 s", Knopf: „Nochmal (festgehalten)".
+  **Strg+S** speichert während des Festhaltens genau diesen Ausschnitt
+  (`cw_…_festgehalten.wav` plus `.txt` mit dem Text dazu), sonst wie
+  bisher die letzten 30 s.
+- **Tempo-Regler statt „langsamer (0,7×)"**: Schieberegler 0,5×–1,0× neben
+  dem Knopf, Anzeige des Werts daneben. Er wirkt sofort, auch mitten in
+  der Wiedergabe, die Tonhöhe bleibt. Er beginnt mit dem Starttempo aus den
+  Einstellungen; ein Verschieben gilt für den festgehaltenen Ausschnitt,
+  mit neuem Material springt er zurück. Einstellungen von bis beta15 mit
+  „langsamer" werden zu Starttempo 0,7.
+- Dialog Einstellungen → „Puffer und Nochmal hören…": neu „Festhalten nach
+  Ende (Sekunden)" (1–60), „Tempo beim Start (0,5–1,0)" und
+  „Ausgabegerät"; der Haken „langsamer (0,7×)" entfällt. Neue Schlüssel in
+  `config.json`: `replay_hold_s` (5), `replay_rate` (1.0), `output_device`
+  (Name, leer = Standard); `replay_slow` wird nicht mehr gelesen.
 - **Geber mit engen Zeichenabständen** werden gelesen: Die Pause, ab der
   ein Zeichen endet, passt sich dem Geber an (vorher fest 2,2 Punkte).
   Zeichen, die bisher zu `*` oder falschen Sonderzeichen verschmolzen
@@ -27,6 +48,17 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   97,7/96,7/98,4 %), alte Matrix 98,3 %, Rauschen 100 %.
 
 ### Added
+- **Ausgabegerät für Nochmal hören** wählbar (Liste aller Ausgänge,
+  „Standard" voreingestellt). Gespeichert wird der Gerätename; gefunden
+  wird es per Namensteil, auch wenn Windows die Nummern ändert. Fehlt das
+  Gerät (abgezogen), spielt der CW Decoder über die Standard-Ausgabe und
+  sagt es einmal im Klartext („Ausgabegerät nicht gefunden"), danach in der
+  Statuszeile.
+- **Rufzeichen einzeln entfernen** (#25): kleines „×" rechts an jedem
+  Rufzeichen-Knopf (übergibt nichts an N1MM), Rechtsklick auf den Knopf →
+  „Entfernen" (neben „… übernehmen"), Knopf **„Alle löschen"** am Ende der
+  Spalte (ohne Nachfrage). Die Markierung im Text bleibt anklickbar; wird
+  das Rufzeichen wieder gehört, erscheint der Knopf wieder.
 - **Super Check Partial:** Die Rufzeichen-Datenbank aus Contest-Logs
   (`master.scp`, supercheckpartial.com) liegt dem Programm bei. Bekannte
   Rufzeichen sind in Knopf und Text grün unterlegt, andere gelb; der

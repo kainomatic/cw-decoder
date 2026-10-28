@@ -126,11 +126,23 @@ Markierung („enthält unsichere Zeichen"). Im Terminal (`live`,
 **Letzte 30 s speichern** (Strg+S) sichert die letzten Sekunden Audio als
 WAV in `Dokumente\CW Decoder\Aufnahmen` (`cw_…_letzte30s.wav`), daneben
 den decodierten Text dieses Ausschnitts als `.txt` – ohne Daueraufnahme.
-**Nochmal hören** (Strg+R) spielt die letzten 10 s über das
-Standard-Ausgabegerät ab, der Decoder läuft weiter; ein zweiter Klick
-(„Stopp") bricht ab. Längen, Puffergröße (Standard 60 s) und „langsamer
-(0,7×)" ohne Tonhöhenänderung stehen unter Einstellungen → „Puffer und
-Nochmal hören…" (ADR-0024).
+**Nochmal hören** (Strg+R) spielt die letzten 10 s ab, der Decoder läuft
+weiter; ein zweiter Klick („Stopp") bricht ab. Der Ausschnitt bleibt
+**festgehalten**: Jedes Strg+R innerhalb von 5 s nach dem Ende spielt
+denselben noch einmal, Strg+S speichert dann genau ihn
+(`cw_…_festgehalten.wav`). Die Statuszeile zählt herunter („festgehalten
+10 s – noch 4 s"); danach verfällt er, und das nächste Strg+R fasst neu.
+Der **Tempo-Regler** daneben (0,5×–1,0×) wirkt sofort, auch mitten in der
+Wiedergabe, ohne die Tonhöhe zu ändern. Längen, Puffergröße (Standard
+60 s), Frist, Starttempo und das **Ausgabegerät** (z. B. Kopfhörer statt
+Lautsprecher) stehen unter Einstellungen → „Puffer und Nochmal hören…"
+(ADR-0024).
+
+Ein Rufzeichen verschwindet mit dem **×** rechts am Knopf (oder Rechtsklick
+→ „Entfernen") aus der Liste, **Alle löschen** leert sie. Die Markierung im
+Text bleibt; wird das Rufzeichen wieder gehört, erscheint es wieder.
+
+![Regler, festgehaltener Ausschnitt und ×-Knöpfe](docs/img/nochmal-festgehalten.png)
 
 ![Knöpfe „Letzte 30 s speichern“ und „Nochmal hören“, Statuszeile nach dem Speichern](docs/img/ringpuffer.png)
 

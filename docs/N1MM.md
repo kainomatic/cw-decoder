@@ -69,6 +69,8 @@ mitteilt (nur solange der CW Reader offen ist).
 
 Ein Klick auf ein Rufzeichen im CW Decoder (Knopf rechts oder Markierung
 im Text) schickt einen Spot auf der aktuellen Frequenz.
+Das **×** rechts am Knopf entfernt das Rufzeichen nur aus der Liste und
+übergibt nichts (#25).
 
 1. N1MM: **Window → Telnet**, Reiter **Clusters** → **Edit List**. In der
    leeren Zeile unten *Cluster Name* `CWDecoder`, *URL* `127.0.0.1:7373`

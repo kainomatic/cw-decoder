@@ -15,6 +15,11 @@ Geschwindigkeits-Erkennung und besserer Rauschunterdrückung.
 Lizenz GPL-3.0-or-later (`LICENSE`). Python-Referenzversion 3.12.
 
 ## Onboarding für neue Sessions
+Zuerst Issue-Zugriff prüfen (`gh api repos/kainomatic/cw-decoder/issues?per_page=1`);
+ohne Zugriff erst DF1DS fragen (Details: ROADMAP, „Einstieg für eine neue
+Desktop-Session"). Den Abschnitt „Offene Aufträge" der ROADMAP bei jedem
+Auftrag pflegen.
+
 Bei `NEUE SESSION: ja` (DF1DS hat `/clear` ausgeführt) in dieser Reihenfolge:
 1. das Auftrags-Issue: `gh issue view N --comments`
 2. `CLAUDE.md` (dieses Dokument), bei Bedarf das Playbook

@@ -9,6 +9,16 @@
 
 ## Einstieg für eine neue Desktop-Session
 
+**Erster Schritt: Issue-Zugriff prüfen.**
+`gh api repos/kainomatic/cw-decoder/issues?per_page=1`. Schlägt es fehl,
+**vor allem anderen** DF1DS bitten, das Repo `kainomatic/cw-decoder` mit
+Schreibzugriff (und `kainomatic/claude-playbook` lesend) hinzuzufügen – die
+Freigabe-Karte im Chat bestätigen; bei „nicht freigeschaltet" in claude.ai
+unter Einstellungen → Connectors → GitHub beide Repos für die App
+freigeben. Ohne Issue-Zugriff keine Einschätzung abgeben, weil offene
+Aufträge sonst unsichtbar sind (Stand ohne API: Abschnitt „Offene Aufträge"
+unten).
+
 > Lies `CLAUDE.md`, diese ROADMAP, `docs/adr/README.md` und die offenen Issues (`gh issue list` oder GitHub). Du bist Architekt und Reviewer: Du liest das Repo, schreibst Aufträge für Claude Code (Kopf `NEUE SESSION: ja/nein`), reviewst Berichte gegen den Code und legst Issues an. Du pushst nie. Der Stand steht in "Aktueller Stand", der Plan unter "Beschlossen, noch nicht umgesetzt".
 
 Rechte der Desktop-Session im Repo (ADR-0016): **nur** Issues anlegen,
@@ -35,27 +45,43 @@ und sag mir, was als Nächstes zu tun ist."*
 Programm-Infrastruktur stehen; das Programm ist als Setup mit Self-Update
 installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 
-- Neueste Beta: [`v0.1.0-beta13`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta13)
-  (`CWDecoder-Beta-Setup-v0.1.0.exe`, Ringpuffer: „Letzte 30 s speichern"
-  und „Nochmal hören", #19; davor beta12 mit grauen unsicheren Zeichen,
-  #18, und beta11 mit dem CW Decoder als Engine für N1MMs CW Reader, #3). Self-Update beta2 → beta4 auf dem
+- Neueste Beta: [`v0.1.0-beta16`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta16)
+  (`CWDecoder-Beta-Setup-v0.1.0.exe`: Nochmal hören mit Festhalten,
+  Tempo-Regler und Ausgabegerät, Rufzeichen entfernen, #25; enthält auch
+  den Knopf-Fix aus #23, `1523eb3`). Davor beta15 (Super Check Partial,
+  Wörterbuch-Zerlegung, #23), beta14 (Zeichenschwelle, #21), beta13
+  (Ringpuffer, #19). Self-Update beta2 → beta4 auf dem
   Entwicklungsrechner nachgewiesen. Noch keine Stable.
 - Testmatrix (`python tests/run_matrix.py`, zufällige Texte, 11 Kategorien,
   ADR-0017/0018): Mittelwert **97,9 %**, Rauschen 100 % (auch durch
   CW-Filter); Stichproben Seed 5000/7777: 97,2/98,5 %. Alte Matrix
   (`--legacy`): **98,3 %**. Echte Aufnahmen: Fragmente in
   `tests/test_real.py`, Volltext-Stand `tests/real_baseline.json`. Erstes Zeichen nach langer Pause: `tests/test_erstes_zeichen.py`.
-- Laufender Auftrag: siehe Issues mit Label `auftrag`
-  (`gh issue list --label auftrag`).
+- Laufender Auftrag: siehe „Offene Aufträge" unten bzw. Issues mit Label
+  `auftrag` (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** Review #23, dann Shack-Test mit `v0.1.0-beta15`.
-DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta15` (Self-Update), richtet
+**Nächster Schritt:** Review #25, dann Shack-Test mit `v0.1.0-beta16`.
+DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta16` (Self-Update), richtet
 N1MM nach `docs/N1MM.md` ein und testet mit Funkgerät und N1MM (siehe
 „Testablauf Installer/Beta"). Danach
 Auswertung der Aufnahmen durch die Desktop-Session und Entscheidung über die
 Stable `v0.1.0`.
 
 ---
+
+## Offene Aufträge
+
+Stand des Repos ohne GitHub-API; Claude Code pflegt die Tabelle bei jedem
+Auftrag (Beginn, Bericht, Schließen).
+
+| Issue | Titel | Stand |
+|-------|-------|-------|
+| #25 | GUI: Nochmal hören mit Festhalten/Verfall und Tempo-Regler, Ausgabegerät, Rufzeichen einzeln entfernen | umgesetzt, Beta `v0.1.0-beta16`, Review ausstehend |
+
+#20 (Shack-Test beta13) wird mit #25 geschlossen. Offen ohne Label
+`auftrag` (Ideen, Infos): #13 (Engine-Name gegenüber
+N1MM), #16 (mehrere Stationen), #17 (Ideensammlung), #22 (Blockgröße),
+#24 (Handbuch).
 
 ## Leitlinie
 
@@ -99,8 +125,9 @@ Zurzeit keine; #14 und #15 sind mit #18 umgesetzt (siehe unten).
 Ideen, noch nicht beschlossen: #16 (mehrere Stationen gleichzeitig,
 „Skimmer light") und #17 (Ideensammlung Contest, Oberfläche; daraus der
 Ringpuffer mit #19, die Vertrauensanzeige mit #18 und Super Check Partial
-mit #23 umgesetzt). Offen aus #20: Ausgabegerät für „Nochmal hören"
-wählbar.
+mit #23 umgesetzt). #20 (Shack-Test beta13) ist mit #21, #23 und #25
+abgearbeitet; die Cluster-Durchreichung (Telnet-Cluster über den Decoder an
+N1MM) steht als Idee in #17.
 
 #1, #2 und #5 sind umgesetzt und geschlossen (siehe „Decoder-Tuning" unten).
 
@@ -273,6 +300,21 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
   Rufzeichen ersetzt; kommt mit der nächsten Beta.
 - Beta [`v0.1.0-beta15`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta15);
   Review bestanden, #23 geschlossen.
+
+## ✅ Nochmal hören: Festhalten, Tempo-Regler, Ausgabegerät; Rufzeichen entfernen (#25)
+
+- ✅ Strg+R hält den Ausschnitt fest; Strg+R innerhalb der Frist
+  (`replay_hold_s`, Standard 5 s nach dem Ende) spielt denselben, danach
+  verfällt er; Strg+S speichert ihn als `…_festgehalten.wav` (ADR-0024).
+- ✅ Tempo-Regler 0,5×–1,0×, wirkt mitten in der Wiedergabe
+  (`replay.Stretcher`, Dehnung als Strom), Tonhöhe bleibt;
+  `replay_slow` → `replay_rate`.
+- ✅ Ausgabegerät wählbar, Rückfall auf Standard mit Klartext.
+- ✅ Rufzeichen per „×", Rechtsklick „Entfernen" und „Alle löschen" aus der
+  Liste; wieder gehört → wieder da.
+- ✅ #19 und #12 geschlossen (erledigt bzw. reine Info).
+- Kein Eingriff in `dsp.py`/`timing.py`/`decoder.py`.
+- Beta `v0.1.0-beta16`; Review ausstehend.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

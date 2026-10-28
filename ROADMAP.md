@@ -60,7 +60,7 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 - Laufender Auftrag: siehe „Offene Aufträge" unten bzw. Issues mit Label
   `auftrag` (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** Review #25, dann Shack-Test mit `v0.1.0-beta16`.
+**Nächster Schritt:** Shack-Test mit `v0.1.0-beta16`.
 DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta16` (Self-Update), richtet
 N1MM nach `docs/N1MM.md` ein und testet mit Funkgerät und N1MM (siehe
 „Testablauf Installer/Beta"). Danach
@@ -74,11 +74,9 @@ Stable `v0.1.0`.
 Stand des Repos ohne GitHub-API; Claude Code pflegt die Tabelle bei jedem
 Auftrag (Beginn, Bericht, Schließen).
 
-| Issue | Titel | Stand |
-|-------|-------|-------|
-| #25 | GUI: Nochmal hören mit Festhalten/Verfall und Tempo-Regler, Ausgabegerät, Rufzeichen einzeln entfernen | umgesetzt, Beta `v0.1.0-beta16`, Review ausstehend |
+Zurzeit keiner (#25 und #20 am 28.10. geschlossen).
 
-#20 (Shack-Test beta13) wird mit #25 geschlossen. Offen ohne Label
+Offen ohne Label
 `auftrag` (Ideen, Infos): #13 (Engine-Name gegenüber
 N1MM), #16 (mehrere Stationen), #17 (Ideensammlung), #22 (Blockgröße),
 #24 (Handbuch).
@@ -314,7 +312,8 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
   Liste; wieder gehört → wieder da.
 - ✅ #19 und #12 geschlossen (erledigt bzw. reine Info).
 - Kein Eingriff in `dsp.py`/`timing.py`/`decoder.py`.
-- Beta `v0.1.0-beta16`; Review ausstehend.
+- Beta [`v0.1.0-beta16`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta16);
+  Review bestanden, #25 und #20 geschlossen.
 
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 

@@ -45,7 +45,8 @@ und sag mir, was als Nächstes zu tun ist."*
 Programm-Infrastruktur stehen; das Programm ist als Setup mit Self-Update
 installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 
-- Neueste Beta: [`v0.1.0-beta16`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta16)
+- Neueste Beta: [`v0.1.0-beta17`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta17)
+  mit Handbuch als PDF (#24). Davor: [`v0.1.0-beta16`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta16)
   (`CWDecoder-Beta-Setup-v0.1.0.exe`: Nochmal hören mit Festhalten,
   Tempo-Regler und Ausgabegerät, Rufzeichen entfernen, #25; enthält auch
   den Knopf-Fix aus #23, `1523eb3`). Davor beta15 (Super Check Partial,
@@ -60,8 +61,8 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 - Laufender Auftrag: siehe „Offene Aufträge" unten bzw. Issues mit Label
   `auftrag` (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** Shack-Test mit `v0.1.0-beta16`.
-DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta16` (Self-Update), richtet
+**Nächster Schritt:** Review #24, dann Shack-Test mit `v0.1.0-beta17` (Handbuch: Hilfe → Handbuch).
+DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta17` (Self-Update), richtet
 N1MM nach `docs/N1MM.md` ein und testet mit Funkgerät und N1MM (siehe
 „Testablauf Installer/Beta"). Danach
 Auswertung der Aufnahmen durch die Desktop-Session und Entscheidung über die
@@ -76,7 +77,7 @@ Auftrag (Beginn, Bericht, Schließen).
 
 | Issue | Titel | Stand |
 |-------|-------|-------|
-| #24 | Handbuch für Funker (PDF) mit reproduzierbaren Bildern und Pflege-Regel | in Arbeit; N1MM-Foto wartet auf Klick-Freigabe |
+| #24 | Handbuch für Funker (PDF) mit reproduzierbaren Bildern und Pflege-Regel | umgesetzt, Beta `v0.1.0-beta17`, Review ausstehend |
 
 Offen ohne Label
 `auftrag` (Ideen, Infos): #13 (Engine-Name gegenüber

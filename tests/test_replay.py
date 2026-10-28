@@ -15,7 +15,7 @@ def fake_sd(ok_rates=(8000, 48000, 44100), fail=None, delay=0.0):
     log = {"streams": []}
 
     class OutputStream:
-        def __init__(self, samplerate, channels, dtype):
+        def __init__(self, samplerate, channels, dtype, device=None):
             if fail is not None:
                 raise fail
             if samplerate not in ok_rates:
@@ -136,8 +136,179 @@ def test_langsamer_ohne_tonhoehe(fs):
     # die Dehnung kurze Scheintöne bilden (vereinzelt ein „E“); zum Hören egal
     dec, _ = decode_signal(y, fs)
     assert " ".join("".join(dec.text).split()).endswith("CQ DE DL1ABC K")
-    # Player mit slow=True schreibt die gedehnte Fassung
+    # Player mit Tempo 0,7 schreibt die gedehnte Fassung
     sd = fake_sd()
-    done, res = _play(Player(sd=sd), x, fs, slow=True)
+    done, res = _play(Player(sd=sd), x, fs, rate=SLOW_RATE)
     assert done.wait(10) and res["err"] is None
     assert len(sd.log["streams"][0].written) == len(y)
+
+
+# -- #25: Tempo je Block, Festhalten mit Verfall, Ausgabegerät -------------
+from cwdecoder.replay import (OutputDeviceMissingError, ReplayHold, Stretcher,  # noqa: E402
+                              find_output, output_devices)
+from cwdecoder.ringbuffer import AudioRing, TokenRing, save_clip  # noqa: E402
+
+
+def _peak_hz(s, fs):
+    return np.argmax(np.abs(np.fft.rfft(s))) * fs / len(s)
+
+
+@pytest.mark.parametrize("rate", [0.5, 0.75])
+def test_tonhoehe_bleibt(rate):
+    fs = 8000
+    x = _tone(fs, 3.0, f=650.0)
+    y = stretch(x, fs, rate)
+    assert len(y) == pytest.approx(len(x) / rate, abs=2)
+    assert _peak_hz(y, fs) == pytest.approx(650.0, abs=2)
+
+
+def test_tempo_wechsel_mitten_im_durchgang():
+    """Erste Hälfte des Eingangs mit 1,0, dann 0,5: die zweite Hälfte dauert
+    doppelt so lange, die Tonhöhe bleibt in beiden Teilen."""
+    fs = 8000
+    x = _tone(fs, 4.0, f=700.0)
+    st = Stretcher(x, fs)
+    first, second = [], []
+    while not st.done:
+        if st._consumed < len(x) / 2:
+            first.append(st.read(1.0))
+        else:
+            second.append(st.read(0.5))
+    a, b = np.concatenate(first), np.concatenate(second)
+    assert len(a) == pytest.approx(len(x) / 2, abs=st.hs)
+    assert len(b) == pytest.approx(len(x), abs=2 * st.hs)          # halbe Geschwindigkeit
+    assert _peak_hz(a, fs) == pytest.approx(700, abs=2)
+    assert _peak_hz(b[st.n:], fs) == pytest.approx(700, abs=2)
+
+
+def test_tempo_eins_reicht_original_durch():
+    fs = 8000
+    x = np.random.default_rng(1).normal(0, 0.1, fs).astype(np.float32)
+    np.testing.assert_allclose(stretch(x, fs, 1.0), x, atol=1e-6)
+
+
+def test_player_liest_tempo_je_block():
+    sd = fake_sd()
+    fs = 8000
+    x = _tone(fs, 2.0)
+    rates = iter([1.0] * 10 + [0.5] * 10_000)                     # nach 10 Blöcken langsamer
+    done, res = _play(Player(sd=sd), x, fs, rate=lambda: next(rates))
+    assert done.wait(10) and res["err"] is None
+    n = len(sd.log["streams"][0].written)
+    hs = Stretcher(x, fs).hs
+    assert n == pytest.approx(10 * hs + (len(x) - 10 * hs) / 0.5, abs=2 * hs)
+
+
+class _Clock:
+    def __init__(self):
+        self.t = 100.0
+
+    def __call__(self):
+        return self.t
+
+
+def _ring(fs=100, seconds=60):
+    ring = AudioRing(fs, seconds)
+    return ring
+
+
+def test_festhalten_zustandsautomat():
+    """Fassen -> spielen -> innerhalb der Frist dasselbe -> nach der Frist neu."""
+    clock = _Clock()
+    hold = ReplayHold(hold_s=1.0, clock=clock)
+    ring = _ring()
+    ring.write(np.arange(1000, dtype=np.float32))
+    clip, fresh = hold.grab(ring, 5)
+    assert fresh and clip.seconds == 5.0 and clip.samples[-1] == 999
+    hold.started()
+    ring.write(np.full(300, -1, dtype=np.float32))                 # Ring läuft weiter
+    clock.t += 30                                                  # lange Wiedergabe
+    assert hold.active() and hold.remaining() == 1.0
+    hold.finished()                                                # Frist ab Ende
+    clock.t += 0.6
+    again, fresh = hold.grab(ring, 5)
+    assert again is clip and not fresh                             # gleiches Material
+    hold.started()
+    hold.finished()
+    clock.t += 0.9
+    assert hold.active() and hold.remaining() == pytest.approx(0.1)
+    clock.t += 0.2                                                 # Frist um
+    assert not hold.active() and hold.expire_if_due() and hold.clip is None
+    new, fresh = hold.grab(ring, 5)
+    assert fresh and new is not clip and new.samples[-1] == -1     # neues Material
+
+
+def test_festhalten_leerer_ring():
+    hold = ReplayHold(5)
+    clip, fresh = hold.grab(_ring(), 5)
+    assert clip is None and not hold.active()
+
+
+def test_festgehaltenes_speichern(tmp_path):
+    """Strg+S während des Festhaltens: genau dieses Material plus Tokens."""
+    clock = _Clock()
+    hold = ReplayHold(5, clock=clock)
+    ring = _ring(fs=1000, seconds=60)
+    tokens = TokenRing(60)
+    ring.write(np.linspace(-0.5, 0.5, 10_000).astype(np.float32))  # 10 s
+    tokens.add(6.0, "C", 1.0)
+    tokens.add(9.5, "Q", 0.4)
+    tokens.add(2.0, "X", 1.0)                                      # vor dem Fenster
+    clip, _ = hold.grab(ring, 5, tokens)
+    ring.write(np.zeros(3000, dtype=np.float32))                   # später Gehörtes
+    tokens.add(12.0, "Z", 1.0)
+    wav, secs = save_clip(tmp_path, clip)
+    assert wav.endswith("_festgehalten.wav") and secs == 5.0
+    from scipy.io import wavfile
+    fs, data = wavfile.read(wav)
+    assert fs == 1000 and len(data) == 5000 and data[0] > 0 and data[-1] > 15000
+    lines = open(wav[:-4] + ".txt", encoding="utf-8").read().splitlines()
+    assert lines == ["1.00;C;1.00", "4.50;Q;0.40"]
+
+
+def _fake_sd_devices():
+    sd = fake_sd()
+    sd.query_devices = lambda: [
+        {"name": "Mikrofon (USB Audio)", "max_input_channels": 1, "max_output_channels": 0},
+        {"name": "Lautsprecher (Realtek)", "max_input_channels": 0, "max_output_channels": 2},
+        {"name": "Kopfhörer (USB Audio)", "max_input_channels": 0, "max_output_channels": 2},
+        {"name": "Lautsprecher (Realtek)", "max_input_channels": 0, "max_output_channels": 2},
+    ]
+    return sd
+
+
+def test_ausgabegeraete_und_suche():
+    sd = _fake_sd_devices()
+    assert output_devices(sd) == ["Lautsprecher (Realtek)", "Kopfhörer (USB Audio)"]
+    assert find_output(None, sd) is None
+    assert find_output("kopfhörer", sd) == 2                       # Namensteil, Groß/klein
+    assert find_output("USB Audio", sd) == 2                       # nur Ausgänge
+    with pytest.raises(OutputDeviceMissingError):
+        find_output("Bluetooth", sd)
+
+
+def test_fehlendes_geraet_rueckfall_standard():
+    from cwdecoder.gui_errors import classify_error
+    sd = _fake_sd_devices()
+    p = Player(sd=sd)
+    done, res = _play(p, _tone(8000, 0.5), 8000, device="Bluetooth")
+    assert done.wait(5) and res["err"] is None                     # gespielt, nur anders
+    assert isinstance(p.fallback, OutputDeviceMissingError)
+    info = classify_error(p.fallback)
+    assert info.expected and info.title == "Ausgabegerät nicht gefunden"
+    assert "Standard-Ausgabe" in info.status
+
+
+def test_gewaehltes_geraet_wird_benutzt():
+    sd = _fake_sd_devices()
+    opened = []
+    orig = sd.OutputStream
+
+    def stream(samplerate, channels, dtype, device=None):
+        opened.append(device)
+        return orig(samplerate, channels, dtype)
+    sd.OutputStream = stream
+    p = Player(sd=sd)
+    done, res = _play(p, _tone(8000, 0.5), 8000, device="Kopfhörer")
+    assert done.wait(5) and res["err"] is None and p.fallback is None
+    assert opened == [2]

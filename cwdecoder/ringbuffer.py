@@ -9,6 +9,8 @@ TokenRing    die Decoder-Ausgaben `(t_s, token, conf)` im gleichen
              Decodier-Log (live.DecodeLog).
 save_excerpt Ausschnitt als WAV plus Decodier-Log daneben schreiben
              (`…_letzte30s.wav` / `…_letzte30s.txt`).
+save_clip    festgehaltenen Ausschnitt von „Nochmal hören“ ebenso
+             schreiben (`…_festgehalten.wav`, #25).
 
 Kein tk, damit alles direkt testbar ist.
 """
@@ -113,10 +115,15 @@ class TokenRing:
                     if t_start <= t <= t_end]
 
 
-def excerpt_name(save_s: int, now: datetime = None) -> str:
-    """`cw_JJJJMMTT_HHMMSS_NNN_letzte30s.wav` (Schema der Aufnahmen, ADR-0003)."""
+HELD_SUFFIX = "festgehalten"
+
+
+def excerpt_name(save_s: int, now: datetime = None, suffix: str = None) -> str:
+    """`cw_JJJJMMTT_HHMMSS_NNN_letzte30s.wav` (Schema der Aufnahmen, ADR-0003);
+    mit suffix `…_festgehalten.wav`."""
     now = now or datetime.now()
-    return now.strftime("cw_%Y%m%d_%H%M%S_%f")[:-3] + f"_letzte{int(save_s)}s.wav"
+    tail = suffix if suffix else f"letzte{int(save_s)}s"
+    return now.strftime("cw_%Y%m%d_%H%M%S_%f")[:-3] + f"_{tail}.wav"
 
 
 def write_wav(path, samples, fs) -> None:
@@ -150,11 +157,24 @@ def save_excerpt(directory, audio: AudioRing, tokens: TokenRing, save_s: float,
     secs = len(samples) / audio.fs
     t_start = t_end - secs
     toks = tokens.window(t_start, t_end) if tokens is not None else []
+    return _write_pair(directory, excerpt_name(save_s, now), samples, audio.fs, toks), secs
+
+
+def save_clip(directory, clip, now: datetime = None):
+    """Festgehaltenen Ausschnitt (replay.HeldClip) als `…_festgehalten.wav`
+    + TXT mit den Tokens seines Zeitfensters schreiben.
+
+    Liefert (Pfad der WAV, Sekunden). Wirft SaveLastError."""
+    name = excerpt_name(0, now, HELD_SUFFIX)
+    return _write_pair(directory, name, clip.samples, clip.fs, clip.token_window()), clip.seconds
+
+
+def _write_pair(directory, name, samples, fs, toks):
     try:
         os.makedirs(directory, exist_ok=True)
-        wav = os.path.join(str(directory), excerpt_name(save_s, now))
-        write_wav(wav, samples, audio.fs)
+        wav = os.path.join(str(directory), name)
+        write_wav(wav, samples, fs)
         write_tokens(os.path.splitext(wav)[0] + ".txt", toks)
     except OSError as e:
         raise SaveLastError(f"{directory}: {e}") from e
-    return wav, secs
+    return wav

@@ -9,6 +9,14 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 ## [Unreleased]
 
 ### Changed
+- **N1MM mit zwei Entry Windows (SO2R/SO2V)** (#31): Der CW Decoder
+  richtet sich nach dem Radio mit dem grünen Punkt (FocusRadioNr aus dem
+  Broadcast „Radio“). Anzeige und Spot-Frequenz springen nicht mehr
+  zwischen den Radios, die Anzeige zeigt die Nummer („N1MM: 7040.3 kHz CW
+  R1 (…)“). „Ins Entry Window tippen“ trifft das Fenster dieses Radios
+  (Handle aus dem Broadcast, sonst Titel); bisher scheiterte es bei SO2R
+  mit „Entry Window nicht erkannt“, weil die Titel auf „Radio 1/2“ statt
+  „VFO A/B“ enden. Alt+W geht ans selbe Fenster.
 - **N1MMs CW Reader geht immer, N1MM hängt nicht mehr** (#30, ADR-0030):
   Öffnet man in N1MM den CW Reader, während der CW Decoder ohne den Weg
   „CW Reader von N1MM (Engine)“ läuft, schaltet der Decoder die Engine

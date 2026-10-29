@@ -1271,8 +1271,10 @@ class App(tk.Tk):
             self.engine_win.withdraw()
         if self.n1mm:
             r = self.n1mm.radio
-            if r.connected:
-                line = _MSG_N1MM_RADIO.format(freq=r.freq_khz, mode=r.mode or "",
+            if r.connected and r.freq_khz is not None:
+                # SO2R/SO2V: Nummer des Fokus-Radios dazu (#31)
+                mode = (r.mode or "") + (f" R{r.radio_nr}" if r.multi else "")
+                line = _MSG_N1MM_RADIO.format(freq=r.freq_khz, mode=mode,
                                               call=r.mycall or "")
             else:
                 line = _MSG_N1MM_NO_BROADCAST

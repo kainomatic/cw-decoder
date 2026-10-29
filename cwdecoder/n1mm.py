@@ -59,15 +59,44 @@ class SpotNotSentError(RuntimeError):
 
 
 # --------------------------------------------------------------------------
+class RadioState:
+    """Letzter Stand eines Radios aus den RadioInfo-Paketen."""
+
+    def __init__(self, nr: int):
+        self.nr = nr
+        self.freq_khz = None
+        self.mode = None
+        self.entry_hwnd = None      # EntryWindowHwnd: Entry Window dieses Radios
+        self.last_rx = 0.0
+
+
+def _int_or_none(text: str):
+    """Zahl aus einem RadioInfo-Feld (dezimal, auch 0x…); leer/ungültig -> None."""
+    text = (text or "").strip()
+    if not text:
+        return None
+    try:
+        return int(text, 0) if text.lower().startswith("0x") else int(text)
+    except ValueError:
+        return None
+
+
 class RadioInfoListener(threading.Thread):
+    """RadioInfo-Broadcasts von N1MM (UDP 12060).
+
+    Bei SO2R/SO2V schickt N1MM ein Paket je Radio (alle 10 s und bei jeder
+    Änderung). Die Werte stehen deshalb je RadioNr in self.radios; „das
+    Radio“ für Anzeige, Spot-Frequenz und Eintippen ist das Fokus-Radio
+    (FocusRadioNr, grüner Punkt in N1MM), ohne das Feld Radio 1 (#31)."""
+
     def __init__(self, port: int = 12060, on_update=None):
         super().__init__(daemon=True)
         self.port = port
         self.on_update = on_update or (lambda info: None)
-        self.freq_khz = None
-        self.mode = None
+        self.radios = {}            # RadioNr -> RadioState
+        self.focus_nr = None        # FocusRadioNr aus dem jüngsten Paket
+        self.focus_entry = None     # FocusEntry: Entry Window mit dem Fokus
         self.mycall = None
-        self.radio_nr = 1
         self.last_rx = 0.0
         self.sock = None
         self.error = None
@@ -111,19 +140,59 @@ class RadioInfoListener(threading.Thread):
         if root.tag != "RadioInfo":
             return
         g = lambda tag: (root.findtext(tag) or "").strip()  # noqa: E731
-        try:
+        nr = _int_or_none(g("RadioNr")) or 1
+        st = self.radios.get(nr)
+        if st is None:
+            st = self.radios[nr] = RadioState(nr)
+        freq = _int_or_none(g("Freq"))
+        if freq is not None:
             # N1MM sendet Freq in 10-Hz-Schritten (z. B. 1402500 = 14025.00 kHz)
-            self.freq_khz = int(g("Freq")) / 100.0
-        except ValueError:
-            pass
-        self.mode = g("Mode") or self.mode
+            st.freq_khz = freq / 100.0
+        st.mode = g("Mode") or st.mode
+        st.entry_hwnd = _int_or_none(g("EntryWindowHwnd")) or st.entry_hwnd
+        now = time.time()
+        st.last_rx = now
+        self.focus_nr = _int_or_none(g("FocusRadioNr")) or self.focus_nr
+        self.focus_entry = _int_or_none(g("FocusEntry")) or self.focus_entry
         self.mycall = g("OpCall") or g("mycall") or self.mycall
-        try:
-            self.radio_nr = int(g("RadioNr") or 1)
-        except ValueError:
-            pass
-        self.last_rx = time.time()
+        self.last_rx = now
         self.on_update(self)
+
+    # -- das Radio (Fokus-Radio) ------------------------------------------
+    @property
+    def radio_nr(self) -> int:
+        """Nummer des Fokus-Radios (ohne FocusRadioNr: 1)."""
+        return self.focus_nr or 1
+
+    @property
+    def focus(self):
+        """RadioState des Fokus-Radios oder None (noch kein Paket von ihm)."""
+        return self.radios.get(self.radio_nr)
+
+    @property
+    def freq_khz(self):
+        st = self.focus
+        return st.freq_khz if st else None
+
+    @property
+    def mode(self):
+        st = self.focus
+        return st.mode if st else None
+
+    @property
+    def multi(self) -> bool:
+        """Mehr als ein Radio meldet sich (SO2R/SO2V)."""
+        return len(self.radios) > 1
+
+    def entry_candidates(self):
+        """Fenster-Handles fürs Eintippen, beste zuerst: EntryWindowHwnd des
+        Fokus-Radios, dann FocusEntry."""
+        st = self.focus
+        out = []
+        for h in ((st.entry_hwnd if st else None), self.focus_entry):
+            if h and h not in out:
+                out.append(h)
+        return out
 
     def stop(self):
         self._stop_evt.set()
@@ -142,24 +211,36 @@ class RadioInfoListener(threading.Thread):
 #   "14053.63 CW Elecraft K3 VFO A"        (Frequenz kHz, Mode, Radio, VFO)
 #   "21050.00+0.00 CW Elecraft K3 VFO A"   (mit RIT-Anteil)
 #   "14200.00 USB Manual - VFO A"          (ohne CAT)
-# Das zweite Entry Window (SO2V/SO2R) hat "B" statt "A". Die Bandmap heißt
-# ähnlich ("Elecraft K3 VFO A"), beginnt aber nicht mit einer Frequenz.
+# Das zweite Entry Window (SO2V) hat "B" statt "A". Bei SO2R enden die Titel
+# auf "Radio 1"/"Radio 2", oft mit Leerzeichen am Ende (Shack-Test #31):
+#   "7040.32 CW Manual Radio 1 ", "21300.00 USB Manual Radio 2 "
+# Die Bandmap heißt ähnlich ("Elecraft K3 VFO A", "Manual Radio 1",
+# "Available Radio 1 …"), beginnt aber nicht mit einer Frequenz.
 ENTRY_TITLE_RE = re.compile(
-    r"^\s*\d{1,6}\.\d{1,3}(?:[+-]\d+(?:\.\d+)?)?\s+\S+.*\bVFO\s*([AB])\s*$", re.I)
+    r"^\s*\d{1,6}\.\d{1,3}(?:[+-]\d+(?:\.\d+)?)?\s+\S+.*"
+    r"\b(?:VFO\s*([AB])|Radio\s*([12]))\s*$", re.I)
 
 
-def pick_entry_window(windows, vfo: str = "A", title_hint: str = ""):
+def _slot(which) -> int:
+    """VFO A / Radio 1 -> 1, VFO B / Radio 2 -> 2."""
+    return 2 if str(which).strip().upper() in ("B", "2") else 1
+
+
+def pick_entry_window(windows, vfo="A", title_hint: str = ""):
     """Wählt aus [(hwnd, titel), ...] das Entry Window.
 
-    1. Titel passt auf ENTRY_TITLE_RE, bevorzugt der gewünschte VFO
+    1. Titel passt auf ENTRY_TITLE_RE, bevorzugt das gewünschte Fenster
+       (vfo: "A"/"B" oder Radio 1/2; A und 1 sind das erste Entry Window)
     2. Fallback: Titel enthält title_hint (falls gesetzt)
     Sonst None – lieber nichts tippen als ins falsche Fenster.
     """
+    want = _slot(vfo)
     matches = []
     for hwnd, title in windows:
         m = ENTRY_TITLE_RE.match(title or "")
         if m:
-            matches.append((m.group(1).upper() != vfo.upper(), hwnd, title))
+            slot = _slot(m.group(1) or m.group(2))
+            matches.append((slot != want, hwnd, title))
     if matches:
         matches.sort(key=lambda t: t[0])    # gewünschter VFO zuerst, sonst stabil
         return matches[0][1], matches[0][2]
@@ -179,6 +260,7 @@ def _win32():
     if getattr(u, "_cw_sig", False):
         return u, k
     u.IsWindowVisible.argtypes = [wintypes.HWND]
+    u.IsWindow.argtypes = [wintypes.HWND]
     u.GetWindowTextLengthW.argtypes = [wintypes.HWND]
     u.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
     u.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
@@ -197,6 +279,33 @@ def _win32():
     k.GetCurrentThreadId.restype = wintypes.DWORD
     u._cw_sig = True
     return u, k
+
+
+def _window_title(hwnd) -> str:
+    import ctypes
+    user32, _k = _win32()
+    length = user32.GetWindowTextLengthW(hwnd)
+    buf = ctypes.create_unicode_buffer(length + 1)
+    user32.GetWindowTextW(hwnd, buf, length + 1)
+    return buf.value
+
+
+def _exe_of_window(hwnd) -> str:
+    """Programmpfad des Prozesses, dem das Fenster gehört ("" wenn unbekannt)."""
+    import ctypes
+    from ctypes import wintypes
+    user32, kernel32 = _win32()
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    h = kernel32.OpenProcess(0x1000, False, pid.value)  # PROCESS_QUERY_LIMITED_INFORMATION
+    exe = ""
+    if h:
+        size = wintypes.DWORD(1024)
+        pbuf = ctypes.create_unicode_buffer(1024)
+        if kernel32.QueryFullProcessImageNameW(h, 0, pbuf, ctypes.byref(size)):
+            exe = pbuf.value
+        kernel32.CloseHandle(h)
+    return exe
 
 
 def windows_of_pid(pid: int):
@@ -362,51 +471,58 @@ class EntryWindowTyper:
         import ctypes
         import os
         from ctypes import wintypes
-        user32, kernel32 = _win32()
+        user32, _kernel32 = _win32()
         found = []
 
         @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
         def enum_cb(hwnd, _):
             if not user32.IsWindowVisible(hwnd):
                 return True
-            length = user32.GetWindowTextLengthW(hwnd)
-            buf = ctypes.create_unicode_buffer(length + 1)
-            user32.GetWindowTextW(hwnd, buf, length + 1)
-            title = buf.value
-            pid = wintypes.DWORD()
-            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-            h = kernel32.OpenProcess(0x1000, False, pid.value)  # PROCESS_QUERY_LIMITED_INFORMATION
-            exe = ""
-            if h:
-                size = wintypes.DWORD(1024)
-                pbuf = ctypes.create_unicode_buffer(1024)
-                if kernel32.QueryFullProcessImageNameW(h, 0, pbuf, ctypes.byref(size)):
-                    exe = pbuf.value
-                kernel32.CloseHandle(h)
-            if self.process_hint in os.path.basename(exe).lower():
-                found.append((hwnd, title))
+            if self.process_hint in os.path.basename(_exe_of_window(hwnd)).lower():
+                found.append((hwnd, _window_title(hwnd)))
             return True
 
         user32.EnumWindows(enum_cb, 0)
         return found
 
-    def find_window(self):
+    def window_ok(self, hwnd) -> bool:
+        """Handle aus dem Broadcast noch brauchbar: Fenster existiert und
+        gehört zum N1MM-Prozess (Handles werden nach dem Schließen neu
+        vergeben)."""
+        if not (self.available and hwnd):
+            return False
+        import os
+        user32, _k = _win32()
+        if not user32.IsWindow(hwnd):
+            return False
+        return self.process_hint in os.path.basename(_exe_of_window(hwnd)).lower()
+
+    def find_window(self, candidates=(), slot=None):
+        """Entry Window: erst die Handles aus dem Broadcast (Fokus-Radio,
+        dann FocusEntry), sonst Titelsuche mit Vorzug für `slot` (1/2,
+        ohne Angabe self.vfo)."""
+        for hwnd in candidates:
+            if self.window_ok(hwnd):
+                title = _window_title(hwnd)
+                log.info("Entry Window per Handle %s: %r", hwnd, title)
+                return hwnd, title
+            log.info("Handle %s aus dem Broadcast ungültig, nächster Weg", hwnd)
         wins = self.process_windows()
         self.last_titles = [t for _, t in wins]
-        # Für den ersten echten Test: alles ausgeben, was der Prozess an Fenstern hat
         log.info("%d Fenster von '%s': %s", len(wins), self.process_hint,
                  ", ".join(repr(t) for t in self.last_titles))
-        win = pick_entry_window(wins, self.vfo, self.title_hint)
+        win = pick_entry_window(wins, self.vfo if slot is None else slot, self.title_hint)
         if win:
-            log.info("Entry Window: %r", win[1])
+            log.info("Entry Window per Titel: %r", win[1])
         return win
 
     # -- Tippen --------------------------------------------------------------
-    def type_call(self, call: str):
+    def type_call(self, call: str, candidates=(), slot=None):
         """Rufzeichen ins Entry Window tippen. Liefert (ok, Meldung);
-        bei Fehlschlag steht die Ursache zusätzlich in self.last_error."""
+        bei Fehlschlag steht die Ursache zusätzlich in self.last_error.
+        Wipe (Alt+W) geht an dasselbe Fenster wie das Rufzeichen."""
         self.last_error = None
-        win = self.find_window()
+        win = self.find_window(candidates, slot)
         if not win:
             if self.last_titles:
                 msg = (f"Entry Window nicht erkannt ({len(self.last_titles)} N1MM-Fenster, "
@@ -707,7 +823,12 @@ class N1MMBridge:
         self.last_failure = None
         if self.use_type and self.typer.available:
             tried = True
-            typed, msg = self.typer.type_call(call)
+            # Entry Window des Fokus-Radios (#31); ohne Broadcast Titelsuche
+            r = self.radio
+            if r.connected:
+                typed, msg = self.typer.type_call(call, r.entry_candidates(), r.radio_nr)
+            else:
+                typed, msg = self.typer.type_call(call)
             msgs.append(msg)
             ok = typed
             if not typed:

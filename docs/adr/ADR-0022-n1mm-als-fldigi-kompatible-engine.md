@@ -175,3 +175,26 @@ laufender Engine normal, der CW Reader zeigt danach Text, Klick setzt
 DL1ABC. Test: `tests/test_gui_app.py::test_engine_fenster_schliesst_bei_wm_close`.
 Nebenbefund: `CWReader1` in der N1MM-INI steht unter
 `[FontSizeAdjustments]` und hat mit dem Öffnen des CW Readers nichts zu tun.
+
+## Nachtrag (#31): zwei Entry Windows (SO2R/SO2V)
+
+Bei SO2R/SO2V schickt N1MM je Radio ein RadioInfo-Paket. Bisher galt das
+zuletzt empfangene, Anzeige und Spot-Frequenz sprangen zwischen den Radios.
+Die Titelsuche kannte nur „… VFO A/B“; bei SO2R enden die Titel auf
+„… Radio 1/2“ (oft mit Leerzeichen), Eintippen scheiterte.
+
+**Auswahlregel.** „Das Radio“ ist das Fokus-Radio (`FocusRadioNr`, grüner
+Punkt), ohne das Feld Radio 1. Werte je `RadioNr`; hat das Fokus-Radio noch
+kein eigenes Paket, gibt es keine Frequenz (nie die des anderen Radios).
+Eingetippt wird ins Fenster mit diesem Handle, in dieser Reihenfolge:
+`EntryWindowHwnd` des Fokus-Radios, dann `FocusEntry`, dann die Titelsuche
+(Radio 1 bzw. VFO A bevorzugt). Ein Handle gilt nur, wenn das Fenster
+existiert und zum N1MM-Prozess gehört. Die Bandmap („Manual Radio 1“,
+„Available Radio 1 …“) beginnt nicht mit einer Frequenz und passt nie.
+Alt+W und Rufzeichen gehen ans selbe Fenster.
+
+**Befund N1MM 1.0.7711** (Entwicklungsrechner, SO2R ohne CAT): Die Pakete
+enthalten `RadioNr`, `FocusRadioNr`, `FocusEntry` und `ActiveRadioNr`,
+aber kein `EntryWindowHwnd` (erst in neueren Versionen). `FocusEntry` zeigt
+auf das Entry Window mit dem Fokus und wechselt mit `\`; die Auswahl folgt
+ihm.

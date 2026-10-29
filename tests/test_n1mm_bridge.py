@@ -45,8 +45,9 @@ class FakeTyper:
         self.calls = []
         self.last_error = None if ok else EntryWindowNotFoundError("weg")
 
-    def type_call(self, call):
+    def type_call(self, call, candidates=(), slot=None):
         self.calls.append(call)
+        self.where = (list(candidates), slot)
         return (True, "ins Entry Window getippt") if self.ok else (False, "Entry Window fehlt")
 
 
@@ -183,7 +184,7 @@ def test_spot_auch_ohne_login(make_bridge):
     """N1MM ohne „Automatically Logon“ schickt kein Rufzeichen und wartet
     nach „login:“; der Spot muss trotzdem ankommen (Nachweis #3)."""
     b = make_bridge(engine=False)
-    b.radio.freq_khz, b.radio.last_rx = 14025.0, time.time()
+    b.radio._parse(b"<RadioInfo><RadioNr>1</RadioNr><Freq>1402500</Freq></RadioInfo>")
     c = socket.create_connection(("127.0.0.1", b.spots.srv.getsockname()[1]), timeout=2)
     try:
         assert c.recv(64) == b"login: "

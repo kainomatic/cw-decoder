@@ -55,6 +55,9 @@ def test_gui_start_importiert_keine_schweren_module():
 class _BusyLock:
     other_pid = 4711
 
+    def __init__(self, path):
+        self.path = path
+
     def acquire(self):
         return False
 
@@ -64,31 +67,88 @@ class _BusyLock:
 
 def _second_instance(monkeypatch, app_env, listening):
     """gui_start.main als Zweitinstanz mit den Argumenten von N1MM."""
-    seen = {"front": 0, "notice": [], "gui": False}
-    monkeypatch.setattr("cwdecoder.instance_lock.InstanceLock", lambda *a, **k: _BusyLock())
+    seen = {"front": 0, "notice": [], "gui": False, "request": None}
+    lock_path = app_env / "appdata" / "CWDecoder" / "cwdecoder.lock"
+    monkeypatch.setattr("cwdecoder.instance_lock.InstanceLock",
+                        lambda *a, **k: _BusyLock(lock_path))
     monkeypatch.setattr(gui_start, "handle_second_instance",
-                        lambda pid: seen.__setitem__("front", pid) or "front")
-    monkeypatch.setattr(gui_start, "engine_listening", lambda port, timeout=0.5: listening)
+                        lambda pid, notice=None: seen.__setitem__("front", pid) or "front")
+
+    real = gui_start.request_engine_of_first
+
+    def fake_request(port, title, request_file):
+        seen["request"] = (port, title, request_file)
+        clock = _Clock()
+        return real(port, title, request_file, listening=lambda p: listening,
+                    sleep=clock.sleep, clock=clock)
+    monkeypatch.setattr(gui_start, "request_engine_of_first", fake_request)
     monkeypatch.setattr(gui_start, "show_starting_notice",
                         lambda ms=0, text="": seen["notice"].append(text))
     monkeypatch.setattr(gui_start, "show_splash",
                         lambda: seen.__setitem__("gui", True))
     gui_start.main(["--n1mm-engine", "--xmlrpc-server-port", "7367", "-ti",
                     "Fldigi CW Engine 1"])
-    return seen
+    return seen, lock_path.parent / "engine-request.json"
 
 
 def test_n1mm_engine_startet_keine_zweite_instanz(monkeypatch, app_env):
     """N1MM startet CWDecoder.exe, während der CW Decoder schon läuft: die
     zweite holt die erste nach vorn und endet (ADR-0020, ADR-0022)."""
-    seen = _second_instance(monkeypatch, app_env, listening=True)
+    seen, req = _second_instance(monkeypatch, app_env, listening=True)
     assert seen["front"] == 4711 and not seen["gui"] and seen["notice"] == []
+    assert not req.exists()             # Engine lief schon: keine Anforderung
 
 
-def test_n1mm_engine_hinweis_wenn_erste_ohne_engine(monkeypatch, app_env):
-    seen = _second_instance(monkeypatch, app_env, listening=False)
-    assert not seen["gui"]
-    assert len(seen["notice"]) == 1 and "Port 7367" in seen["notice"][0]
+def test_n1mm_engine_bittet_erste_ohne_dialog(monkeypatch, app_env):
+    """Erste ohne Engine: Anforderung mit Port und Titel von N1MM, kein
+    Hinweisfenster (#30, ADR-0030)."""
+    from cwdecoder.engine_request import take_request
+    seen, req = _second_instance(monkeypatch, app_env, listening=False)
+    assert not seen["gui"] and seen["notice"] == []
+    assert seen["request"][:2] == (7367, "Fldigi CW Engine 1")
+    assert take_request(req) == (7367, "Fldigi CW Engine 1")
+
+
+def test_kein_hinweisfenster_mehr():
+    assert not hasattr(gui_start, "_MSG_ENGINE_OFF")
+    assert not hasattr(gui_start, "check_engine_of_first")
+
+
+class _Clock:
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self):
+        return self.t
+
+    def sleep(self, s):
+        self.t += s
+
+
+def test_anforderung_wartet_bis_port_offen(tmp_path):
+    clock = _Clock()
+    up_at = 1.0
+    res = gui_start.request_engine_of_first(
+        7367, "Fldigi CW Engine 1", tmp_path / "engine-request.json",
+        listening=lambda p: clock.t >= up_at, sleep=clock.sleep, clock=clock)
+    assert res == "started" and up_at <= clock.t < up_at + 0.5
+    assert (tmp_path / "engine-request.json").exists()   # holt die erste ab
+
+
+def test_anforderung_gibt_nach_5_s_auf(tmp_path):
+    clock = _Clock()
+    res = gui_start.request_engine_of_first(
+        7367, "T", tmp_path / "engine-request.json",
+        listening=lambda p: False, sleep=clock.sleep, clock=clock)
+    assert res == "timeout" and 5.0 <= clock.t < 5.5
+
+
+def test_anforderung_ohne_schreibrecht_endet_trotzdem(tmp_path):
+    (tmp_path / "ordner").write_text("keine Mappe", encoding="utf-8")
+    res = gui_start.request_engine_of_first(
+        7367, "T", tmp_path / "ordner" / "engine-request.json",
+        listening=lambda p: False, sleep=lambda s: None)
+    assert res == "timeout"
 
 
 def test_engine_listening_erkennt_offenen_port():

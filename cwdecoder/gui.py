@@ -118,6 +118,7 @@ _MSG_CTX_SAVE = "Letzte Sekunden speichern"
 _MSG_CTX_REPLAY = "Nochmal hören"
 _MSG_CALL_COUNTRY = "{name} ({prefix}, {continent}, CQ {cq}, ITU {itu})"
 _MSG_N1MM_OFF = "N1MM: aus"
+_MSG_ENGINE_FORCED = "Engine für N1MMs CW Reader eingeschaltet (nur dieser Lauf)"
 _MSG_N1MM_IDLE = "N1MM: –"
 _MSG_N1MM_RADIO = "N1MM: {freq:.1f} kHz {mode}  ({call})"
 _MSG_N1MM_NO_BROADCAST = "N1MM: keine Broadcasts (Port 12060)"
@@ -234,18 +235,24 @@ class App(tk.Tk):
         """n1mm: None = Einstellung aus der Config, True/False = nur für
         diesen Lauf überschreiben. config_path None = nichts speichern
         (Tests). engine_port/engine_title: Start durch N1MMs CW Reader
-        (--n1mm-engine); schaltet für diesen Lauf Anbindung und Engine ein."""
+        (--n1mm-engine); schaltet die Engine nur für diesen Lauf ein, wie
+        eine Anforderung der zweiten Instanz (request_engine, ADR-0030)."""
         super().__init__()
         self.cfg = config_mod.defaults()
         self.cfg.update(cfg or {})
         self.config_path = config_path
         engine_start = engine_port is not None or engine_title is not None
-        if engine_start:
-            n1mm = True
         self.n1mm_on_start = self.cfg["n1mm_enabled"] if n1mm is None else bool(n1mm)
-        self.engine_on_start = True if engine_start else self.cfg["n1mm_engine"]
+        self.engine_on_start = self.cfg["n1mm_engine"]
+        # Engine nur für diesen Lauf (N1MM hat uns gerufen); Haken und
+        # Config bleiben, wie sie sind (#30, ADR-0030)
+        self.engine_forced = engine_start
         self.rpc_port = int(engine_port or self.cfg["n1mm_rpc_port"])
         self.engine_title = engine_title or ENGINE_TITLE
+        # Anforderungsdatei der zweiten Instanz (run_app setzt sie neben den Lock)
+        self.engine_request_file = None
+        self._request_next = 0.0
+        self._n1mm_last = None      # Stand der Haken beim letzten _n1mm_changed
         self.engine_win = None      # verstecktes Fenster, an dem N1MM die Engine erkennt
         self.n1mm_dialog = None
         # feste Tonfrequenz (Spektrum-Klick); None = noch keine gewählt
@@ -316,6 +323,8 @@ class App(tk.Tk):
         self._build_menu()
         self._build()
         self._fill_devices()
+        if self.engine_forced and self.n1mm is not None and self.n1mm.engine is not None:
+            self._note(_MSG_ENGINE_FORCED)
         self._poll_id = self.after(60, self._poll)
         self.protocol("WM_DELETE_WINDOW", self._quit)
 
@@ -1057,22 +1066,54 @@ class App(tk.Tk):
                     type_call=bool(self.type_var.get()),
                     clipboard=bool(self.clip_var.get()), wipe=bool(self.wipe_var.get()))
 
-    def _n1mm_changed(self, save=True):
+    def _n1mm_settings(self):
+        """Stand der Haken als Config-Schlüssel (das, was gespeichert wird)."""
         ways = self._n1mm_ways()
-        if save:
-            self._save_config(n1mm_enabled=bool(self.n1mm_var.get()),
-                              n1mm_engine=ways["engine"], n1mm_spot=ways["spot"],
-                              n1mm_type=ways["type_call"],
-                              n1mm_clipboard=ways["clipboard"], n1mm_wipe=ways["wipe"])
-        if self.n1mm_var.get():
+        return {"n1mm_enabled": bool(self.n1mm_var.get()), "n1mm_engine": ways["engine"],
+                "n1mm_spot": ways["spot"], "n1mm_type": ways["type_call"],
+                "n1mm_clipboard": ways["clipboard"], "n1mm_wipe": ways["wipe"]}
+
+    def _effective_ways(self):
+        """Wege, die wirklich laufen: die Haken, dazu die Engine, wenn N1MM
+        sie für diesen Lauf verlangt hat. Ist die Anbindung aus, läuft dann
+        nur die Engine (#30)."""
+        ways = self._n1mm_ways()
+        if self.engine_forced:
+            if not self.n1mm_var.get():
+                ways = dict.fromkeys(ways, False)
+            ways["engine"] = True
+        return ways
+
+    def _n1mm_changed(self, save=True):
+        """Haken geändert (oder Start). Gespeichert wird nur, was der Nutzer
+        seit dem letzten Aufruf wirklich umgeschaltet hat; Werte nur für
+        diesen Lauf (--n1mm, Engine für N1MM) landen so nie in config.json."""
+        now = self._n1mm_settings()
+        last = self._n1mm_last or now
+        changed = {k: v for k, v in now.items() if v != last[k]}
+        self._n1mm_last = now
+        if save and changed:
+            self._save_config(**changed)
+        if "n1mm_engine" in changed and self.engine_forced:
+            # Nutzer entscheidet selbst über die Engine
+            log.info("Engine-Haken umgeschaltet: Engine nur für diesen Lauf endet")
+            self.engine_forced = False
+        self._apply_n1mm()
+
+    def _apply_n1mm(self):
+        """Brücke zu N1MM nach den wirksamen Wegen starten, umstellen oder stoppen."""
+        ways = self._effective_ways()
+        if self.n1mm_var.get() or self.engine_forced:
             if self.n1mm is None:
-                log.info("N1MM-Anbindung ein: %s, Engine-Port %d", ways, self.rpc_port)
+                log.info("N1MM-Anbindung ein: %s, Engine-Port %d%s", ways, self.rpc_port,
+                         " (Engine nur für diesen Lauf)" if self.engine_forced else "")
                 self.n1mm = N1MMBridge(rpc_port=self.rpc_port,
                                        engine_title=self.engine_title, **ways)
                 failed = self.n1mm.start_failures
             else:
                 log.info("N1MM-Übergabe: %s", ways)
-                failed = self.n1mm.configure(**ways)
+                self.n1mm.engine_title = self.engine_title
+                failed = self.n1mm.configure(rpc_port=self.rpc_port, **ways)
             for exc in failed:
                 self.report_error(exc, _MSG_CTX_N1MM)
         else:
@@ -1082,6 +1123,35 @@ class App(tk.Tk):
                 self.n1mm = None
             self.n1mm_status.set(_MSG_N1MM_OFF)
         self._sync_engine_window()
+
+    def request_engine(self, port, title):
+        """N1MM hat einen zweiten CW Decoder als Engine gestartet, und dieser
+        bittet uns, sie anzubieten (Anforderungsdatei, ADR-0030). Engine nur
+        für diesen Lauf mit Port und Fenstertitel von N1MM; Haken und Config
+        bleiben unverändert. Fehler (z. B. Port belegt) zeigt report_error."""
+        port = int(port)
+        if (self.n1mm is not None and self.n1mm.engine is not None
+                and self.rpc_port == port and self.engine_title == title):
+            log.info("Engine-Anforderung: Engine läuft schon auf Port %d", port)
+            return
+        log.info("Engine-Anforderung von N1MM: Port %d, Titel %r – Engine für diesen "
+                 "Lauf ein (Haken und Config bleiben)", port, title)
+        self.rpc_port = port            # nicht gespeichert (set_rpc_port speichert)
+        self.engine_title = title
+        self.engine_forced = True
+        self._apply_n1mm()
+        if self.n1mm is not None and self.n1mm.engine is not None:
+            self._note(_MSG_ENGINE_FORCED)
+
+    def _check_engine_request(self):
+        """Aus _poll: Anforderungsdatei der zweiten Instanz abholen (4-mal je s)."""
+        if self.engine_request_file is None or time.monotonic() < self._request_next:
+            return
+        self._request_next = time.monotonic() + 0.25
+        from .engine_request import take_request
+        req = take_request(self.engine_request_file)
+        if req is not None:
+            self.request_engine(*req)
 
     def set_rpc_port(self, port):
         """Neuer Port der Engine (Dialog); startet eine laufende Engine neu."""
@@ -1104,6 +1174,9 @@ class App(tk.Tk):
         """N1MM erkennt die Engine an einem Fenster mit dem Titel aus `-ti`
         (Standard „Fldigi CW Engine 1“). Ein verstecktes Fenster genügt."""
         want = self.n1mm is not None and self.n1mm.engine is not None
+        if want and self.engine_win is not None and self.engine_win.title() != self.engine_title:
+            self.engine_win.title(self.engine_title)
+            log.info("Engine-Fenster heißt jetzt %r", self.engine_title)
         if want and self.engine_win is None:
             win = tk.Toplevel(self)
             win.title(self.engine_title)
@@ -1189,6 +1262,7 @@ class App(tk.Tk):
                     self._replay_done(val)
         except queue.Empty:
             pass
+        self._check_engine_request()
         self._tick_hold()
         if self.live:
             self._draw_spectrum()
@@ -1749,6 +1823,10 @@ def run_app(n1mm=None, lock=None, splash=None, timer=None, engine_port=None,
               engine_title=engine_title)
     app.instance_lock = lock
     app.app_mutex = mutex
+    if lock is not None:
+        # _poll holt sie ab; veraltete (> 30 s) verwirft take_request selbst
+        from .engine_request import REQUEST_FILE
+        app.engine_request_file = lock.path.parent / REQUEST_FILE
     notice = config_mod.pop_broken_notice(config_path)
     if notice:
         app.after(300, lambda: app.show_config_notice(*notice))

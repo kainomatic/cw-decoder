@@ -9,6 +9,21 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
 ## [Unreleased]
 
 ### Changed
+- **N1MMs CW Reader geht immer, N1MM hängt nicht mehr** (#30, ADR-0030):
+  Öffnet man in N1MM den CW Reader, während der CW Decoder ohne den Weg
+  „CW Reader von N1MM (Engine)“ läuft, schaltet der Decoder die Engine
+  jetzt für diesen Lauf selbst ein (Port und Fenstertitel von N1MM).
+  Statuszeile: „Engine für N1MMs CW Reader eingeschaltet (nur dieser
+  Lauf)“. Die Haken unter **N1MM-Anbindung** und **Übergabe…** bleiben,
+  wie sie sind, nichts wird gespeichert; ist die Anbindung aus, läuft nur
+  die Engine. Bisher zeigte der von N1MM gestartete zweite CW Decoder
+  10–13 s ein Hinweisfenster, danach hing N1MM. Jetzt gibt er dem ersten
+  Bescheid und endet nach höchstens 5 s ohne Meldung. Startet N1MM den
+  CW Decoder frisch, gilt dasselbe (bisher wurden dabei Anbindung und alle
+  Wege für den Lauf eingeschaltet).
+- Ein Haken unter **N1MM-Anbindung**/**Übergabe…** speichert nur noch sich
+  selbst. Bisher schrieb jeder Klick alle Übergabewege, auch Werte, die
+  nur für diesen Lauf galten (Start durch N1MM, `--n1mm`).
 - **CI testet nach geänderten Dateien** (#28, ADR-0029): Reine Doku startet
   keinen Lauf, Handbuch-Doku (README, `docs/N1MM.md`, `docs/VERGLEICH.md`,
   `docs/handbuch/`) nur `tests/test_handbuch.py`, sonstiger Code die

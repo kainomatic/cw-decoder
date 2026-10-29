@@ -72,6 +72,7 @@ DECODER = (
 )
 GUI = (
     "cwdecoder/gui*.py",
+    "cwdecoder/engine_request.py",
     "cwdecoder/live.py",
     "cwdecoder/n1mm.py",
     "cwdecoder/fldigi_rpc.py",

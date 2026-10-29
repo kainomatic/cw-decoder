@@ -7,8 +7,9 @@ Reihenfolge:
    der ersten nach vorn und beendet sich. Hat die erste noch kein Fenster
    (lädt noch), erscheint 5 s lang „CW Decoder startet gerade …".
    Startet N1MMs CW Reader uns als Engine (--n1mm-engine) und bietet die
-   laufende Instanz die Engine nicht an, sagt ein Hinweis, was zu tun ist
-   (ADR-0022).
+   laufende Instanz die Engine nicht an, bittet die zweite die erste per
+   Anforderungsdatei, sie für diesen Lauf einzuschalten, wartet bis 5 s
+   auf den Port und endet ohne Dialog (ADR-0030).
 3. Startfenster „CW Decoder startet …" (tkinter ist schnell).
 4. Erst jetzt die schweren Imports (numpy, scipy, sounddevice über
    `cwdecoder.gui`), dann das Hauptfenster. Es ersetzt das Startfenster.
@@ -31,14 +32,11 @@ log = logging.getLogger("cwdecoder.start")
 _MSG_SPLASH = "CW Decoder startet …"
 _MSG_STARTING_TITLE = "CW Decoder"
 _MSG_STARTING = "CW Decoder startet gerade, bitte einen Moment warten."
-_MSG_ENGINE_OFF = ("N1MM möchte den CW Decoder als CW-Reader-Engine (Port {port}), "
-                   "aber der laufende CW Decoder bietet sie nicht an.\n\n"
-                   "Im CW Decoder den Haken „N1MM-Anbindung“ setzen und unter "
-                   "„Übergabe…“ „CW Reader von N1MM (Engine)“ wählen, dann den "
-                   "CW Reader in N1MM neu öffnen.")
 STARTING_NOTICE_MS = 5000
-ENGINE_NOTICE_MS = 12000
 ENGINE_DEFAULT_PORT = 7367      # wie fldigi_rpc.DEFAULT_PORT (ohne dessen Imports)
+ENGINE_DEFAULT_TITLE = "Fldigi CW Engine 1"   # wie fldigi_rpc.DEFAULT_TITLE
+ENGINE_WAIT_S = 5.0             # so lange wartet die zweite Instanz auf den Port
+ENGINE_WAIT_STEP_S = 0.2
 
 _FILETIME_EPOCH = 116444736000000000   # 1601-01-01 -> 1970-01-01 in 100 ns
 
@@ -102,17 +100,37 @@ def engine_listening(port: int, timeout: float = 0.5) -> bool:
         return False
 
 
-def check_engine_of_first(port: int, listening=None, notice=None) -> bool:
-    """Zweite Instanz, von N1MM als Engine gestartet: bietet die erste die
-    Engine an? Sonst Hinweis zeigen. Liefert True, wenn alles passt."""
-    if (listening or engine_listening)(port):
+def request_engine_of_first(port: int, title: str, request_file, listening=None,
+                            wait_s: float = ENGINE_WAIT_S, sleep=time.sleep,
+                            clock=time.monotonic) -> str:
+    """Zweite Instanz, von N1MM als Engine gestartet. Bietet die erste die
+    Engine nicht an, bittet sie per Anforderungsdatei darum und wartet bis
+    `wait_s` auf den Port. Nie ein Dialog: N1MM wartet auf diesen Prozess.
+
+    Liefert "running" (lief schon), "started" (nach der Bitte erreichbar)
+    oder "timeout" (die erste zeigt den Grund, z. B. Port belegt)."""
+    from .engine_request import write_request
+    listening = listening or engine_listening
+    if listening(port):
         log.info("Zweite Instanz: Engine der ersten auf Port %d erreichbar", port)
-        return True
-    log.warning("Zweite Instanz: N1MM will die Engine auf Port %d, die erste bietet "
-                "sie nicht an", port)
-    (notice or (lambda: show_starting_notice(ENGINE_NOTICE_MS,
-                                             _MSG_ENGINE_OFF.format(port=port))))()
-    return False
+        return "running"
+    log.info("Zweite Instanz: erste bietet die Engine auf Port %d nicht an, "
+             "bitte sie darum (Titel %r)", port, title)
+    try:
+        write_request(request_file, port, title)
+    except OSError as e:
+        log.error("Zweite Instanz: Engine-Anforderung nicht geschrieben: %s", e)
+        return "timeout"
+    t0 = clock()
+    while clock() - t0 < wait_s:
+        sleep(ENGINE_WAIT_STEP_S)
+        if listening(port):
+            log.info("Zweite Instanz: Engine der ersten nach %.1f s auf Port %d erreichbar",
+                     clock() - t0, port)
+            return "started"
+    log.warning("Zweite Instanz: Engine der ersten nach %.1f s nicht erreichbar "
+                "(Port %d); die erste zeigt den Grund", wait_s, port)
+    return "timeout"
 
 
 def show_starting_notice(ms: int = STARTING_NOTICE_MS, text: str = _MSG_STARTING):
@@ -192,9 +210,15 @@ def main(argv=None):
     from .instance_lock import InstanceLock
     lock = InstanceLock()
     if not lock.acquire():
-        res = handle_second_instance(lock.other_pid)
-        if engine and res == "front":
-            check_engine_of_first(a.xmlrpc_server_port or ENGINE_DEFAULT_PORT)
+        if engine:
+            # kein Hinweisfenster: N1MM wartet auf diesen Prozess (#30)
+            handle_second_instance(lock.other_pid, notice=lambda: None)
+            from .engine_request import REQUEST_FILE
+            request_engine_of_first(a.xmlrpc_server_port or ENGINE_DEFAULT_PORT,
+                                    a.engine_title or ENGINE_DEFAULT_TITLE,
+                                    lock.path.parent / REQUEST_FILE)
+        else:
+            handle_second_instance(lock.other_pid)
         log.info("Zweite Instanz beendet sich")
         return
     timer.phase("Lock erworben")
@@ -206,7 +230,7 @@ def main(argv=None):
         log.info("Startphase: schwere Imports %.2f s", time.time() - t0)
         timer.phase("Imports fertig")
         if engine:
-            gui.run_app(n1mm=True, lock=lock, splash=splash, timer=timer,
+            gui.run_app(n1mm=a.n1mm, lock=lock, splash=splash, timer=timer,
                         engine_port=a.xmlrpc_server_port or ENGINE_DEFAULT_PORT,
                         engine_title=a.engine_title)
         else:

@@ -15,11 +15,11 @@
 Schreibzugriff (und `kainomatic/claude-playbook` lesend) hinzuzufügen – die
 Freigabe-Karte im Chat bestätigen; bei „nicht freigeschaltet" in claude.ai
 unter Einstellungen → Connectors → GitHub beide Repos für die App
-freigeben. Ohne Issue-Zugriff keine Einschätzung abgeben, weil offene
-Aufträge sonst unsichtbar sind (Stand ohne API: Abschnitt „Offene Aufträge"
-unten).
+freigeben. Ohne Issue-Zugriff keine Einschätzung abgeben, sonst bleiben
+offene Aufträge unsichtbar. Den Stand ohne API zeigt der Abschnitt „Offene
+Aufträge" unten.
 
-> Lies `CLAUDE.md`, diese ROADMAP, `docs/adr/README.md` und die offenen Issues (`gh issue list` oder GitHub). Du bist Architekt und Reviewer: Du liest das Repo, schreibst Aufträge für Claude Code (Kopf `NEUE SESSION: ja/nein`), reviewst Berichte gegen den Code und legst Issues an. Du pushst nie. Der Stand steht in "Aktueller Stand", der Plan unter "Beschlossen, noch nicht umgesetzt".
+> Lies `CLAUDE.md`, diese ROADMAP, `docs/adr/README.md` und die offenen Issues (`gh issue list` oder GitHub). Du bist Architekt und Reviewer: Du liest das Repo, schreibst Aufträge für Claude Code (Kopf `NEUE SESSION: ja/nein`), reviewst Berichte gegen den Code und legst Issues an. Du pushst nur nach Einzelfreigabe durch DF1DS, nur Daten oder Doku (Playbook §1). Der Stand steht in "Aktueller Stand", der Plan unter "Beschlossen, noch nicht umgesetzt".
 
 Rechte der Desktop-Session im Repo (ADR-0016): **nur** Issues anlegen,
 kommentieren und Labels setzen. Keine Commits, kein Push, keine Tags, keine
@@ -34,8 +34,10 @@ Issue mit Label `auftrag` → DF1DS startet Claude Code mit „Bearbeite Issue
 Kommentar darunter → bei „bestanden" schließt Claude Code das Issue mit
 `Fixes #N`. Immer nur ein `auftrag`-Issue in Arbeit.
 
-Startsatz: *„Lies das Repo kainomatic/cw-decoder, fang mit ROADMAP.md an,
-und sag mir, was als Nächstes zu tun ist."*
+Startsatz (neue Session als Code/Cloud-Session mit ausgewähltem Repo;
+zuerst Issue-Zugriff prüfen): *„Lies kainomatic/claude-playbook, danach das
+Repo kainomatic/cw-decoder (zuerst ROADMAP.md), und sag mir, was als
+Nächstes zu tun ist."*
 
 ---
 
@@ -45,7 +47,9 @@ und sag mir, was als Nächstes zu tun ist."*
 Programm-Infrastruktur stehen; das Programm ist als Setup mit Self-Update
 installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 
-- Neueste Beta: [`v0.1.0-beta19`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta19)
+- Neueste Beta: [`v0.1.0-beta20`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta20)
+  (N1MMs CW Reader schaltet die Engine bei laufendem Decoder selbst ein,
+  N1MM hängt nicht mehr, #30). Davor [`v0.1.0-beta19`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta19)
   (fester 10-ms-Takt im Decoder, Live und Test sehen denselben Text, #22).
   Davor [`v0.1.0-beta18`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta18)
   (Engine meldet sich mit eigenem Namen, N1MM hängt nicht mehr beim Start
@@ -70,8 +74,8 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 - Laufender Auftrag: siehe „Offene Aufträge" unten bzw. Issues mit Label
   `auftrag` (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** Shack-Test mit `v0.1.0-beta19` (Handbuch: Hilfe → Handbuch).
-DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta19` (Self-Update), richtet
+**Nächster Schritt:** Shack-Test mit `v0.1.0-beta20` (Handbuch: Hilfe → Handbuch).
+DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta20` (Self-Update), richtet
 N1MM nach `docs/N1MM.md` ein und testet mit Funkgerät und N1MM (siehe
 „Testablauf Installer/Beta"). Danach
 Auswertung der Aufnahmen durch die Desktop-Session und Entscheidung über die
@@ -86,7 +90,9 @@ Auftrag (Beginn, Bericht, Schließen).
 
 | Issue | Thema | Stand |
 |---|---|---|
-| #28 | CI gezielter: Tests verschlanken, Auswahl nach geänderten Dateien, Volllauf vor jedem Tag (ADR-0029) | umgesetzt, Bericht im Issue, wartet auf Review |
+| #30 | N1MM CW Reader bei laufendem Decoder: Engine für diesen Lauf selbst einschalten, kein Dialog (ADR-0030); ROADMAP bereinigt | umgesetzt, `v0.1.0-beta20`, Bericht im Issue, wartet auf Review |
+
+#28 (CI nach geänderten Dateien, ADR-0029) ist geschlossen.
 
 Offen ohne Label
 `auftrag` (Ideen, Infos): #16 (mehrere Stationen), #17 (Ideensammlung).
@@ -128,7 +134,9 @@ Ausschnitte gehen an die Desktop-Session (Kandidaten für `testdata/`).
 Offene Aufgaben-Issues (noch kein Auftrag, bis sie das Label `auftrag`
 bekommen):
 
-Zurzeit keine; #14 und #15 sind mit #18 umgesetzt (siehe unten).
+- #26 Maidenhead-Locatoren erkennen, markieren und übernehmen (nach der
+  ersten Stable)
+- #27 Erklärung von CW-Abkürzungen per Tooltip (nach der ersten Stable)
 
 Ideen, noch nicht beschlossen: #16 (mehrere Stationen gleichzeitig,
 „Skimmer light") und #17 (Ideensammlung Contest, Oberfläche; daraus der
@@ -338,10 +346,22 @@ Entwurf der Desktop-Session als Patch-Serie, eingespielt mit Auftrag #2.
 - Beta [`v0.1.0-beta17`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta17);
   Review bestanden, #24 geschlossen.
 
+## ✅ CI nach geänderten Dateien (#28) und CW Reader bei laufendem Decoder (#30)
+
+- ✅ CI wählt Tests nach geänderten Dateien, Volllauf vor jedem Tag
+  (ADR-0029).
+- ✅ Ruft N1MM den CW Reader, schaltet der laufende Decoder die Engine für
+  diesen Lauf selbst ein; die zweite Instanz endet ohne Dialog, N1MM hängt
+  nicht (ADR-0030). Nachweis mit echtem N1MM und echtem Decoder.
+- ✅ Haken speichern nur sich selbst (Werte nur für diesen Lauf landen nicht
+  mehr in `config.json`).
+
 ## ➡️ Stable 0.1.0 (Freigabe DF1DS)
 
 - Beta auf dem Shack-PC installieren, mit Funkgerät und N1MM testen.
 - Danach CHANGELOG einfrieren und `v0.1.0` taggen (ADR-0014).
+- Nach der Stable: Mails an das N1MM-Team (CW Decoder als CW-Reader-Engine)
+  und an K6TU (Super Check Partial).
 
 ## 🔧 Live-Test am Funkgerät
 
@@ -385,8 +405,11 @@ Weiter offen:
 
 ## ⏳ N1MM am echten Logger
 
+Prüfpunkte für den Shack-Test mit `v0.1.0-beta20`:
 - `EntryWindowTyper`: Kommt das Rufzeichen im Entry Window an? Ist Alt+W
   tatsächlich „Wipe"? Fenstertitel aus dem Log prüfen.
-- Spot-Server (Telnet 127.0.0.1:7373) in N1MM verbinden und Bandmap-Spots
-  prüfen.
 - RadioInfo-Broadcasts (UDP 12060): Frequenz und Mode in der GUI.
+- CW Reader öffnen, während der CW Decoder schon läuft (auch mit
+  Engine-Haken aus): Text kommt, N1MM hängt nicht (#30).
+- Skimmer-Spot (Telnet 127.0.0.1:7373): optional, Standard aus (#24); bei
+  echtem Cluster in N1MM unnötig.

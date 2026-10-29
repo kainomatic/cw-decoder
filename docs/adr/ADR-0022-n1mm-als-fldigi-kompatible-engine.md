@@ -1,6 +1,7 @@
 # ADR-0022: Anbindung an N1MM als fldigi-kompatible Engine
 
-**Status:** Accepted
+**Status:** Accepted; Punkt 5, Satz zum Hinweisfenster der zweiten Instanz:
+Superseded by ADR-0030
 
 ## Kontext
 

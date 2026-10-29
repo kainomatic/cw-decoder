@@ -64,6 +64,9 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
   (`--legacy`): **98,4 %**. Seit #22 (ADR-0028) fester 10-ms-Takt im
   Decoder: GUI und Matrix sehen denselben Text (`tests/test_blockgroesse.py`). Echte Aufnahmen: Fragmente in
   `tests/test_real.py`, Volltext-Stand `tests/real_baseline.json`. Erstes Zeichen nach langer Pause: `tests/test_erstes_zeichen.py`.
+- CI wählt die Tests nach den geänderten Dateien (#28, ADR-0029): reine
+  Doku ohne Lauf, Volllauf von Hand (`gh workflow run ci.yml`) und vor
+  jedem Tag in `release.yml`.
 - Laufender Auftrag: siehe „Offene Aufträge" unten bzw. Issues mit Label
   `auftrag` (`gh issue list --label auftrag`).
 

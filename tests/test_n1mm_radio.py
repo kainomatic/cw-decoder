@@ -123,15 +123,21 @@ def test_bridge_gibt_handles_und_radio_an_den_typer(bridge):
 # -- Fensterwahl -------------------------------------------------------------
 class FakeTyper(EntryWindowTyper):
     """EntryWindowTyper ohne echte Fenster: gültige Handles und Fensterliste
-    vorgegeben, Vordergrund und Tastendrücke werden mitgeschrieben."""
+    vorgegeben, Vordergrund und Tastendrücke werden mitgeschrieben. Das
+    Rufzeichenfeld (Fokus) wird nachgebildet: Alt+W leert es nur, wenn
+    wipe_works; Pos1/Umschalt+Ende/Entf leert es; Zeichen werden angehängt."""
 
-    def __init__(self, valid=(), windows=()):
+    def __init__(self, valid=(), windows=(), field="", wipe_works=True, focus_after=0):
         super().__init__()
         self.available = True
         self.valid = set(valid)
         self.windows = list(windows)
         self.front = []
         self.keys = []
+        self.field = field
+        self.wipe_works = wipe_works
+        self.focus_after = focus_after      # so oft fragt _focus_in, bevor der Fokus da ist
+        self.events = []                    # Reihenfolge: front, focus?, keys
 
     def window_ok(self, hwnd):
         return hwnd in self.valid
@@ -141,10 +147,33 @@ class FakeTyper(EntryWindowTyper):
 
     def _bring_to_front(self, hwnd, wait_s=0.25):
         self.front.append(hwnd)
+        self.events.append("front")
         return True
 
+    def _focus_in(self, hwnd):
+        if self.focus_after > 0:
+            self.focus_after -= 1
+            self.events.append("kein Fokus")
+            return None
+        return 4711
+
+    def _field_text(self, field):
+        return self.field if field else None
+
     def _send_inputs(self, inputs):
-        self.keys.append(list(inputs))
+        inputs = list(inputs)
+        self.keys.append(inputs)
+        vks = [k[0] for k in inputs]
+        if vks[:2] == [0x12, ord("W")]:
+            self.events.append("Alt+W")
+            if self.wipe_works:
+                self.field = ""
+        elif 0x2E in vks:
+            self.events.append("leeren")
+            self.field = ""
+        else:
+            self.events.append("tippen")
+            self.field += "".join(chr(k[1]) for k in inputs[::2])
 
 
 @pytest.fixture
@@ -164,12 +193,52 @@ def test_handle_vor_focus_entry_vor_titel(titles):
 
 
 def test_wipe_und_rufzeichen_ans_selbe_fenster(titles):
-    t = FakeTyper(valid={2222})
+    t = FakeTyper(valid={2222}, field="ET9ECY")
     ok, _msg = t.type_call("DL1ABC", [2222], 2)
     assert ok and t.front == [2222]
     alt_w, typed = t.keys
     assert [k[0] for k in alt_w] == [0x12, ord("W"), ord("W"), 0x12]
+    if sys.platform == "win32":
+        assert all(k[1] for k in alt_w)            # mit Scan-Codes wie echte Tasten
     assert "".join(chr(k[1]) for k in typed[::2]) == "DL1ABC"
+    assert t.field == "DL1ABC"
+
+
+def test_zweimal_dasselbe_dann_ein_anderes(titles):
+    """Shack-Test beta21: zweimal ET9ECY ergab ET9ECYET9ECY. Im Feld steht
+    nach jedem Klick genau das angeklickte Rufzeichen."""
+    t = FakeTyper(valid={2222})
+    for call in ("ET9ECY", "ET9ECY", "DL1ABC"):
+        t.type_call(call, [2222], 1)
+        assert t.field == call
+
+
+def test_wipe_kommt_nicht_an_feld_wird_selbst_geleert(titles, monkeypatch):
+    monkeypatch.setattr(n1mm, "WIPE_WAIT_S", 0.05)
+    t = FakeTyper(valid={2222}, field="ET9ECY", wipe_works=False)
+    t.type_call("ET9ECY", [2222], 1)
+    assert t.events == ["front", "Alt+W", "leeren", "tippen"]
+    assert t.field == "ET9ECY"
+
+
+def test_wartet_auf_den_fokus_vor_den_tasten(titles):
+    """Erst wenn N1MM den Tastaturfokus im Entry Window hat, kommen Tasten."""
+    t = FakeTyper(valid={2222}, field="X", focus_after=3)
+    t.type_call("DL1ABC", [2222], 1)
+    assert t.events[:5] == ["front", "kein Fokus", "kein Fokus", "kein Fokus", "Alt+W"]
+    assert t.field == "DL1ABC"
+
+
+def test_ohne_wipe_nur_das_feld_leeren(titles):
+    t = FakeTyper(valid={2222}, field="ET9ECY")
+    t.wipe = False
+    t.type_call("DL1ABC", [2222], 1)
+    assert "Alt+W" not in t.events and t.events[-2:] == ["leeren", "tippen"]
+    assert t.field == "DL1ABC"
+    t2 = FakeTyper(valid={2222}, field="")
+    t2.wipe = False
+    t2.type_call("DL1ABC", [2222], 1)
+    assert t2.events == ["front", "tippen"]         # leeres Feld: nichts zu tun
 
 
 def test_titel_aus_dem_shack_log():

@@ -47,7 +47,8 @@ Nächstes zu tun ist."*
 Programm-Infrastruktur stehen; das Programm ist als Setup mit Self-Update
 installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 
-- Neueste Beta: [`v0.1.0-beta21`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta21)
+- Neueste Beta: [`v0.1.0-beta22`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta22)
+  (Eintippen ins Entry Window hängt nicht mehr an, #31). Davor [`v0.1.0-beta21`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta21)
   (SO2R/SO2V: Anzeige, Spot-Frequenz und Eintippen folgen dem Fokus-Radio,
   #31). Davor [`v0.1.0-beta20`](https://github.com/kainomatic/cw-decoder/releases/tag/v0.1.0-beta20)
   (N1MMs CW Reader schaltet die Engine bei laufendem Decoder selbst ein,
@@ -76,8 +77,8 @@ installierbar (Stable/Beta getrennt, ADR-0011 bis ADR-0015).
 - Laufender Auftrag: siehe „Offene Aufträge" unten bzw. Issues mit Label
   `auftrag` (`gh issue list --label auftrag`).
 
-**Nächster Schritt:** Shack-Test mit `v0.1.0-beta21` (Handbuch: Hilfe → Handbuch).
-DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta21` (Self-Update), richtet
+**Nächster Schritt:** Shack-Test mit `v0.1.0-beta22` (Handbuch: Hilfe → Handbuch).
+DF1DS aktualisiert auf dem Shack-PC auf `v0.1.0-beta22` (Self-Update), richtet
 N1MM nach `docs/N1MM.md` ein und testet mit Funkgerät und N1MM (siehe
 „Testablauf Installer/Beta"). Danach
 Auswertung der Aufnahmen durch die Desktop-Session und Entscheidung über die
@@ -92,7 +93,7 @@ Auftrag (Beginn, Bericht, Schließen).
 
 | Issue | Thema | Stand |
 |---|---|---|
-| #31 | N1MM mit zwei Entry Windows (SO2R/SO2V): Eintippen und RadioInfo folgen dem Fokus-Radio | umgesetzt, `v0.1.0-beta21`, Bericht im Issue; Nachweis des Eintippens braucht eine aktive RDP-Sitzung |
+| #31 | N1MM mit zwei Entry Windows (SO2R/SO2V): Eintippen und RadioInfo folgen dem Fokus-Radio; Eintippen hängt nicht mehr an | Code bestanden, Shack-Test beta21 bestätigt die Fensterwahl; Wipe-Korrektur in `v0.1.0-beta22`, Bericht im Issue |
 
 #28 (CI, ADR-0029) und #30 (Engine für diesen Lauf, ADR-0030) sind geschlossen.
 
@@ -407,13 +408,16 @@ Weiter offen:
 
 ## ⏳ N1MM am echten Logger
 
-Prüfpunkte für den Shack-Test mit `v0.1.0-beta21`:
+Prüfpunkte für den Shack-Test mit `v0.1.0-beta22`:
 - `EntryWindowTyper`: Kommt das Rufzeichen im Entry Window an? Ist Alt+W
   tatsächlich „Wipe"? Fenstertitel aus dem Log prüfen.
 - RadioInfo-Broadcasts (UDP 12060): Frequenz und Mode in der GUI.
 - CW Reader öffnen, während der CW Decoder schon läuft (auch mit
   Engine-Haken aus): Text kommt, N1MM hängt nicht (#30).
 - SO2R/SO2V: Rufzeichen kommt im Entry Window mit dem grünen Punkt an,
-  nach `\` im anderen; Anzeige „… R1/R2“ folgt (#31).
+  nach Klick ins andere Eingabefenster (oder Backslash, AltGr+ß) im
+  anderen; Anzeige „… R1/R2“ folgt (#31, mit beta21 bestätigt).
+- Zweimal dasselbe Rufzeichen anklicken, dann ein anderes: im
+  Rufzeichenfeld steht jeweils nur das letzte (#31, beta22).
 - Skimmer-Spot (Telnet 127.0.0.1:7373): optional, Standard aus (#24); bei
   echtem Cluster in N1MM unnötig.

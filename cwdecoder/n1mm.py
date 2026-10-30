@@ -261,6 +261,12 @@ def _win32():
         return u, k
     u.IsWindowVisible.argtypes = [wintypes.HWND]
     u.IsWindow.argtypes = [wintypes.HWND]
+    u.IsChild.argtypes = [wintypes.HWND, wintypes.HWND]
+    u.GetGUIThreadInfo.argtypes = [wintypes.DWORD, ctypes.c_void_p]
+    u.SendMessageTimeoutW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM,
+                                      ctypes.c_void_p, wintypes.UINT, wintypes.UINT,
+                                      ctypes.POINTER(ctypes.c_size_t)]
+    u.SendMessageTimeoutW.restype = ctypes.c_ssize_t
     u.GetWindowTextLengthW.argtypes = [wintypes.HWND]
     u.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
     u.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
@@ -384,6 +390,59 @@ def bring_to_front(hwnd, wait_s: float = 0.25) -> bool:
     ok = is_front()
     log.info("Vordergrund: per ALT-Trick %s", "ok" if ok else "FEHLGESCHLAGEN")
     return ok
+
+
+FOCUS_WAIT_S = 0.5      # so lange warten, bis N1MM den Tastaturfokus gesetzt hat
+WIPE_WAIT_S = 0.4       # so lange darf Wipe bzw. das Leeren dauern
+
+
+def scan_code(vk: int) -> int:
+    """Scan-Code zur virtuellen Taste (MapVirtualKeyW); 0 außerhalb von Windows."""
+    if not sys.platform.startswith("win"):
+        return 0
+    import ctypes
+    return int(ctypes.windll.user32.MapVirtualKeyW(vk, 0)) & 0xFFFF
+
+
+def focus_in_window(hwnd):
+    """Fenster mit dem Tastaturfokus im GUI-Thread von hwnd, wenn es hwnd
+    selbst oder ein Kind davon ist; sonst None (GetGUIThreadInfo)."""
+    if not sys.platform.startswith("win"):
+        return None
+    import ctypes
+    from ctypes import wintypes
+
+    class GUITHREADINFO(ctypes.Structure):
+        _fields_ = [("cbSize", wintypes.DWORD), ("flags", wintypes.DWORD),
+                    ("hwndActive", wintypes.HWND), ("hwndFocus", wintypes.HWND),
+                    ("hwndCapture", wintypes.HWND), ("hwndMenuOwner", wintypes.HWND),
+                    ("hwndMoveSize", wintypes.HWND), ("hwndCaret", wintypes.HWND),
+                    ("rcCaret", wintypes.RECT)]
+
+    user32, _k = _win32()
+    tid = user32.GetWindowThreadProcessId(hwnd, None)
+    info = GUITHREADINFO(cbSize=ctypes.sizeof(GUITHREADINFO))
+    if not tid or not user32.GetGUIThreadInfo(tid, ctypes.byref(info)):
+        return None
+    focus = info.hwndFocus
+    if focus and (focus == hwnd or user32.IsChild(hwnd, focus)):
+        return focus
+    return None
+
+
+def window_text(hwnd) -> str:
+    """Text eines (fremden) Steuerelements per WM_GETTEXT, 0,5 s Frist."""
+    import ctypes
+    from ctypes import wintypes
+    user32, _k = _win32()
+    res = ctypes.c_size_t()
+    if not user32.SendMessageTimeoutW(hwnd, 0x000E, 0, None, 0x0002, 500, ctypes.byref(res)):
+        return None
+    n = res.value
+    buf = ctypes.create_unicode_buffer(n + 1)
+    if not user32.SendMessageTimeoutW(hwnd, 0x000D, n + 1, buf, 0x0002, 500, ctypes.byref(res)):
+        return None
+    return buf.value
 
 
 def send_inputs(inputs):
@@ -537,12 +596,63 @@ class EntryWindowTyper:
             msg = "N1MM ließ sich nicht in den Vordergrund holen (Windows-Fokussperre)"
             log.warning(msg)
             return False, msg
-        time.sleep(0.05)
+        # Erst tippen, wenn N1MM den Tastaturfokus wirklich in diesem Fenster
+        # hat; sonst gehen Alt+W oder Buchstaben verloren (#31, Shack-Test).
+        field = self._wait(lambda: self._focus_in(hwnd), FOCUS_WAIT_S)
+        if not field:
+            log.info("Tastaturfokus nach %.1f s nicht im Entry Window, tippe trotzdem",
+                     FOCUS_WAIT_S)
+        self._clear_field(hwnd)
+        self._type_text(call)
+        got = self._wait(lambda: self._field_text(self._focus_in(hwnd)) == call, WIPE_WAIT_S)
+        if got:
+            log.info("Rufzeichenfeld danach: %r", call)
+        else:
+            log.warning("Rufzeichenfeld danach: %r statt %r",
+                        self._field_text(self._focus_in(hwnd)), call)
+        return True, "ins Entry Window getippt"
+
+    def _clear_field(self, hwnd):
+        """Vor dem Tippen: Wipe (Alt+W, leert das ganze Entry Window und
+        setzt den Fokus ins Rufzeichenfeld), dann prüfen. Steht danach noch
+        etwas im Feld mit dem Fokus (Alt+W kam nicht an) oder ist Wipe aus,
+        wird nur dieses Feld geleert: Pos1, Umschalt+Ende, Entf."""
         if self.wipe:
             self._key_combo_alt("W")
-            time.sleep(0.05)
-        self._type_text(call)
-        return True, "ins Entry Window getippt"
+            if self._wait(lambda: self._field_empty(hwnd), WIPE_WAIT_S):
+                log.info("Wipe: Rufzeichenfeld leer")
+                return
+            log.warning("Wipe (Alt+W) hat das Rufzeichenfeld nicht geleert, leere es selbst")
+        elif self._field_empty(hwnd):
+            return
+        self._select_line_and_delete()
+        if self._wait(lambda: self._field_empty(hwnd), WIPE_WAIT_S):
+            log.info("Rufzeichenfeld selbst geleert")
+        else:
+            log.warning("Rufzeichenfeld ließ sich nicht leeren: %r",
+                        self._field_text(self._focus_in(hwnd)))
+
+    @staticmethod
+    def _wait(cond, timeout: float, step: float = 0.02):
+        """cond() bis timeout erfüllt? Liefert das letzte Ergebnis."""
+        t_end = time.monotonic() + timeout
+        while True:
+            res = cond()
+            if res or time.monotonic() >= t_end:
+                return res
+            time.sleep(step)
+
+    def _field_empty(self, hwnd) -> bool:
+        field = self._focus_in(hwnd)
+        return bool(field) and self._field_text(field) == ""
+
+    def _focus_in(self, hwnd):
+        """Fensterhandle mit dem Tastaturfokus, wenn es im Fenster hwnd liegt."""
+        return focus_in_window(hwnd)
+
+    @staticmethod
+    def _field_text(field):
+        return window_text(field) if field else None
 
     def _bring_to_front(self, hwnd, wait_s: float = 0.25) -> bool:
         return bring_to_front(hwnd, wait_s)
@@ -560,9 +670,26 @@ class EntryWindowTyper:
         self._send_inputs(seq)
 
     def _key_combo_alt(self, letter: str):
+        """Alt+Buchstabe mit Scan-Codes wie von einer echten Tastatur."""
         VK_MENU, KEYUP = 0x12, 0x0002
         vk = ord(letter.upper())
-        self._send_inputs([(VK_MENU, 0, 0), (vk, 0, 0), (vk, 0, KEYUP), (VK_MENU, 0, KEYUP)])
+        alt, key = scan_code(VK_MENU), scan_code(vk)
+        self._send_inputs([(VK_MENU, alt, 0), (vk, key, 0), (vk, key, KEYUP),
+                           (VK_MENU, alt, KEYUP)])
+
+    def _select_line_and_delete(self):
+        """Pos1, Umschalt+Ende, Entf: leert das Feld mit dem Fokus."""
+        KEYUP, EXT = 0x0002, 0x0001
+        VK_SHIFT, VK_HOME, VK_END, VK_DELETE = 0x10, 0x24, 0x23, 0x2E
+        seq = []
+        for vk, flags in ((VK_HOME, EXT), (VK_SHIFT, 0), (VK_END, EXT)):
+            seq.append((vk, scan_code(vk), flags))
+            if vk != VK_SHIFT:
+                seq.append((vk, scan_code(vk), flags | KEYUP))
+        seq.append((VK_SHIFT, scan_code(VK_SHIFT), KEYUP))
+        seq += [(VK_DELETE, scan_code(VK_DELETE), EXT),
+                (VK_DELETE, scan_code(VK_DELETE), EXT | KEYUP)]
+        self._send_inputs(seq)
 
 
 # --------------------------------------------------------------------------

@@ -17,6 +17,13 @@ Releases entstehen durch Tags `vX.Y.Z` bzw. `vX.Y.Z-betaN` (ADR-0002).
   (Handle aus dem Broadcast, sonst Titel); bisher scheiterte es bei SO2R
   mit „Entry Window nicht erkannt“, weil die Titel auf „Radio 1/2“ statt
   „VFO A/B“ enden. Alt+W geht ans selbe Fenster.
+- **Eintippen ins Entry Window hängt nicht mehr an** (#31, Shack-Test
+  beta21: zweimal dasselbe Rufzeichen ergab z. B. „DL1ABCDL1ABC“): Der Decoder wartet, bis
+  N1MM den Tastaturfokus im Entry Window hat, schickt Alt+W (Wipe) mit
+  echten Scan-Codes, prüft, ob das Rufzeichenfeld leer ist, und leert es
+  sonst selbst (Pos1, Umschalt+Ende, Entf). Ohne „vorher Alt+W“ leert er
+  nur das Rufzeichenfeld. Danach steht dort genau das angeklickte
+  Rufzeichen; das Ergebnis steht im Log.
 - **N1MMs CW Reader geht immer, N1MM hängt nicht mehr** (#30, ADR-0030):
   Öffnet man in N1MM den CW Reader, während der CW Decoder ohne den Weg
   „CW Reader von N1MM (Engine)“ läuft, schaltet der Decoder die Engine

@@ -86,7 +86,8 @@ mitteilt (nur solange der CW Reader offen ist).
 
 **Zwei Entry Windows (SO2R/SO2V).** N1MM schickt dann je Radio ein
 Broadcast. Der CW Decoder nimmt das Radio mit dem **grünen Punkt**
-(Empfangs-/Tastaturfokus, in N1MM mit `\` umschaltbar): dessen Frequenz für
+(Empfangs-/Tastaturfokus; umschalten per Klick ins andere Eingabefenster
+oder Backslash, auf deutscher Tastatur AltGr+ß): dessen Frequenz für
 Anzeige und Spots, dessen Entry Window zum Eintippen. Die Anzeige zeigt die
 Nummer, etwa „N1MM: 7040.3 kHz CW R1 (…)". Dafür muss der Broadcast
 **Radio** an sein; ohne ihn tippt der Decoder ins erste Entry Window
@@ -117,9 +118,12 @@ Klick dann „Spot nicht gesendet".
 
 Unter **Übergabe…** im CW Decoder:
 - **ins Entry Window tippen**: Klick tippt das Rufzeichen in N1MM (holt
-  N1MM dafür nach vorn), optional vorher Alt+W, beides ins selbe Fenster.
-  Bei zwei Entry Windows ins Fenster des Radios mit dem grünen Punkt
-  (Abschnitt 3).
+  N1MM dafür nach vorn), beides ins selbe Fenster. Im Rufzeichenfeld steht
+  danach genau das angeklickte Rufzeichen: Mit **vorher Alt+W** (Standard)
+  leert Wipe das ganze Entry Window; der Decoder prüft, ob das
+  Rufzeichenfeld leer ist, und leert es sonst selbst. Ohne Alt+W leert er
+  nur das Rufzeichenfeld. Bei zwei Entry Windows tippt er ins Fenster des
+  Radios mit dem grünen Punkt (Abschnitt 3).
 - **Zwischenablage**: Klick legt das Rufzeichen in die Zwischenablage,
   Strg+V in N1MM. Beim Tippen auch Rückfallweg, wenn N1MM nicht gefunden
   wird.
